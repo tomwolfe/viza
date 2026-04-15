@@ -15,6 +15,7 @@ export interface UseCameraOptions {
   height?: number;
   isActive: boolean;
   onFrameReady?: (video: HTMLVideoElement) => void;
+  onXRSessionReady?: (session: XRSession) => void;
 }
 
 export interface UseCameraResult {
@@ -22,6 +23,9 @@ export interface UseCameraResult {
   streamActive: boolean;
   error: CameraError | null;
   isXRMode: boolean;
+  xrSession: XRSession | null;
+  cameraAccessSupported: boolean;
+  startXRSession: () => Promise<boolean>;
 }
 
 function mapCameraError(err: unknown): CameraError {
@@ -51,23 +55,64 @@ export function useCamera({
   height = 1080,
   isActive,
   onFrameReady,
+  onXRSessionReady,
 }: UseCameraOptions): UseCameraResult {
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const [streamActive, setStreamActive] = useState(false);
   const [error, setError] = useState<CameraError | null>(null);
   const [isXRMode, setIsXRMode] = useState(false);
+  const [xrSession, setXrSession] = useState<XRSession | null>(null);
+  const [cameraAccessSupported, setCameraAccessSupported] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const isActiveRef = useRef(isActive);
+
+  const startXRSession = useCallback(async (): Promise<boolean> => {
+    if (!navigator.xr) {
+      return false;
+    }
+
+    try {
+      const supported = await navigator.xr.isSessionSupported('immersive-ar');
+      if (!supported) {
+        return false;
+      }
+
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['camera-access', 'local-floor'],
+      });
+
+      const hasCamera = session.enabledFeatures?.includes('camera-access');
+      if (!hasCamera) {
+        await session.end();
+        setCameraAccessSupported(false);
+        return false;
+      }
+
+      setCameraAccessSupported(true);
+      setIsXRMode(true);
+      setXrSession(session);
+      onXRSessionReady?.(session);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }, [onXRSessionReady]);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    if (xrSession) {
+      xrSession.end();
+      setXrSession(null);
+    }
     setVideoElement(null);
     setStreamActive(false);
     setIsXRMode(false);
-  }, []);
+  }, [xrSession]);
 
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -91,10 +136,14 @@ export function useCamera({
         const hasCamera = session.enabledFeatures?.includes('camera-access');
         if (!hasCamera || cancelled) {
           await session.end();
+          setCameraAccessSupported(false);
           return false;
         }
 
+        setCameraAccessSupported(true);
         setIsXRMode(true);
+        setXrSession(session);
+        onXRSessionReady?.(session);
         return true;
       } catch {
         return false;
@@ -165,12 +214,15 @@ export function useCamera({
       cancelled = true;
       stopStream();
     };
-  }, [isActive, stopStream, facingMode, width, height, onFrameReady]);
+  }, [isActive, stopStream, facingMode, width, height, onFrameReady, onXRSessionReady]);
 
   return {
     videoElement,
     streamActive,
     error,
     isXRMode,
+    xrSession,
+    cameraAccessSupported,
+    startXRSession,
   };
 }

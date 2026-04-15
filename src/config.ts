@@ -25,6 +25,29 @@ export const CONFIG = {
   },
 };
 
+export const SYSTEM_PROMPT_BASE = `You are a spatial assistant for assembly tasks. Analyze this image based on the user's audio request.
+Current Task Context: {taskContext}
+Current Step: {currentStep}
+Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "name": "string",
+      "bbox_2d": [x, y, width, height],
+      "action": "string"
+    }
+  ],
+  "completed": boolean,
+  "nextStep": "string | null"
+}
+Do not include any other text. Only return the JSON object.`;
+
+export function buildSystemPrompt(taskContext: string, currentStep: string): string {
+  return SYSTEM_PROMPT_BASE
+    .replace('{taskContext}', taskContext)
+    .replace('{currentStep}', currentStep);
+}
+
 export const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
 Return ONLY a valid JSON object with the structure:
 {
@@ -50,8 +73,15 @@ export async function checkWebGPU() {
       return result;
     }
 
-    await adapter.requestDevice();
-    return { supported: true, memoryGB: 4 };
+    const device = await adapter.requestDevice();
+    const totalMemory = device.limits?.maxStorageBufferBindingSize || 0;
+    const memoryGB = Math.floor(totalMemory / (1024 * 1024 * 1024));
+
+    if (memoryGB >= 4) {
+      return { supported: true, memoryGB };
+    }
+
+    return { supported: true, memoryGB };
   } catch {
     return { supported: false, memoryGB: 0 };
   }

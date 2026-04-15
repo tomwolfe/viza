@@ -1,6 +1,6 @@
 'use client';
 
-import { Text } from '@react-three/drei';
+import { Text, Float } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo } from 'react';
@@ -13,9 +13,11 @@ const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 interface DetectedObject3DProps {
   obj: DetectedObject;
   index: number;
+  isTarget?: boolean;
+  targetName?: string;
 }
 
-export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
+export function DetectedObject3D({ obj, index, isTarget, targetName }: DetectedObject3DProps) {
   const { camera, viewport } = useThree();
   const [x, y, width, height] = obj.bbox_2d;
 
@@ -59,14 +61,16 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
   const boxScale = useMemo(() => [boxWidth, boxHeight, 1] as const, [boxWidth, boxHeight]);
   const labelScale = useMemo(() => [labelWidth, 0.25, 1] as const, [labelWidth]);
 
+  const isCurrentTarget = isTarget && targetName && obj.name.toLowerCase().includes(targetName.toLowerCase());
+
   return (
     <group position={[worldPosition.x, worldPosition.y, worldPosition.z]}>
       <mesh scale={boxScale}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial
-          color={SPATIAL.BOX_COLOR}
+          color={isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR}
           transparent
-          opacity={0.15}
+          opacity={isCurrentTarget ? 0.3 : 0.15}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -74,8 +78,21 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
 
       <lineSegments scale={boxScale}>
         <edgesGeometry args={[PLANE_GEOMETRY]} />
-        <lineBasicMaterial color={SPATIAL.BOX_COLOR} linewidth={2} />
+        <lineBasicMaterial color={isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR} linewidth={2} />
       </lineSegments>
+
+      {isCurrentTarget && (
+        <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
+          <mesh position={[0, boxHeight / 2 + 0.3, 0]}>
+            <coneGeometry args={[0.15, 0.4, 8]} />
+            <meshBasicMaterial color="#ff6b00" transparent opacity={0.8} />
+          </mesh>
+          <mesh position={[0, boxHeight / 2 + 0.3, 0]} rotation={[Math.PI, 0, 0]}>
+            <coneGeometry args={[0.15, 0.4, 8]} />
+            <meshBasicMaterial color="#ffcc00" transparent opacity={0.6} />
+          </mesh>
+        </Float>
+      )}
 
       <mesh position={[0, -boxHeight / 2 - SPATIAL.LABEL_OFFSET, 0.01]} scale={labelScale}>
         <planeGeometry args={[1, 1]} />
@@ -85,7 +102,7 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
       <Text
         position={[0, -boxHeight / 2 - SPATIAL.LABEL_OFFSET, 0.02]}
         fontSize={SPATIAL.FONT_SIZE}
-        color={SPATIAL.BOX_COLOR}
+        color={isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR}
         anchorX="center"
         anchorY="middle"
         outlineWidth={SPATIAL.OUTLINE_WIDTH}

@@ -34,7 +34,7 @@ declare global {
   }
 }
 
-type VoiceStatus = 'idle' | 'listening' | 'starting';
+type VoiceStatus = 'idle' | 'listening' | 'starting' | 'streaming';
 
 interface UseVoiceReturn {
   isListening: boolean;
@@ -46,14 +46,20 @@ interface UseVoiceReturn {
   stopSpeaking: () => void;
   isSupported: boolean;
   error: string | null;
+  startAudioStream: () => Promise<MediaStream | null>;
+  stopAudioStream: () => void;
+  audioStream: MediaStream | null;
 }
 
 export function useVoice(onCommand?: (transcript: string) => void): UseVoiceReturn {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
   const onCommandRef = useRef(onCommand);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const [isSupported] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -197,6 +203,36 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     setStatus('idle');
   }, [status]);
 
+  const startAudioStream = useCallback(async (): Promise<MediaStream | null> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setAudioStream(stream);
+      setStatus('streaming');
+      return stream;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes('NotAllowed')) {
+        setError('Microphone permission denied. Please allow microphone access.');
+      } else if (errorMessage.includes('NotFound')) {
+        setError('No microphone found. Please connect a microphone.');
+      } else {
+        setError(`Failed to start audio stream: ${errorMessage}`);
+      }
+      return null;
+    }
+  }, []);
+
+  const stopAudioStream = useCallback((): void => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (audioStream) {
+      audioStream.getTracks().forEach(track => track.stop());
+      setAudioStream(null);
+    }
+    setStatus('idle');
+  }, [audioStream]);
+
   const speak = useCallback((text: string): void => {
     if (!window.speechSynthesis) {
       console.warn('[Voice] Speech synthesis not supported.');
@@ -244,5 +280,8 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     stopSpeaking,
     isSupported,
     error,
+    startAudioStream,
+    stopAudioStream,
+    audioStream,
   };
 }

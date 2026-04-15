@@ -20,6 +20,8 @@ interface ARSceneProps {
   detectedObjects: DetectedObject[];
   onObjectsDetected: (objects: DetectedObject[]) => void;
   voiceCommand?: string | null;
+  taskActive?: boolean;
+  currentStepTarget?: string;
 }
 
 export function ARScene({
@@ -29,6 +31,8 @@ export function ARScene({
   detectedObjects,
   onObjectsDetected,
   voiceCommand,
+  taskActive,
+  currentStepTarget,
 }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { captureFrame } = useFrameCapture();
@@ -75,7 +79,13 @@ export function ARScene({
       <CameraFallback isActive={isARActive} onFrameReady={handleFrameReady} />
 
       {detectedObjects.map((obj, index) => (
-        <DetectedObject3D key={`${obj.name}-${index}`} obj={obj} index={index} />
+        <DetectedObject3D 
+          key={`${obj.name}-${index}`} 
+          obj={obj} 
+          index={index}
+          isTarget={taskActive}
+          targetName={currentStepTarget}
+        />
       ))}
     </XR>
   );
