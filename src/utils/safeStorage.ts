@@ -1,3 +1,5 @@
+import { logger } from '@/config';
+
 const SCHEMA_VERSION = 1;
 
 export interface SafeStorageOptions {
@@ -32,11 +34,11 @@ export function safeGet<T>({ key, schemaVersion = SCHEMA_VERSION }: SafeStorageO
     return JSON.parse(stored) as T;
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      console.warn('[SafeStorage] Quota exceeded, clearing old data');
+      logger.warn('[SafeStorage] Quota exceeded, clearing old data');
       localStorage.removeItem(key);
       localStorage.removeItem(`${key}_version`);
     } else {
-      console.warn('[SafeStorage] Failed to load:', e);
+      logger.warn('[SafeStorage] Failed to load:', e);
     }
     return null;
   }
@@ -51,9 +53,9 @@ export function safeSet<T>(data: T, { key, schemaVersion = SCHEMA_VERSION }: Saf
     return true;
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      console.warn('[SafeStorage] Quota exceeded');
+      logger.warn('[SafeStorage] Quota exceeded');
     } else {
-      console.warn('[SafeStorage] Failed to save:', e);
+      logger.warn('[SafeStorage] Failed to save:', e);
     }
     return false;
   }

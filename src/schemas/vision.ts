@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { logger } from '@/config';
 
 export const DetectedObjectSchema = z.object({
   name: z.string().min(1),
@@ -36,7 +37,7 @@ export function parseVisionResponse(data: unknown): VisionResponse | null {
   if (result.success) {
     return result.data;
   }
-  console.warn('[VisionSchema] Invalid response:', result.error.flatten());
+  logger.warn('[VisionSchema] Invalid response:', result.error.flatten());
   return null;
 }
 
@@ -45,6 +46,6 @@ export function parsePlanningResponse(data: unknown): PlanningResponse | null {
   if (result.success) {
     return result.data;
   }
-  console.warn('[VisionSchema] Invalid planning response:', result.error.flatten());
+  logger.warn('[VisionSchema] Invalid planning response:', result.error.flatten());
   return null;
 }

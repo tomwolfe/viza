@@ -1,6 +1,58 @@
 import * as webllm from '@mlc-ai/web-llm';
 import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage } from '@/types/worker';
+import { CONFIG, logger } from '@/config';
+
+type MessageHandler = (msg: { type: string; [key: string]: unknown }) => Promise<void> | void;
+
+const messageHandlers: Record<string, MessageHandler> = {
+  init: async (msg) => {
+    const initMsg = msg as Extract<WorkerOutgoingMessage, { type: 'init' }>;
+    if (initMsg.systemPrompt) {
+      systemPrompt = initMsg.systemPrompt;
+    }
+    await initializeModel(initMsg.model || 'Phi-3.5-vision-instruct-q4f16_1-MLC');
+  },
+
+  chat: async (msg) => {
+    const chatMsg = msg as Extract<WorkerOutgoingMessage, { type: 'chat' }>;
+    if (!chatMsg.image) {
+      postMessage({ type: 'error', message: 'Missing image for chat', messageId: chatMsg.messageId });
+      return;
+    }
+    await runTask(chatMsg.image, chatMsg.prompt, chatMsg.messageId, TASK_CONFIGS['chat']);
+  },
+
+  planning: async (msg) => {
+    const planMsg = msg as Extract<WorkerOutgoingMessage, { type: 'planning' }>;
+    if (!planMsg.image) {
+      postMessage({ type: 'error', message: 'Missing image for planning', messageId: planMsg.messageId });
+      return;
+    }
+    await runTask(planMsg.image, planMsg.goal, planMsg.messageId, TASK_CONFIGS['planning']);
+  },
+
+  category: async (msg) => {
+    const catMsg = msg as Extract<WorkerOutgoingMessage, { type: 'category' }>;
+    if (!catMsg.image) {
+      postMessage({ type: 'error', message: 'Missing image for category', messageId: catMsg.messageId });
+      return;
+    }
+    await runTask(catMsg.image, catMsg.goal, catMsg.messageId, TASK_CONFIGS['category']);
+  },
+
+  reload: async () => {
+    await reloadEngine();
+  },
+
+  app_reset: () => {
+    postMessage({ type: 'reset_ack' });
+  },
+
+  ping: () => {
+    postMessage({ type: 'pong' });
+  },
+};
 
 interface TaskRunnerConfig {
   promptBuilder: (userInput: string) => string;
@@ -284,7 +336,11 @@ async function runTask(
       error: err.toString(),
     });
   } finally {
-    image.close();
+    try {
+      image.close();
+    } catch {
+      // ImageBitmap may already be closed or invalid
+    }
   }
 }
 
@@ -334,7 +390,7 @@ async function reloadEngine(): Promise<void> {
     try {
       await engine.unload();
     } catch (e) {
-      console.warn('Engine unload error:', e);
+      logger.warn('Engine unload error:', e);
     }
   }
   engine = null;
@@ -344,43 +400,13 @@ async function reloadEngine(): Promise<void> {
 }
 
 self.onmessage = async (event: MessageEvent) => {
-  const msg = event.data as WorkerOutgoingMessage;
+  const msg = event.data as { type: string; [key: string]: unknown };
+  const handler = messageHandlers[msg.type];
 
-  switch (msg.type) {
-    case 'init':
-      if (msg.systemPrompt) {
-        systemPrompt = msg.systemPrompt;
-      }
-      await initializeModel(msg.model || 'Phi-3.5-vision-instruct-q4f16_1-MLC');
-      break;
-
-    case 'chat':
-      await runTask(msg.image, msg.prompt, msg.messageId, TASK_CONFIGS['chat']);
-      break;
-
-    case 'planning':
-      await runTask(msg.image, msg.goal, msg.messageId, TASK_CONFIGS['planning']);
-      break;
-
-    case 'category':
-      await runTask(msg.image, msg.goal, msg.messageId, TASK_CONFIGS['category']);
-      break;
-
-    case 'reload':
-      await reloadEngine();
-      break;
-
-    case 'app_reset':
-      postMessage({ type: 'reset_ack' });
-      break;
-
-    case 'ping':
-      postMessage({ type: 'pong' });
-      break;
-
-    default:
-      postMessage({ type: 'unknown_message', received: (msg as { type: string }).type });
-      break;
+  if (handler) {
+    await handler(msg);
+  } else {
+    postMessage({ type: 'unknown_message', received: msg.type });
   }
 };
 

@@ -74,7 +74,7 @@ describe('useInferenceLoop', () => {
       })
     );
 
-    const executePromise = result.current.executeInference('test prompt');
+    const executePromise = result.current.run('test prompt');
 
     await act(async () => {
       vi.advanceTimersByTime(10);
@@ -112,7 +112,7 @@ describe('useInferenceLoop', () => {
       })
     );
 
-    const firstPromise = result.current.executeInference('first prompt');
+    const firstPromise = result.current.run('first prompt');
 
     await act(async () => {
       vi.advanceTimersByTime(10);
@@ -120,7 +120,7 @@ describe('useInferenceLoop', () => {
 
     expect(result.current.status).toBe('capturing');
 
-    const secondPromise = result.current.executeInference('second prompt', true);
+    const secondPromise = result.current.run('second prompt', true);
 
     await firstPromise;
     await secondPromise;

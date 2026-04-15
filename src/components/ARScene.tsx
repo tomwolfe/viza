@@ -75,7 +75,7 @@ export function ARScene({
     [addOrUpdateObject, onObjectsDetected]
   );
 
-  const { setVideoSource, setActive, executeInference, cancelPending } = useInferenceLoop({
+  const { setVideoSource, setActive, run, cancelPending } = useInferenceLoop({
     runInference,
     captureFrame,
     onObjectsDetected: handleObjectsDetected,
@@ -91,9 +91,9 @@ export function ARScene({
     if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
       lastVoiceCommandRef.current = voiceCommand;
       cancelPending();
-      executeInference(voiceCommand, true);
+      run(voiceCommand, true);
     }
-  }, [voiceCommand, isModelReady, executeInference, cancelPending]);
+  }, [voiceCommand, isModelReady, run, cancelPending]);
 
   if (!isARActive) return null;
 

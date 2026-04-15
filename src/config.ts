@@ -306,18 +306,30 @@ export async function checkWebGPU() {
   }
 }
 
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
 export const logger = {
-  log: (...args: unknown[]) => {
+  debug: (...args: unknown[]) => {
     if (CONFIG.ENABLE_TELEMETRY) {
-      console.log('[Viza]', ...args);
+      console.debug('[Viza:DEBUG]', ...args);
+    }
+  },
+  info: (...args: unknown[]) => {
+    if (CONFIG.ENABLE_TELEMETRY) {
+      console.log('[Viza:INFO]', ...args);
     }
   },
   warn: (...args: unknown[]) => {
     if (CONFIG.ENABLE_TELEMETRY) {
-      console.warn('[Viza]', ...args);
+      console.warn('[Viza:WARN]', ...args);
     }
   },
   error: (...args: unknown[]) => {
-    console.error('[Viza]', ...args);
+    console.error('[Viza:ERROR]', ...args);
+  },
+  log: (...args: unknown[]) => {
+    if (CONFIG.ENABLE_TELEMETRY) {
+      console.log('[Viza]', ...args);
+    }
   },
 };

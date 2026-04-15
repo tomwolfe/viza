@@ -4,7 +4,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
-import { CONFIG } from '@/config';
+import { CONFIG, logger } from '@/config';
 
 export interface WorldObject {
   id: string;
@@ -80,7 +80,7 @@ function loadWorldMapFromStorage(): Map<string, WorldObject> {
       });
     }
   } catch (e) {
-    console.warn('[WorldMap] Failed to load from storage:', e);
+    logger.warn('[WorldMap] Failed to load from storage:', e);
   }
   return map;
 }
