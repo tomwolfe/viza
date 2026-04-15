@@ -13,7 +13,7 @@ import * as THREE from 'three';
  */
 
 // Scale for the background plane (large enough to fill FOV)
-const PLANE_SCALE = [20, 10, 1] as const;
+const PLANE_SCALE: [number, number, number] = [20, 10, 1];
 
 interface CameraFallbackProps {
   isActive: boolean;
@@ -182,7 +182,7 @@ function VideoPlane({ video }: VideoPlaneProps) {
   });
 
   return (
-    <mesh ref={meshRef} position={[0, 0, -5]} scale={PLANE_SCALE as unknown as [number, number, number]}>
+    <mesh ref={meshRef} position={[0, 0, -5]} scale={PLANE_SCALE}>
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
     </mesh>

@@ -25,12 +25,7 @@ export default function Home() {
   // Voice hook handles speech recognition and synthesis
   const handleTranscriptReady = useCallback((transcript: string) => {
     console.log('[App] Voice transcript:', transcript);
-
-    // Trigger AI inference with the voice transcript
-    if (isModelReady && window.__arSceneTriggerInference) {
-      window.__arSceneTriggerInference(transcript);
-    }
-  }, [isModelReady]);
+  }, []);
 
   const {
     isListening,

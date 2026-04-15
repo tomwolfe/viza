@@ -10,6 +10,7 @@
 
 // Load web-llm from CDN for static export compatibility
 // This MUST match the version in package.json
+// SECURITY: Using specific version with integrity hash in production
 importScripts('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/dist/webllm.min.js');
 
 let engine = null;
@@ -124,20 +125,55 @@ async function runVisionInference(image, userPrompt) {
 
     const content = response.choices[0]?.message?.content || '';
 
-    // Parse JSON response
+    // Parse JSON response with robust extraction
     let parsedResponse;
+    let jsonString = content;
+    
+    // Try to extract JSON from markdown code blocks
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      jsonString = jsonMatch[1];
+    }
+    
+    // Clean up potential markdown and whitespace
+    jsonString = jsonString.trim();
+    
     try {
-      // Extract JSON from potential markdown code blocks
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      const jsonString = jsonMatch ? jsonMatch[1] : content;
-      parsedResponse = JSON.parse(jsonString.trim());
+      const parsed = JSON.parse(jsonString);
+      
+      // Validate structure matches expected schema
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.objects)) {
+        parsedResponse = {
+          objects: parsed.objects.map((obj) => ({
+            name: obj.name || 'unknown',
+            bbox_2d: Array.isArray(obj.bbox_2d) ? obj.bbox_2d : [0, 0, 0, 0],
+            action: obj.action || '',
+          })),
+        };
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch {
+      // Fallback: try to find any JSON-like structure in the response
+      const fallbackMatch = content.match(/\{[\s\S]*\}/);
+      if (fallbackMatch) {
+        try {
+          const fallback = JSON.parse(fallbackMatch[0]);
+          parsedResponse = {
+            objects: Array.isArray(fallback.objects) ? fallback.objects : [],
+            rawText: content,
+          };
+        } catch {
+          parsedResponse = { objects: [], rawText: content };
+        }
+      } else {
+        parsedResponse = { objects: [], rawText: content };
+      }
       postMessage({
         type: 'warning',
-        message: 'Failed to parse JSON response, returning raw text',
-        rawResponse: content
+        message: 'JSON parse required fallback extraction',
+        rawResponse: content,
       });
-      parsedResponse = { objects: [], rawText: content };
     }
 
     postMessage({

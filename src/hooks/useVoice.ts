@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useARStore } from '@/store/useARStore';
 
 // TypeScript declarations for the Web Speech API
 interface SpeechRecognitionEvent extends Event {
@@ -56,6 +57,8 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
 
+  const { triggerInference } = useARStore();
+
   // Initialize support check synchronously (only in browser)
   const [isSupported] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -79,6 +82,65 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
     onTranscriptReadyRef.current = onTranscriptReady;
   }, [onTranscriptReady]);
 
+  // Handle speech recognition results
+  const handleResult = useCallback((event: SpeechRecognitionEvent) => {
+    let finalTranscript = '';
+    let interimTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const result = event.results[i];
+      if (result.isFinal) {
+        finalTranscript += result[0].transcript;
+      } else {
+        interimTranscript += result[0].transcript;
+      }
+    }
+
+    setTranscript(finalTranscript || interimTranscript);
+
+    if (finalTranscript && onTranscriptReadyRef.current) {
+      onTranscriptReadyRef.current(finalTranscript.trim());
+      triggerInference(finalTranscript.trim());
+    }
+  }, [triggerInference]);
+
+  // Handle speech recognition errors
+  const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
+    console.error('[Voice] Speech recognition error:', event.error);
+    isListeningRef.current = false;
+    setIsListening(false);
+
+    switch (event.error) {
+      case 'no-speech':
+        setError('No speech detected. Please try again.');
+        break;
+      case 'audio-capture':
+        setError('No microphone found. Please ensure microphone is connected.');
+        break;
+      case 'not-allowed':
+        setError('Microphone permission denied. Please allow microphone access.');
+        break;
+      case 'network':
+        setError('Network error. Speech recognition requires an internet connection.');
+        break;
+      default:
+        setError(`Speech recognition error: ${event.error}`);
+    }
+  }, []);
+
+  // Handle speech recognition end
+  const handleEnd = useCallback(() => {
+    isListeningRef.current = false;
+    setIsListening(false);
+  }, []);
+
+  // Handle speech recognition start
+  const handleStart = useCallback(() => {
+    isListeningRef.current = true;
+    setIsListening(true);
+    setError(null);
+  }, []);
+
   // Initialize SpeechRecognition on mount
   useEffect(() => {
     if (!isSupported) {
@@ -94,59 +156,11 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
     recognition.lang = 'en-US';
     recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => {
-      isListeningRef.current = true;
-      setIsListening(true);
-      setError(null);
-    };
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
-        } else {
-          interimTranscript += result[0].transcript;
-        }
-      }
-
-      setTranscript(finalTranscript || interimTranscript);
-
-      if (finalTranscript && onTranscriptReadyRef.current) {
-        onTranscriptReadyRef.current(finalTranscript.trim());
-      }
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('[Voice] Speech recognition error:', event.error);
-      isListeningRef.current = false;
-      setIsListening(false);
-
-      switch (event.error) {
-        case 'no-speech':
-          setError('No speech detected. Please try again.');
-          break;
-        case 'audio-capture':
-          setError('No microphone found. Please ensure microphone is connected.');
-          break;
-        case 'not-allowed':
-          setError('Microphone permission denied. Please allow microphone access.');
-          break;
-        case 'network':
-          setError('Network error. Speech recognition requires an internet connection.');
-          break;
-        default:
-          setError(`Speech recognition error: ${event.error}`);
-      }
-    };
-
-    recognition.onend = () => {
-      isListeningRef.current = false;
-      setIsListening(false);
-    };
+    // Attach event handlers
+    recognition.onstart = handleStart;
+    recognition.onresult = handleResult;
+    recognition.onerror = handleError;
+    recognition.onend = handleEnd;
 
     recognitionRef.current = recognition;
 
@@ -160,7 +174,7 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
         }
       }
     };
-  }, []);
+  }, [isSupported, handleStart, handleResult, handleError, handleEnd]);
 
   /**
    * Start listening for voice input.
