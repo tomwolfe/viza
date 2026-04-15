@@ -24,6 +24,7 @@ function ARContent() {
     initModel,
     runInference,
     error: llmError,
+    lastCompleted,
   } = useWebLLM();
 
   const {
@@ -117,6 +118,12 @@ function ARContent() {
     }
   }, [voiceError]);
 
+  useEffect(() => {
+    if (lastCompleted && taskState.isActive && !taskState.completed) {
+      completeCurrentStep();
+    }
+  }, [lastCompleted, taskState.isActive, taskState.completed, completeCurrentStep]);
+
   const currentInstruction = getCurrentInstruction();
 
   return (
@@ -125,9 +132,9 @@ function ARContent() {
         <div className="fixed top-4 left-4 right-4 z-50 bg-amber-900/90 backdrop-blur-md text-white rounded-lg p-4">
           <p className="text-sm font-semibold mb-2">System Requirements</p>
           <ul className="text-xs space-y-1">
-            <li>• Wi-Fi recommended (~1.5GB model download)</li>
+            <li>• Wi-Fi recommended (~2.3GB model download)</li>
             <li>• High battery usage expected during inference</li>
-            <li>• 8GB+ RAM recommended for optimal performance</li>
+            <li>• 8GB+ RAM required for optimal performance</li>
           </ul>
           <button 
             onClick={() => setShowWarnings(false)}

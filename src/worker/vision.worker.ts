@@ -17,11 +17,12 @@ Return ONLY a valid JSON object with the structure:
 {
   "objects": [
     {
-      "name": "string",
-      "bbox_2d": [x, y, width, height],
-      "action": "string"
+      "item": "string",
+      "coordinates": [x, y, width, height],
+      "action_step": "string"
     }
-  ]
+  ],
+  "completed": boolean
 }
 Do not include any other text. Only return the JSON object.`;
 
@@ -120,12 +121,13 @@ async function runVisionInference(
       if (parsed && typeof parsed === 'object' && Array.isArray(parsed.objects)) {
         parsedResponse = {
           objects: parsed.objects.map((obj: unknown) => ({
-            name: (obj as { name?: string }).name || 'unknown',
-            bbox_2d: Array.isArray((obj as { bbox_2d?: unknown[] }).bbox_2d)
-              ? (obj as { bbox_2d?: number[] }).bbox_2d
+            name: (obj as { item?: string }).item || 'unknown',
+            bbox_2d: Array.isArray((obj as { coordinates?: unknown[] }).coordinates)
+              ? (obj as { coordinates?: number[] }).coordinates
               : [0, 0, 0, 0],
-            action: (obj as { action?: string }).action || '',
+            action: (obj as { action_step?: string }).action_step || '',
           })),
+          completed: (parsed as { completed?: boolean }).completed || false,
         };
       } else {
         throw new Error('Invalid response structure');
@@ -154,10 +156,12 @@ async function runVisionInference(
       });
     }
 
+    const isCompleted = (parsedResponse as { completed?: boolean })?.completed || false;
     postMessage({
       type: 'inference_complete',
       messageId,
       response: parsedResponse,
+      completed: isCompleted,
       rawText: content,
       usage: response.usage,
     });
@@ -194,7 +198,7 @@ self.onmessage = async (event: MessageEvent) => {
       if (data.systemPrompt) {
         systemPrompt = data.systemPrompt;
       }
-      await initializeModel(data.model || 'Llama-3.2-11B-Vision-Instruct-q4f16_1-MLC');
+      await initializeModel(data.model || 'Phi-3.5-vision-instruct-q4f16_1-MLC');
       break;
 
     case 'chat':

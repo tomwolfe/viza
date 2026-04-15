@@ -4,9 +4,10 @@
  */
 
 export const CONFIG = {
-  DEFAULT_MODEL: 'Llama-3.2-11B-Vision-Instruct-q4f16_1-MLC',
+  DEFAULT_MODEL: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+  MODEL_SIZE_GB: 2.3,
   TARGET_SIZE: 512,
-  INFERENCE_INTERVAL: 5000,
+  INFERENCE_INTERVAL: 4000,
   ENABLE_TELEMETRY: process.env.NODE_ENV === 'development',
 
   SPATIAL: {
@@ -32,13 +33,12 @@ Return ONLY a valid JSON object with the structure:
 {
   "objects": [
     {
-      "name": "string",
-      "bbox_2d": [x, y, width, height],
-      "action": "string"
+      "item": "string",
+      "coordinates": [x, y, width, height],
+      "action_step": "string"
     }
   ],
-  "completed": boolean,
-  "nextStep": "string | null"
+  "completed": boolean
 }
 Do not include any other text. Only return the JSON object.`;
 
@@ -53,16 +53,17 @@ Return ONLY a valid JSON object with the structure:
 {
   "objects": [
     {
-      "name": "string",
-      "bbox_2d": [x, y, width, height],
-      "action": "string"
+      "item": "string",
+      "coordinates": [x, y, width, height],
+      "action_step": "string"
     }
-  ]
+  ],
+  "completed": boolean
 }
 Do not include any other text. Only return the JSON object.`;
 
 export async function checkWebGPU() {
-  const result = { supported: false, memoryGB: 0 };
+  const result = { supported: false, memoryGB: 0, recommendedGB: 8 };
   if (typeof navigator === 'undefined' || !navigator.gpu) {
     return result;
   }
@@ -77,13 +78,13 @@ export async function checkWebGPU() {
     const totalMemory = device.limits?.maxStorageBufferBindingSize || 0;
     const memoryGB = Math.floor(totalMemory / (1024 * 1024 * 1024));
 
-    if (memoryGB >= 4) {
-      return { supported: true, memoryGB };
+    if (memoryGB >= 8) {
+      return { supported: true, memoryGB, recommendedGB: 8 };
     }
 
-    return { supported: true, memoryGB };
+    return { supported: true, memoryGB, recommendedGB: 8 };
   } catch {
-    return { supported: false, memoryGB: 0 };
+    return { supported: false, memoryGB: 0, recommendedGB: 8 };
   }
 }
 

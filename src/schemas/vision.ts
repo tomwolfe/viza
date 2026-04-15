@@ -8,6 +8,7 @@ export const DetectedObjectSchema = z.object({
 
 export const VisionResponseSchema = z.object({
   objects: z.array(DetectedObjectSchema),
+  completed: z.boolean().default(false),
   rawText: z.string().optional(),
 });
 

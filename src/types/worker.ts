@@ -14,7 +14,7 @@ export type WorkerIncomingMessage =
   | { type: 'init_progress'; progress: number; status: string; details?: unknown }
   | { type: 'init_complete'; model: string; progress: number }
   | { type: 'inference_start' }
-  | { type: 'inference_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
+  | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown }
   | { type: 'error'; message: string; messageId?: string; error?: string }
   | { type: 'warning'; message: string; rawResponse?: string }
   | { type: 'pong' }

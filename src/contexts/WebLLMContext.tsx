@@ -20,6 +20,7 @@ export interface WebLLMContextValue {
   dispose: () => void;
   error: string | null;
   errorCode: VizaErrorCode | null;
+  lastCompleted: boolean;
 }
 
 const WebLLMContext = createContext<WebLLMContextValue | null>(null);
@@ -37,6 +38,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
+  const [lastCompleted, setLastCompleted] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
@@ -47,9 +49,9 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
   useEffect(() => {
     checkWebGPU().then((result) => {
-      if (!result.supported || result.memoryGB < 4) {
+      if (!result.supported || result.memoryGB < 8) {
         setIsDeviceCompatible(false);
-        setError('WebGPU not supported or insufficient memory (requires 4GB+).');
+        setError(`WebGPU not supported or insufficient memory (requires ${result.recommendedGB}GB+).`);
         setErrorCode('WEBGPU_NOT_SUPPORTED');
       }
     });
@@ -84,6 +86,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
         case 'inference_complete':
           setIsInferring(false);
+          setLastCompleted(data.completed || false);
           if (data.messageId) {
             const pending = pendingRef.current.get(data.messageId);
             if (pending) {
@@ -262,6 +265,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         dispose,
         error,
         errorCode,
+        lastCompleted,
       }}
     >
       {children}

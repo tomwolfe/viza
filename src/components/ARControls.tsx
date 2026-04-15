@@ -33,7 +33,7 @@ export default function ARControls({
           ) : isModelLoading ? (
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Loading AI Model... {modelProgress}%</span>
+              <span>Loading AI Model (~2.3GB)... {modelProgress}%</span>
             </div>
           ) : isARActive ? (
             <div className="flex items-center gap-2">
