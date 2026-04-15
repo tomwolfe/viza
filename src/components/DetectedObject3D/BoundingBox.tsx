@@ -1,6 +1,7 @@
 'use client';
 
 import * as THREE from 'three';
+import { useMemo } from 'react';
 import { CONFIG } from '@/config';
 
 const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
@@ -17,22 +18,38 @@ export function BoundingBox({ width, height, color, opacity = 0.15 }: BoundingBo
   const boxHeight = Math.max(height, 0.1);
   const boxScale: [number, number, number] = [boxWidth, boxHeight, 1];
 
+  const material = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    [color, opacity]
+  );
+
+  const lineMaterial = useMemo(
+    () => new THREE.LineBasicMaterial({ color, linewidth: 2 }),
+    [color]
+  );
+
+  const edgesGeometry = useMemo(
+    () => new THREE.EdgesGeometry(PLANE_GEOMETRY),
+    []
+  );
+
   return (
     <group>
       <mesh scale={boxScale}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial
-          color={color}
-          transparent
-          opacity={opacity}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
+        <primitive object={material} attach="material" />
       </mesh>
 
       <lineSegments scale={boxScale}>
-        <edgesGeometry args={[PLANE_GEOMETRY]} />
-        <lineBasicMaterial color={color} linewidth={2} />
+        <primitive object={edgesGeometry} attach="geometry" />
+        <primitive object={lineMaterial} attach="material" />
       </lineSegments>
     </group>
   );

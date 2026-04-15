@@ -1,10 +1,39 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useReducer, useMemo } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG, logger } from '@/config';
 
-export type InferenceStatus = 'idle' | 'capturing' | 'inferring';
+export type InferenceStatus = 'idle' | 'capturing' | 'inferring' | 'error';
+
+type InferenceState = {
+  status: InferenceStatus;
+  error: string | null;
+};
+
+type InferenceAction =
+  | { type: 'START_CAPTURE' }
+  | { type: 'START_INFERENCE' }
+  | { type: 'COMPLETE' }
+  | { type: 'ERROR'; error: string }
+  | { type: 'RESET' };
+
+function inferenceReducer(state: InferenceState, action: InferenceAction): InferenceState {
+  switch (action.type) {
+    case 'START_CAPTURE':
+      return { ...state, status: 'capturing', error: null };
+    case 'START_INFERENCE':
+      return { ...state, status: 'inferring', error: null };
+    case 'COMPLETE':
+      return { ...state, status: 'idle', error: null };
+    case 'ERROR':
+      return { ...state, status: 'error', error: action.error };
+    case 'RESET':
+      return { ...state, status: 'idle', error: null };
+    default:
+      return state;
+  }
+}
 
 interface UseInferenceLoopOptions {
   runInference: (
@@ -30,7 +59,8 @@ export function useInferenceLoop({
   const pendingInferenceRef = useRef<{ resolve: (value: unknown) => void; reject: (reason?: unknown) => void; prompt: string; timestamp: number; voiceTriggered: boolean } | null>(null);
   const latestRequestRef = useRef<{ prompt: string; timestamp: number; voiceTriggered: boolean } | null>(null);
 
-  const [status, setStatus] = useState<InferenceStatus>('idle');
+  const [state, dispatch] = useReducer(inferenceReducer, { status: 'idle', error: null });
+  const status = state.status;
 
   const abortCurrentInference = useCallback(() => {
     if (abortControllerRef.current) {
@@ -54,24 +84,24 @@ export function useInferenceLoop({
       }
 
       isProcessingRef.current = true;
-      setStatus('capturing');
+      dispatch({ type: 'START_CAPTURE' });
 
       let frame: ImageBitmap | null = null;
       try {
         frame = await captureFrame(frameRef.current);
         if (!frame) {
-          setStatus('idle');
+          dispatch({ type: 'RESET' });
           isProcessingRef.current = false;
           return;
         }
 
         if (abortControllerRef.current?.signal.aborted) {
-          setStatus('idle');
+          dispatch({ type: 'RESET' });
           isProcessingRef.current = false;
           return;
         }
 
-        setStatus('inferring');
+        dispatch({ type: 'START_INFERENCE' });
 
         const result = await runInference(frame, prompt);
 
@@ -85,6 +115,7 @@ export function useInferenceLoop({
         }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
+        dispatch({ type: 'ERROR', error: (error as Error).message });
         if (pendingInferenceRef.current) {
           pendingInferenceRef.current.reject(error);
           pendingInferenceRef.current = null;
@@ -97,7 +128,7 @@ export function useInferenceLoop({
             // Frame may already be closed
           }
         }
-        setStatus('idle');
+        dispatch({ type: 'COMPLETE' });
         isProcessingRef.current = false;
 
         if (latestRequestRef.current) {
@@ -117,7 +148,7 @@ export function useInferenceLoop({
   const setActive = useCallback((active: boolean) => {
     if (active && !isActiveRef.current) {
       isActiveRef.current = true;
-      setStatus('idle');
+      dispatch({ type: 'RESET' });
     } else if (!active && isActiveRef.current) {
       isActiveRef.current = false;
       cancelPending();
@@ -135,7 +166,7 @@ export function useInferenceLoop({
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    setStatus('idle');
+    dispatch({ type: 'RESET' });
   }, [abortCurrentInference]);
 
   const run = useCallback(

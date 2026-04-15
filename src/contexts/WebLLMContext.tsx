@@ -7,6 +7,10 @@ import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
+const HEARTBEAT_TIMEOUT_MS = 60000;
+
+let globalWorker: Worker | null = null;
+let globalWorkerModelId: string | null = null;
 
 type InferenceResult = VisionResponse | null | TaskStep[];
 
@@ -58,6 +62,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const isInitializedRef = useRef(false);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastPongRef = useRef<number>(Date.now());
+  const reconnectAttemptRef = useRef<number>(0);
 
   useEffect(() => {
     checkWebGPU().then((result) => {
@@ -73,9 +79,12 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    const worker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
-      type: 'module',
-    });
+    if (!globalWorker) {
+      globalWorker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
+        type: 'module',
+      });
+    }
+    const worker = globalWorker;
     workerRef.current = worker;
 
     worker.onmessage = (event) => {
@@ -164,6 +173,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           break;
 
         case 'pong':
+          lastPongRef.current = Date.now();
           break;
 
         case 'warning':
@@ -291,6 +301,36 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
     const startHeartbeat = () => {
       heartbeatRef.current = setInterval(() => {
+        const timeSinceLastPong = Date.now() - lastPongRef.current;
+        
+        if (timeSinceLastPong > HEARTBEAT_TIMEOUT_MS) {
+          logger.warn('[WebLLM] Worker unresponsive, attempting reconnect...');
+          setError('AI Engine Lost - Restarting...');
+          setIsModelReady(false);
+          reconnectAttemptRef.current += 1;
+          
+          if (reconnectAttemptRef.current <= 3) {
+            worker.terminate();
+            globalWorker = null;
+            isInitializedRef.current = false;
+            
+            const newWorker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
+              type: 'module',
+            });
+            globalWorker = newWorker;
+            workerRef.current = newWorker;
+            
+            setTimeout(() => {
+              setError(null);
+              initModel();
+            }, 1000);
+          } else {
+            setError('AI Engine recovery failed after 3 attempts');
+            setErrorCode('WORKER_INIT_FAILED');
+          }
+          return;
+        }
+        
         worker.postMessage({ type: 'ping' });
       }, HEARTBEAT_INTERVAL_MS);
     };
@@ -302,7 +342,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         clearInterval(heartbeatRef.current);
       }
     };
-  }, []);
+  }, [initModel]);
 
   const dispose = useCallback(() => {
     pendingRef.current.forEach(({ timeoutId }) => clearTimeout(timeoutId));
@@ -314,6 +354,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       workerRef.current.terminate();
       workerRef.current = null;
     }
+    globalWorker = null;
+    globalWorkerModelId = null;
     setIsModelReady(false);
     setIsModelLoading(false);
     setIsInferring(false);
