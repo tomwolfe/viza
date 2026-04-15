@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
-import type { VisionResponse, PlanningResponse, TaskStep } from '@/schemas/vision';
+import type { VisionResponse, TaskStep } from '@/schemas/vision';
 import { checkWebGPU, CONFIG, SYSTEM_PROMPT } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
@@ -220,15 +220,24 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
         const imageSource: ImageBitmap | typeof image = image;
 
-        workerRef.current!.postMessage(
-          {
+        if (imageSource instanceof ImageBitmap) {
+          workerRef.current!.postMessage(
+            {
+              type: 'chat',
+              messageId,
+              image: imageSource,
+              prompt,
+            },
+            [imageSource]
+          );
+        } else {
+          workerRef.current!.postMessage({
             type: 'chat',
             messageId,
             image: imageSource,
             prompt,
-          },
-          imageSource instanceof ImageBitmap ? [imageSource] : []
-        );
+          });
+        }
       });
 
       return result;

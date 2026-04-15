@@ -59,7 +59,6 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
   const onCommandRef = useRef(onCommand);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   const [isSupported] = useState(() => {
     if (typeof window === 'undefined') return false;

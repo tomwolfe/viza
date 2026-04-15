@@ -21,6 +21,28 @@ interface ProjectToWorldOptions {
   depth?: number;
 }
 
+export function get3DPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  camera: THREE.PerspectiveCamera,
+  viewport: { width: number; height: number },
+  targetSize: number,
+  depth: number
+): THREE.Vector3 {
+  const aspect = viewport.width / viewport.height;
+  const scale = aspect > 1 ? 1 : aspect;
+  const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
+  const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
+
+  return new THREE.Vector3(
+    ((x / targetSize) - offsetX) / scale * viewport.width,
+    -(((y / targetSize) - offsetY) / scale * viewport.height),
+    depth
+  );
+}
+
 export function projectBoundingBoxToWorld(
   bbox: BoundingBox2D,
   options: ProjectToWorldOptions

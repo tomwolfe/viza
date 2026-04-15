@@ -8,14 +8,12 @@ import { WebLLMProvider, useWebLLM } from '@/contexts/WebLLMContext';
 import { useVoice } from '@/hooks/useVoice';
 import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
 import type { DetectedObject } from '@/schemas/vision';
-import { CONFIG } from '@/config';
 
 function ARContent() {
   const [isARActive, setIsARActive] = useState(false);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [voiceCommand, setVoiceCommand] = useState<string | null>(null);
   const [showWarnings, setShowWarnings] = useState(true);
-  const [currentSceneImage, setCurrentSceneImage] = useState<ImageBitmap | null>(null);
   const sceneImageRef = useRef<ImageBitmap | null>(null);
   
   const {
@@ -27,7 +25,6 @@ function ARContent() {
     initModel,
     runInference,
     runPlanningInference,
-    runCategoryInference,
     error: llmError,
     lastCompleted,
   } = useWebLLM();
@@ -36,9 +33,7 @@ function ARContent() {
     taskState,
     startTask,
     generateTaskPlan,
-    nextStep,
     completeCurrentStep,
-    resetTask,
     getCurrentInstruction,
     setSpeak,
     isPlanning,
@@ -113,7 +108,7 @@ function ARContent() {
     }
   }, [speak, taskState, completeCurrentStep]);
 
-  const generatePlanFromGoal = useCallback(async (goal: string, _image: ImageBitmap): Promise<TaskStep[]> => {
+  const generatePlanFromGoal = useCallback(async (goal: string, _image: unknown): Promise<TaskStep[]> => {
     if (!sceneImageRef.current) {
       console.warn('[App] No scene image available for planning');
       return DEFAULT_ASSEMBLY_TASK;
@@ -143,7 +138,7 @@ function ARContent() {
       if (isCleaningGoal && !taskState.isActive) {
         triggerPlanningMode(voiceCommand);
       } else {
-        setVoiceCommand(null);
+        setTimeout(() => setVoiceCommand(null), 0);
       }
     }
   }, [voiceCommand, isModelReady, taskState.isActive, triggerPlanningMode]);

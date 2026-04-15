@@ -5,7 +5,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
-import { projectBoundingBoxSize } from '@/utils/spatial';
+import { projectBoundingBoxSize, get3DPosition } from '@/utils/spatial';
 import { CONFIG } from '@/config';
 
 const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
@@ -30,23 +30,23 @@ export function DetectedObject3D({ obj, index, isTarget, targetName, useCategory
 
   const cameraPerspective = camera as THREE.PerspectiveCamera;
 
-  const aspect = viewport.width / viewport.height;
-  const scale = aspect > 1 ? 1 : aspect;
-  const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
-  const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
-
   const worldPosition = useMemo(
     () => {
       if (position) {
         return position;
       }
-      return new THREE.Vector3(
-        ((x / targetSize) - offsetX) / scale * viewport.width,
-        -(((y / targetSize) - offsetY) / scale * viewport.height),
+      return get3DPosition(
+        x,
+        y,
+        width,
+        height,
+        cameraPerspective,
+        { width: viewport.width, height: viewport.height },
+        targetSize,
         worldDepth
       );
     },
-    [position, x, y, viewport.width, viewport.height, worldDepth, targetSize, scale, offsetX, offsetY]
+    [position, x, y, width, height, cameraPerspective, viewport.width, viewport.height, worldDepth, targetSize]
   );
 
   const size = useMemo(

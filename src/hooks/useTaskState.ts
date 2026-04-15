@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 
 export interface TaskStep {
   id: string;
@@ -35,25 +36,11 @@ export interface UseTaskStateReturn {
 const STORAGE_KEY = 'viza_task_state';
 
 function loadFromStorage(): Partial<TaskState> | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.warn('[TaskState] Failed to load from storage:', e);
-  }
-  return null;
+  return safeGet<Partial<TaskState>>({ key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
 }
 
 function saveToStorage(state: TaskState): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.warn('[TaskState] Failed to save to storage:', e);
-  }
+  safeSet(state, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
 }
 
 export const DEFAULT_ASSEMBLY_TASK: TaskStep[] = [
@@ -208,9 +195,7 @@ export function useTaskState(): UseTaskStateReturn {
       isActive: false,
       completed: false,
     });
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    safeRemove({ key: STORAGE_KEY });
   }, []);
 
   return {

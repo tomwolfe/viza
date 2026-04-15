@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import { CameraFallback, useFrameCapture } from './CameraFallback';
 import { DetectedObject3D } from './DetectedObject3D';
@@ -9,7 +9,7 @@ import { useWorldMap, type WorldObject, getCategoryColor } from '@/hooks/useWorl
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 import * as THREE from 'three';
-import { projectBoundingBoxToWorld } from '@/utils/spatial';
+import { get3DPosition } from '@/utils/spatial';
 
 const xrStore = createXRStore();
 
@@ -41,12 +41,12 @@ export function ARScene({
   const { captureFrame } = useFrameCapture();
   const lastVoiceCommandRef = useRef<string | null>(null);
   const { addOrUpdateObject, getAllObjects } = useWorldMap();
-  const worldObjectsRef = useRef<WorldObject[]>([]);
+  const [worldObjects, setWorldObjects] = useState<WorldObject[]>([]);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
   useEffect(() => {
-    worldObjectsRef.current = getAllObjects();
+    setWorldObjects(getAllObjects());
   }, [getAllObjects]);
 
   const handleFrameReady = useCallback((video: HTMLVideoElement) => {
@@ -57,15 +57,15 @@ export function ARScene({
     (objects: DetectedObject[]) => {
       if (cameraRef.current) {
         objects.forEach((obj) => {
-          const position = projectBoundingBoxToWorld(
-            { x: obj.bbox_2d[0], y: obj.bbox_2d[1], width: obj.bbox_2d[2], height: obj.bbox_2d[3] },
-            {
-              camera: cameraRef.current!,
-              viewport: viewportRef.current,
-              imageWidth: CONFIG.SPATIAL.TARGET_SIZE,
-              imageHeight: CONFIG.SPATIAL.TARGET_SIZE,
-              depth: CONFIG.SPATIAL.DEFAULT_DEPTH,
-            }
+          const position = get3DPosition(
+            obj.bbox_2d[0],
+            obj.bbox_2d[1],
+            obj.bbox_2d[2],
+            obj.bbox_2d[3],
+            cameraRef.current as THREE.PerspectiveCamera,
+            { width: viewportRef.current.x, height: viewportRef.current.y },
+            CONFIG.SPATIAL.TARGET_SIZE,
+            CONFIG.SPATIAL.DEFAULT_DEPTH
           );
           addOrUpdateObject(obj, new THREE.Vector3(position.x, position.y, position.z));
         });
@@ -114,7 +114,7 @@ export function ARScene({
         />
       ))}
 
-      {worldObjectsRef.current.map((obj) => {
+      {worldObjects.map((obj) => {
         const categoryColor = getCategoryColor(obj.category);
         return (
           <DetectedObject3D

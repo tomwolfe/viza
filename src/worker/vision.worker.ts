@@ -12,57 +12,44 @@ let isInitialized = false;
 let currentModel: string | null = null;
 const pendingRef = new Map<string, PendingRequest>();
 
-const SYSTEM_PROMPT_DEFAULT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
+let systemPrompt = '';
+
+function extractJsonFromText(text: string): unknown {
+  const trimmed = text.trim();
+  
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
     }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-
-const PLANNING_PROMPT = `You are a spatial planning assistant. The user wants to complete a task.
-
-Analyze this image and create a detailed task plan.
-
-Return ONLY a valid JSON object with this structure:
-{
-  "taskSteps": [
-    {
-      "id": "step-N",
-      "instruction": "Clear description of what to do",
-      "targetObject": "The specific object or category to target",
-      "validationPrompt": "How to verify this step is complete"
+  }
+  
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(jsonCandidate);
+    } catch {
     }
-  ]
+  }
+  
+  return null;
 }
 
-Provide 5-10 specific steps in logical order. Do not include any other text.`;
-
-const CATEGORY_PROMPT = `You are a spatial assistant for cleaning/organizing tasks.
-
-Identify objects and categorize them. For cleaning tasks, find all trash/clutter items.
-
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string",
-      "category": "trash|clutter|keep|tool|unknown"
-    }
-  ],
-  "completed": boolean
+function validateVisionResponse(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const obj = data as { objects?: unknown };
+  return Array.isArray(obj.objects);
 }
-Do not include any other text. Only return the JSON object.`;
 
-let systemPrompt = SYSTEM_PROMPT_DEFAULT;
+function validatePlanningResponse(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const obj = data as { taskSteps?: unknown };
+  return Array.isArray(obj.taskSteps);
+}
 
 async function initializeModel(modelId: string): Promise<void> {
   if (isInitialized && currentModel === modelId) {
@@ -141,55 +128,27 @@ async function runVisionInference(
 
     const content = response.choices[0]?.message?.content || '';
 
-    let parsedResponse: unknown;
-    let jsonString = content;
+    let parsedResponse = extractJsonFromText(content);
 
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      jsonString = jsonMatch[1];
-    }
-
-    jsonString = jsonString.trim();
-
-    try {
-      const parsed = JSON.parse(jsonString);
-
-      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.objects)) {
-        parsedResponse = {
-          objects: parsed.objects.map((obj: unknown) => ({
-            name: (obj as { item?: string }).item || 'unknown',
-            bbox_2d: Array.isArray((obj as { coordinates?: unknown[] }).coordinates)
-              ? (obj as { coordinates?: number[] }).coordinates
-              : [0, 0, 0, 0],
-            action: (obj as { action_step?: string }).action_step || '',
-          })),
-          completed: (parsed as { completed?: boolean }).completed || false,
-        };
-      } else {
-        throw new Error('Invalid response structure');
-      }
-    } catch {
-      const fallbackMatch = content.match(/\{[\s\S]*\}/);
-      if (fallbackMatch) {
-        try {
-          const fallback = JSON.parse(fallbackMatch[0]);
-          parsedResponse = {
-            objects: Array.isArray((fallback as { objects?: unknown }).objects)
-              ? (fallback as { objects: unknown[] }).objects
-              : [],
-            rawText: content,
-          };
-        } catch {
-          parsedResponse = { objects: [], rawText: content };
-        }
-      } else {
-        parsedResponse = { objects: [], rawText: content };
-      }
+    if (!parsedResponse || !validateVisionResponse(parsedResponse)) {
+      parsedResponse = { objects: [], rawText: content };
       postMessage({
         type: 'warning',
         message: 'JSON parse required fallback extraction',
         rawResponse: content,
       });
+    } else {
+      const parsed = parsedResponse as { objects?: unknown[] };
+      parsedResponse = {
+        objects: (parsed.objects || []).map((obj: unknown) => ({
+          name: (obj as { item?: string }).item || 'unknown',
+          bbox_2d: Array.isArray((obj as { coordinates?: unknown[] }).coordinates)
+            ? (obj as { coordinates?: number[] }).coordinates
+            : [0, 0, 0, 0],
+          action: (obj as { action_step?: string }).action_step || '',
+        })),
+        completed: (parsedResponse as { completed?: boolean }).completed || false,
+      };
     }
 
     const isCompleted = (parsedResponse as { completed?: boolean })?.completed || false;
@@ -209,6 +168,8 @@ async function runVisionInference(
       message: `Inference failed: ${err.message}`,
       error: err.toString(),
     });
+  } finally {
+    image.close();
   }
 }
 
@@ -249,7 +210,23 @@ Return ONLY a valid JSON object with this structure:
 }
 
 Provide 5-10 specific steps. Focus on actionable items. Do not include any other text.`
-      : PLANNING_PROMPT.replace('complete a task', userGoal);
+      : `You are a spatial planning assistant. The user wants to: "${userGoal}"
+
+Analyze this image and create a detailed task plan for completing this goal.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "taskSteps": [
+    {
+      "id": "step-N",
+      "instruction": "Clear description of what to do",
+      "targetObject": "The specific object or category to target",
+      "validationPrompt": "How to verify this step is complete"
+    }
+  ]
+}
+
+Provide 5-10 specific steps in logical order. Do not include any other text.`;
 
     const messages: webllm.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
@@ -269,24 +246,15 @@ Provide 5-10 specific steps. Focus on actionable items. Do not include any other
     });
 
     const content = response.choices[0]?.message?.content || '';
-    let parsedResponse: unknown = null;
+    let parsedResponse = extractJsonFromText(content);
 
-    try {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      let jsonString = jsonMatch ? jsonMatch[1] : content;
-      jsonString = jsonString.trim();
-      parsedResponse = JSON.parse(jsonString);
-    } catch {
-      const fallbackMatch = content.match(/\{[\s\S]*\}/);
-      if (fallbackMatch) {
-        try {
-          parsedResponse = JSON.parse(fallbackMatch[0]);
-        } catch {
-          parsedResponse = { taskSteps: [], rawText: content };
-        }
-      } else {
-        parsedResponse = { taskSteps: [], rawText: content };
-      }
+    if (!parsedResponse || !validatePlanningResponse(parsedResponse)) {
+      parsedResponse = { taskSteps: [], rawText: content };
+      postMessage({
+        type: 'warning',
+        message: 'Planning JSON parse required fallback extraction',
+        rawResponse: content,
+      });
     }
 
     postMessage({
@@ -303,6 +271,8 @@ Provide 5-10 specific steps. Focus on actionable items. Do not include any other
       message: `Planning inference failed: ${err.message}`,
       error: err.toString(),
     });
+  } finally {
+    image.close();
   }
 }
 
@@ -373,32 +343,23 @@ Do not include any other text. Only return the JSON object.`;
     });
 
     const content = response.choices[0]?.message?.content || '';
-    let parsedResponse: unknown;
+    let parsedResponse = extractJsonFromText(content);
 
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    let jsonString = jsonMatch ? jsonMatch[1] : content;
-    jsonString = jsonString.trim();
-
-    try {
-      const parsed = JSON.parse(jsonString);
-
-      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.objects)) {
-        parsedResponse = {
-          objects: parsed.objects.map((obj: unknown) => ({
-            name: (obj as { item?: string }).item || 'unknown',
-            bbox_2d: Array.isArray((obj as { coordinates?: unknown[] }).coordinates)
-              ? (obj as { coordinates?: number[] }).coordinates
-              : [0, 0, 0, 0],
-            action: (obj as { action_step?: string }).action_step || '',
-            category: (obj as { category?: string }).category || 'unknown',
-          })),
-          completed: (parsed as { completed?: boolean }).completed || false,
-        };
-      } else {
-        throw new Error('Invalid response structure');
-      }
-    } catch {
+    if (!parsedResponse || !validateVisionResponse(parsedResponse)) {
       parsedResponse = { objects: [], rawText: content };
+    } else {
+      const parsed = parsedResponse as { objects?: unknown[]; completed?: boolean };
+      parsedResponse = {
+        objects: (parsed.objects || []).map((obj: unknown) => ({
+          name: (obj as { item?: string }).item || 'unknown',
+          bbox_2d: Array.isArray((obj as { coordinates?: unknown[] }).coordinates)
+            ? (obj as { coordinates?: number[] }).coordinates
+            : [0, 0, 0, 0],
+          action: (obj as { action_step?: string }).action_step || '',
+          category: (obj as { category?: string }).category || 'unknown',
+        })),
+        completed: parsed.completed || false,
+      };
     }
 
     const isCompleted = (parsedResponse as { completed?: boolean })?.completed || false;
@@ -417,6 +378,8 @@ Do not include any other text. Only return the JSON object.`;
       message: `Category inference failed: ${err.message}`,
       error: err.toString(),
     });
+  } finally {
+    image.close();
   }
 }
 

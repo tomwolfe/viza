@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
+import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 
 export interface WorldObject {
   id: string;
@@ -64,10 +65,9 @@ function loadWorldMapFromStorage(): Map<string, WorldObject> {
   if (typeof window === 'undefined') return map;
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = safeGet<[string, WorldObject][]>({ key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
     if (stored) {
-      const data = JSON.parse(stored) as [string, WorldObject][];
-      data.forEach(([key, value]) => {
+      stored.forEach(([key, value]) => {
         map.set(key, {
           ...value,
           position: new THREE.Vector3(value.position.x, value.position.y, value.position.z),
@@ -86,13 +86,8 @@ function loadWorldMapFromStorage(): Map<string, WorldObject> {
 }
 
 function saveWorldMapToStorage(map: Map<string, WorldObject>): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const data = Array.from(map.entries());
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.warn('[WorldMap] Failed to save to storage:', e);
-  }
+  const data = Array.from(map.entries());
+  safeSet(data, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
 }
 
 export function useWorldMap(): UseWorldMapReturn {
@@ -164,9 +159,7 @@ export function useWorldMap(): UseWorldMapReturn {
 
   const clearWorldMap = useCallback(() => {
     worldMapRef.current.clear();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    safeRemove({ key: STORAGE_KEY });
   }, []);
 
   const setDampeningFactor = useCallback((factor: number) => {
