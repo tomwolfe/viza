@@ -1,18 +1,17 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
 import { Text } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/hooks/useWebLLM';
+import { CONFIG } from '@/config';
 
 interface DetectedObject3DProps {
   obj: DetectedObject;
   index: number;
 }
 
-// Input resolution for bbox (standardized 512x512)
-const BBOX_SIZE = 512;
+const BBOX_SIZE = CONFIG.TARGET_SIZE;
 
 export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
   const { viewport } = useThree();
@@ -24,22 +23,12 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
 
   const boxWidth = (width / BBOX_SIZE) * viewport.width;
   const boxHeight = (height / BBOX_SIZE) * viewport.height;
-
-  const planeGeom = useMemo(() => new THREE.PlaneGeometry(boxWidth, boxHeight), [boxWidth, boxHeight]);
-  const edgeGeom = useMemo(() => new THREE.EdgesGeometry(planeGeom), [planeGeom]);
-
-  // Cleanup geometries on unmount to prevent memory leak
-  useEffect(() => {
-    return () => {
-      planeGeom.dispose();
-      edgeGeom.dispose();
-    };
-  }, [planeGeom, edgeGeom]);
+  const labelWidth = Math.max(boxWidth * 0.9, 0.5);
 
   return (
     <group position={[worldX, worldY, worldZ]}>
       <mesh>
-        <primitive object={planeGeom} attach="geometry" />
+        <planeGeometry args={[boxWidth, boxHeight]} />
         <meshBasicMaterial
           color="#00ff88"
           transparent
@@ -50,12 +39,12 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
       </mesh>
 
       <lineSegments>
-        <primitive object={edgeGeom} attach="geometry" />
+        <edgesGeometry args={[new THREE.PlaneGeometry(boxWidth, boxHeight)]} />
         <lineBasicMaterial color="#00ff88" linewidth={2} />
       </lineSegments>
 
       <mesh position={[0, -boxHeight / 2 - 0.15, 0.01]}>
-        <planeGeometry args={[Math.max(boxWidth * 0.9, 0.5), 0.25]} />
+        <planeGeometry args={[labelWidth, 0.25]} />
         <meshBasicMaterial color="#000000" transparent opacity={0.7} />
       </mesh>
 

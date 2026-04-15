@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, Mic, Loader2 } from 'lucide-react';
+import { Play, Mic, Loader2, AlertTriangle } from 'lucide-react';
 
 interface ARControlsProps {
   onStartAR: () => void;
@@ -9,6 +9,7 @@ interface ARControlsProps {
   isModelLoading: boolean;
   modelProgress: number;
   isListening: boolean;
+  isDeviceIncompatible?: boolean;
 }
 
 export default function ARControls({
@@ -18,13 +19,18 @@ export default function ARControls({
   isModelLoading,
   modelProgress,
   isListening,
+  isDeviceIncompatible,
 }: ARControlsProps) {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 p-4 pointer-events-none">
       <div className="flex flex-col items-center gap-4">
-        {/* Status Indicator */}
         <div className="bg-black/60 backdrop-blur-md rounded-xl px-6 py-3 text-white">
-          {isModelLoading ? (
+          {isDeviceIncompatible ? (
+            <div className="flex items-center gap-2 text-red-400">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Device Incompatible</span>
+            </div>
+          ) : isModelLoading ? (
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>Loading AI Model... {modelProgress}%</span>
@@ -39,9 +45,8 @@ export default function ARControls({
           )}
         </div>
 
-        {/* Control Buttons */}
         <div className="flex gap-4 pointer-events-auto">
-          {!isARActive && (
+          {!isARActive && !isDeviceIncompatible && (
             <button
               onClick={onStartAR}
               disabled={isModelLoading}

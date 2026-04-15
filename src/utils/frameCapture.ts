@@ -1,9 +1,34 @@
 /**
  * Frame capture and downsampling utilities.
  * Converts camera frames to ImageBitmap for WebLLM inference.
+ * Uses singleton OffscreenCanvas to prevent GC pressure.
  */
 
-const TARGET_SIZE = 512; // 512x512 for WebGPU VRAM efficiency
+import { CONFIG } from '@/config';
+
+const TARGET_SIZE = CONFIG.TARGET_SIZE;
+
+let sharedCanvas: OffscreenCanvas | null = null;
+let sharedContext: OffscreenCanvasRenderingContext2D | null = null;
+
+function getSharedCanvas(): OffscreenCanvas {
+  if (!sharedCanvas) {
+    sharedCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+    sharedContext = sharedCanvas.getContext('2d');
+  }
+  return sharedCanvas;
+}
+
+function getContext(): OffscreenCanvasRenderingContext2D {
+  if (!sharedContext) {
+    const canvas = getSharedCanvas();
+    sharedContext = canvas.getContext('2d');
+  }
+  if (!sharedContext) {
+    throw new Error('Failed to get 2D context from OffscreenCanvas');
+  }
+  return sharedContext;
+}
 
 /**
  * Downsample a video frame or canvas to TARGET_SIZE x TARGET_SIZE.
@@ -12,12 +37,8 @@ const TARGET_SIZE = 512; // 512x512 for WebGPU VRAM efficiency
 export async function downsampleFrame(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  const canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) {
-    throw new Error('Failed to get 2D context from OffscreenCanvas');
-  }
+  const ctx = getContext();
+  const canvas = getSharedCanvas();
 
   // Calculate crop to maintain aspect ratio
   const sourceWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.width;

@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useARStore } from '@/store/useARStore';
 
-// TypeScript declarations for the Web Speech API
 interface SpeechRecognitionEvent extends Event {
   readonly resultIndex: number;
   readonly results: SpeechRecognitionResultList;
@@ -48,24 +46,18 @@ interface UseVoiceReturn {
   error: string | null;
 }
 
-/**
- * Hook for voice interaction using native Web Speech API.
- * Handles SpeechRecognition (input) and SpeechSynthesis (output).
- */
-export function useVoice(onTranscriptReady?: (transcript: string) => void): UseVoiceReturn {
+export function useVoice(onCommand?: (transcript: string) => void): UseVoiceReturn {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
 
-  const { triggerInference } = useARStore();
+  const onCommandRef = useRef(onCommand);
 
-  // Initialize support check synchronously (only in browser)
   const [isSupported] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   });
 
-  // Initialize error message if not supported
   const [error, setError] = useState<string | null>(() => {
     if (!isSupported) {
       return 'Speech recognition is not supported in this browser.';
@@ -75,14 +67,11 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const isListeningRef = useRef(false);
-  const onTranscriptReadyRef = useRef(onTranscriptReady);
 
-  // Keep callback ref up to date
   useEffect(() => {
-    onTranscriptReadyRef.current = onTranscriptReady;
-  }, [onTranscriptReady]);
+    onCommandRef.current = onCommand;
+  }, [onCommand]);
 
-  // Handle speech recognition results
   const handleResult = useCallback((event: SpeechRecognitionEvent) => {
     let finalTranscript = '';
     let interimTranscript = '';
@@ -98,13 +87,11 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
 
     setTranscript(finalTranscript || interimTranscript);
 
-    if (finalTranscript && onTranscriptReadyRef.current) {
-      onTranscriptReadyRef.current(finalTranscript.trim());
-      triggerInference(finalTranscript.trim());
+    if (finalTranscript && onCommandRef.current) {
+      onCommandRef.current(finalTranscript.trim());
     }
-  }, [triggerInference]);
+  }, []);
 
-  // Handle speech recognition errors
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
     console.error('[Voice] Speech recognition error:', event.error);
     isListeningRef.current = false;
@@ -120,28 +107,22 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
       case 'not-allowed':
         setError('Microphone permission denied. Please allow microphone access.');
         break;
-      case 'network':
-        setError('Network error. Speech recognition requires an internet connection.');
-        break;
       default:
         setError(`Speech recognition error: ${event.error}`);
     }
   }, []);
 
-  // Handle speech recognition end
   const handleEnd = useCallback(() => {
     isListeningRef.current = false;
     setIsListening(false);
   }, []);
 
-  // Handle speech recognition start
   const handleStart = useCallback(() => {
     isListeningRef.current = true;
     setIsListening(true);
     setError(null);
   }, []);
 
-  // Initialize SpeechRecognition on mount
   useEffect(() => {
     if (!isSupported) {
       return;
@@ -149,14 +130,12 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    // Create recognition instance
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognition.maxAlternatives = 1;
 
-    // Attach event handlers
     recognition.onstart = handleStart;
     recognition.onresult = handleResult;
     recognition.onerror = handleError;
@@ -164,28 +143,22 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
 
     recognitionRef.current = recognition;
 
-    // Cleanup
     return () => {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
         } catch {
-          // Ignore abort errors
         }
       }
     };
   }, [isSupported, handleStart, handleResult, handleError, handleEnd]);
 
-  /**
-   * Start listening for voice input.
-   */
   const startListening = useCallback(async (): Promise<void> => {
     if (!recognitionRef.current) {
       setError('Speech recognition is not available.');
       return;
     }
 
-    // Stop any ongoing speech synthesis
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
 
@@ -194,7 +167,6 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
       recognitionRef.current.start();
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      // If already started, stop and restart
       if (errorMessage.includes('already started')) {
         recognitionRef.current.stop();
         setTimeout(() => {
@@ -211,9 +183,6 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
     }
   }, []);
 
-  /**
-   * Stop listening.
-   */
   const stopListening = useCallback((): void => {
     if (recognitionRef.current && isListeningRef.current) {
       recognitionRef.current.stop();
@@ -222,16 +191,12 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
     setIsListening(false);
   }, []);
 
-  /**
-   * Speak text aloud using SpeechSynthesis.
-   */
   const speak = useCallback((text: string): void => {
     if (!window.speechSynthesis) {
       console.warn('[Voice] Speech synthesis not supported.');
       return;
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -256,9 +221,6 @@ export function useVoice(onTranscriptReady?: (transcript: string) => void): UseV
     window.speechSynthesis.speak(utterance);
   }, []);
 
-  /**
-   * Stop speaking.
-   */
   const stopSpeaking = useCallback((): void => {
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
