@@ -3,8 +3,12 @@
 import { Text } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useMemo } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
 import { projectBoundingBoxSize } from '@/utils/spatial';
+import { CONFIG } from '@/config';
+
+const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 
 interface DetectedObject3DProps {
   obj: DetectedObject;
@@ -15,33 +19,45 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
   const { camera, viewport } = useThree();
   const [x, y, width, height] = obj.bbox_2d;
 
-  const worldDepth = -3 - index * 0.5;
+  const { SPATIAL } = CONFIG;
+  const worldDepth = SPATIAL.DEFAULT_DEPTH - index * SPATIAL.DEPTH_INCREMENT;
 
   const cameraPerspective = camera as THREE.PerspectiveCamera;
-  const worldPosition = new THREE.Vector3(
-    ((x + width / 2) / 512 - 0.5) * viewport.width,
-    -((y + height / 2) / 512 - 0.5) * viewport.height,
-    worldDepth
+  const worldPosition = useMemo(
+    () =>
+      new THREE.Vector3(
+        ((x + width / 2) / 512 - 0.5) * viewport.width,
+        -((y + height / 2) / 512 - 0.5) * viewport.height,
+        worldDepth
+      ),
+    [x, y, width, height, viewport.width, viewport.height, worldDepth]
   );
 
-  const size = projectBoundingBoxSize(
-    { x, y, width, height },
-    cameraPerspective,
-    512,
-    512,
-    Math.abs(worldDepth)
+  const size = useMemo(
+    () =>
+      projectBoundingBoxSize(
+        { x, y, width, height },
+        cameraPerspective,
+        512,
+        512,
+        Math.abs(worldDepth)
+      ),
+    [x, y, width, height, cameraPerspective, worldDepth]
   );
 
   const boxWidth = Math.max(size.width, 0.1);
   const boxHeight = Math.max(size.height, 0.1);
   const labelWidth = Math.max(boxWidth * 0.9, 0.5);
 
+  const boxScale = useMemo(() => [boxWidth, boxHeight, 1] as const, [boxWidth, boxHeight]);
+  const labelScale = useMemo(() => [labelWidth, 0.25, 1] as const, [labelWidth]);
+
   return (
     <group position={[worldPosition.x, worldPosition.y, worldPosition.z]}>
-      <mesh>
-        <planeGeometry args={[boxWidth, boxHeight]} />
+      <mesh scale={boxScale}>
+        <planeGeometry args={[1, 1]} />
         <meshBasicMaterial
-          color="#00ff88"
+          color={SPATIAL.BOX_COLOR}
           transparent
           opacity={0.15}
           side={THREE.DoubleSide}
@@ -49,37 +65,37 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
         />
       </mesh>
 
-      <lineSegments>
-        <edgesGeometry args={[new THREE.PlaneGeometry(boxWidth, boxHeight)]} />
-        <lineBasicMaterial color="#00ff88" linewidth={2} />
+      <lineSegments scale={boxScale}>
+        <edgesGeometry args={[PLANE_GEOMETRY]} />
+        <lineBasicMaterial color={SPATIAL.BOX_COLOR} linewidth={2} />
       </lineSegments>
 
-      <mesh position={[0, -boxHeight / 2 - 0.15, 0.01]}>
-        <planeGeometry args={[labelWidth, 0.25]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.7} />
+      <mesh position={[0, -boxHeight / 2 - SPATIAL.LABEL_OFFSET, 0.01]} scale={labelScale}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial color={SPATIAL.LABEL_BG_COLOR} transparent opacity={SPATIAL.LABEL_BG_OPACITY} />
       </mesh>
 
       <Text
-        position={[0, -boxHeight / 2 - 0.15, 0.02]}
-        fontSize={0.12}
-        color="#00ff88"
+        position={[0, -boxHeight / 2 - SPATIAL.LABEL_OFFSET, 0.02]}
+        fontSize={SPATIAL.FONT_SIZE}
+        color={SPATIAL.BOX_COLOR}
         anchorX="center"
         anchorY="middle"
-        outlineWidth={0.02}
-        outlineColor="#000000"
+        outlineWidth={SPATIAL.OUTLINE_WIDTH}
+        outlineColor={SPATIAL.LABEL_BG_COLOR}
       >
         {obj.name}
       </Text>
 
       {obj.action && (
         <Text
-          position={[0, -boxHeight / 2 - 0.3, 0.02]}
-          fontSize={0.08}
+          position={[0, -boxHeight / 2 - SPATIAL.ACTION_OFFSET, 0.02]}
+          fontSize={SPATIAL.ACTION_FONT_SIZE}
           color="#ffffff"
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.01}
-          outlineColor="#000000"
+          outlineWidth={SPATIAL.ACTION_OUTLINE_WIDTH}
+          outlineColor={SPATIAL.LABEL_BG_COLOR}
         >
           {obj.action}
         </Text>

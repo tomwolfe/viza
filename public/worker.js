@@ -11,11 +11,12 @@
 // Load web-llm from CDN for static export compatibility
 // This MUST match the version in package.json
 // SECURITY: Using specific version with integrity hash in production
-importScripts('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/dist/webllm.min.js');
+importScripts('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/dist/webllm.min.js#sha384-5crZyMDeTM0ifOFASah8oqsNb1hCtHdT18lSHK6RYsQZlL0nf+DLOyPmAmqloENC');
 
 let engine = null;
 let isInitialized = false;
 let currentModel = null;
+let pendingRef = new Map();
 let systemPrompt = `You are a spatial assistant. Analyze this image based on the user's audio request. 
 Return ONLY a valid JSON object with the structure:
 {
@@ -228,6 +229,12 @@ self.onmessage = async (event) => {
 
     case 'reload':
       await reloadEngine();
+      break;
+
+    case 'app_reset':
+      pendingRef.current.forEach(cb => cb({ type: 'error', message: 'App reset triggered' }));
+      pendingRef.current.clear();
+      postMessage({ type: 'reset_ack' });
       break;
 
     case 'ping':

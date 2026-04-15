@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useRef, useCallback, Re
 import type { VisionResponse } from '@/schemas/vision';
 import { checkWebGPU, CONFIG, SYSTEM_PROMPT } from '@/config';
 import { parseVisionResponse } from '@/schemas/vision';
+import type { VizaErrorCode } from '@/types/worker';
 
 const INFERENCE_TIMEOUT_MS = 15000;
 const HEARTBEAT_INTERVAL_MS = 30000;
@@ -16,7 +17,9 @@ export interface WebLLMContextValue {
   isDeviceCompatible: boolean;
   initModel: () => Promise<void>;
   runInference: (image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement, prompt: string) => Promise<VisionResponse | null>;
+  dispose: () => void;
   error: string | null;
+  errorCode: VizaErrorCode | null;
 }
 
 const WebLLMContext = createContext<WebLLMContextValue | null>(null);
@@ -32,6 +35,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const [isModelReady, setIsModelReady] = useState(false);
   const [isInferring, setIsInferring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
 
   const workerRef = useRef<Worker | null>(null);
@@ -46,6 +50,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       if (!result.supported || result.memoryGB < 4) {
         setIsDeviceCompatible(false);
         setError('WebGPU not supported or insufficient memory (requires 4GB+).');
+        setErrorCode('WEBGPU_NOT_SUPPORTED');
       }
     });
   }, []);
@@ -96,6 +101,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         case 'error':
           console.error('[WebLLM] Error:', data.message);
           setError(data.message);
+          setErrorCode('WORKER_INIT_FAILED');
           setIsModelLoading(false);
           setIsInferring(false);
           if (data.messageId) {
@@ -178,6 +184,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           if (pendingRef.current.has(messageId)) {
             pendingRef.current.delete(messageId);
             setError('Inference timeout after 15s');
+            setErrorCode('INFERENCE_TIMEOUT');
             setIsInferring(false);
             resolve(null);
           }
@@ -222,6 +229,24 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     };
   }, []);
 
+  const dispose = useCallback(() => {
+    pendingRef.current.forEach(({ timeoutId }) => clearTimeout(timeoutId));
+    pendingRef.current.clear();
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+    }
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
+    setIsModelReady(false);
+    setIsModelLoading(false);
+    setIsInferring(false);
+    setError(null);
+    setErrorCode(null);
+    isInitializedRef.current = false;
+  }, []);
+
   return (
     <WebLLMContext.Provider
       value={{
@@ -232,7 +257,9 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         isDeviceCompatible,
         initModel,
         runInference,
+        dispose,
         error,
+        errorCode,
       }}
     >
       {children}

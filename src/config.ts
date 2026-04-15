@@ -8,6 +8,20 @@ export const CONFIG = {
   TARGET_SIZE: 512,
   INFERENCE_INTERVAL: 5000,
   ENABLE_TELEMETRY: process.env.NODE_ENV === 'development',
+
+  SPATIAL: {
+    DEFAULT_DEPTH: -3,
+    DEPTH_INCREMENT: 0.5,
+    LABEL_OFFSET: 0.15,
+    ACTION_OFFSET: 0.3,
+    BOX_COLOR: '#00ff88',
+    LABEL_BG_COLOR: '#000000',
+    LABEL_BG_OPACITY: 0.7,
+    FONT_SIZE: 0.12,
+    ACTION_FONT_SIZE: 0.08,
+    OUTLINE_WIDTH: 0.02,
+    ACTION_OUTLINE_WIDTH: 0.01,
+  },
 };
 
 export const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
