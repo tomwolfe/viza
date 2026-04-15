@@ -5,6 +5,8 @@
 export type WorkerOutgoingMessage =
   | { type: 'init'; model: string; systemPrompt?: string }
   | { type: 'chat'; image: ImageBitmap; prompt: string; messageId: string }
+  | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string }
+  | { type: 'category'; image: ImageBitmap; goal: string; messageId: string }
   | { type: 'reload' }
   | { type: 'ping' }
   | { type: 'app_reset' };
@@ -15,10 +17,12 @@ export type WorkerIncomingMessage =
   | { type: 'init_complete'; model: string; progress: number }
   | { type: 'inference_start' }
   | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown }
+  | { type: 'planning_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
   | { type: 'error'; message: string; messageId?: string; error?: string }
   | { type: 'warning'; message: string; rawResponse?: string }
   | { type: 'pong' }
   | { type: 'reloaded' }
+  | { type: 'reset_ack' }
   | { type: 'unknown_message'; received: string };
 
 export type WorkerMessageType = WorkerIncomingMessage['type'];

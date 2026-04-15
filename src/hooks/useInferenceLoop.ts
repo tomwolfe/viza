@@ -1,8 +1,10 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
+
+export type InferenceStatus = 'idle' | 'capturing' | 'inferring';
 
 interface UseInferenceLoopOptions {
   runInference: (
@@ -28,20 +30,13 @@ export function useInferenceLoop({
   intervalMs = CONFIG.INFERENCE_INTERVAL,
 }: UseInferenceLoopOptions) {
   const abortControllerRef = useRef<AbortController | null>(null);
-  const isProcessingRef = useRef(false);
   const frameRef = useRef<HTMLVideoElement | null>(null);
   const isActiveRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const inferenceQueueRef = useRef<PendingInference[]>([]);
-  const isVoiceTriggeredRef = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
-    frameRef.current = video;
-  }, []);
-
-  const setActive = useCallback((active: boolean) => {
-    isActiveRef.current = active;
-  }, []);
+  const [status, setStatus] = useState<InferenceStatus>('idle');
 
   const abortCurrentInference = useCallback(() => {
     if (abortControllerRef.current) {
@@ -52,28 +47,30 @@ export function useInferenceLoop({
 
   const processQueue = useCallback(
     async () => {
-      if (!frameRef.current || isProcessingRef.current || inferenceQueueRef.current.length === 0) {
+      if (!frameRef.current || status !== 'idle' || inferenceQueueRef.current.length === 0) {
         return;
       }
 
       const nextInference = inferenceQueueRef.current.shift();
       if (!nextInference) return;
 
-      isProcessingRef.current = true;
+      setStatus('capturing');
 
       try {
         const frame = await captureFrame(frameRef.current);
         if (!frame) {
-          isProcessingRef.current = false;
+          setStatus('idle');
           processQueue();
           return;
         }
 
         if (abortControllerRef.current?.signal.aborted) {
-          isProcessingRef.current = false;
+          setStatus('idle');
           processQueue();
           return;
         }
+
+        setStatus('inferring');
 
         const result = await runInference(frame, nextInference.prompt);
 
@@ -86,15 +83,39 @@ export function useInferenceLoop({
         console.error('[useInferenceLoop] Inference error:', error);
         nextInference.reject(error);
       } finally {
-        isProcessingRef.current = false;
+        setStatus('idle');
 
         if (inferenceQueueRef.current.length > 0) {
           processQueue();
         }
       }
     },
-    [runInference, captureFrame, onObjectsDetected]
+    [status, runInference, captureFrame, onObjectsDetected]
   );
+
+  const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
+    frameRef.current = video;
+  }, []);
+
+  const setActive = useCallback((active: boolean) => {
+    if (active && !isActiveRef.current) {
+      isActiveRef.current = true;
+      setStatus('idle');
+    } else if (!active && isActiveRef.current) {
+      isActiveRef.current = false;
+      cancelPending();
+    }
+  }, []);
+
+  const cancelPending = useCallback(() => {
+    abortCurrentInference();
+    inferenceQueueRef.current = [];
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setStatus('idle');
+  }, [abortCurrentInference]);
 
   const enqueueInference = useCallback(
     async (prompt: string, voiceTriggered: boolean = false): Promise<unknown> => {
@@ -102,10 +123,13 @@ export function useInferenceLoop({
         return null;
       }
 
-      if (voiceTriggered && isProcessingRef.current) {
+      if (voiceTriggered && status !== 'idle') {
         abortCurrentInference();
         inferenceQueueRef.current = [];
-        isVoiceTriggeredRef.current = true;
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
       }
 
       return new Promise((resolve, reject) => {
@@ -116,12 +140,12 @@ export function useInferenceLoop({
           timestamp: Date.now(),
         });
 
-        if (!isProcessingRef.current) {
+        if (status === 'idle') {
           processQueue();
         }
       });
     },
-    [abortCurrentInference, processQueue]
+    [status, abortCurrentInference, processQueue]
   );
 
   const executeInference = useCallback(
@@ -130,18 +154,23 @@ export function useInferenceLoop({
         abortCurrentInference();
       }
 
-      if (!frameRef.current || isProcessingRef.current) return;
+      if (!frameRef.current || status !== 'idle') return;
 
-      isProcessingRef.current = true;
+      setStatus('capturing');
 
       try {
         const frame = await captureFrame(frameRef.current);
-        if (!frame) return;
-
-        if (abortControllerRef.current?.signal.aborted) {
-          isProcessingRef.current = false;
+        if (!frame) {
+          setStatus('idle');
           return;
         }
+
+        if (abortControllerRef.current?.signal.aborted) {
+          setStatus('idle');
+          return;
+        }
+
+        setStatus('inferring');
 
         const result = await runInference(frame, prompt);
 
@@ -151,47 +180,32 @@ export function useInferenceLoop({
       } catch (error) {
         console.error('[useInferenceLoop] Inference error:', error);
       } finally {
-        isProcessingRef.current = false;
+        setStatus('idle');
       }
     },
-    [runInference, captureFrame, onObjectsDetected, abortCurrentInference]
+    [status, runInference, captureFrame, onObjectsDetected, abortCurrentInference]
   );
-
-  const cancelPending = useCallback(() => {
-    abortCurrentInference();
-    inferenceQueueRef.current = [];
-    isProcessingRef.current = false;
-  }, [abortCurrentInference]);
 
   useEffect(() => {
     if (!isActiveRef.current) return undefined;
 
-    let lastTime = 0;
-
-    const tick = () => {
-      if (!isActiveRef.current) return;
-
-      const now = performance.now();
-
-      if (!isProcessingRef.current && now - lastTime >= intervalMs) {
-        lastTime = now;
+    intervalRef.current = setInterval(() => {
+      if (status === 'idle') {
         executeInference('Identify objects in this scene.');
       }
-
-      animationFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(tick);
+    }, intervalMs);
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
       cancelPending();
     };
-  }, [intervalMs, executeInference, cancelPending]);
+  }, [intervalMs, status, executeInference, cancelPending]);
 
   return {
+    status,
     setVideoSource,
     setActive,
     executeInference,

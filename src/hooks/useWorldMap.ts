@@ -4,6 +4,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
+import { CONFIG } from '@/config';
 
 export interface WorldObject {
   id: string;
@@ -27,8 +28,7 @@ export interface UseWorldMapReturn {
   setDampeningFactor: (factor: number) => void;
 }
 
-const DEFAULT_DAMPENING = 0.3;
-const DEFAULT_DISTANCE_THRESHOLD = 0.5;
+const DEFAULT_DAMPENING = CONFIG.SPATIAL.DAMPENING_FACTOR;
 const STORAGE_KEY = 'viza_world_map';
 
 function categorizeObject(name: string, action?: string): ObjectCategory {
@@ -115,7 +115,7 @@ export function useWorldMap(): UseWorldMapReturn {
     const map = worldMapRef.current;
     const category = categorizeObject(obj.name, obj.action);
 
-    const existingKey = findExistingObjectKey(map, position, DEFAULT_DISTANCE_THRESHOLD);
+    const existingKey = findExistingObjectKey(map, position, CONFIG.SPATIAL.DISTANCE_THRESHOLD);
 
     if (existingKey) {
       const existing = map.get(existingKey)!;

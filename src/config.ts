@@ -113,6 +113,137 @@ Return ONLY a valid JSON object with the structure:
 }
 Do not include any other text. Only return the JSON object.`;
 
+export const PROMPT_TEMPLATES = {
+  vision: `Analyze this scene and identify objects of interest. Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "item": "string",
+      "coordinates": [x, y, width, height],
+      "action_step": "string"
+    }
+  ],
+  "completed": boolean
+}
+Do not include any other text. Only return the JSON object.`,
+
+  planningCleaning: `You are a spatial planning assistant. The user wants to: "{goal}"
+
+Analyze this image and create a detailed task plan. Identify all objects that match the goal category.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "taskSteps": [
+    {
+      "id": "step-N",
+      "instruction": "Clear description of what to do",
+      "targetObject": "The specific object or category to target",
+      "validationPrompt": "How to verify this step is complete"
+    }
+  ]
+}
+
+Provide 5-10 specific steps. Focus on actionable items. Do not include any other text.`,
+
+  planningGeneral: `You are a spatial planning assistant. The user wants to: "{goal}"
+
+Analyze this image and create a detailed task plan for completing this goal.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "taskSteps": [
+    {
+      "id": "step-N",
+      "instruction": "Clear description of what to do",
+      "targetObject": "The specific object or category to target",
+      "validationPrompt": "How to verify this step is complete"
+    }
+  ]
+}
+
+Provide 5-10 specific steps in logical order. Do not include any other text.`,
+
+  categoryTrash: `You are a spatial assistant for cleaning tasks.
+User Goal: "{goal}"
+
+Identify all TRASH items (wrappers, bottles, cans, paper waste, food containers, etc.) and return their bounding boxes.
+
+Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "item": "string - object name",
+      "coordinates": [x, y, width, height],
+      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
+      "category": "string - one of: trash, clutter, keep, tool, unknown"
+    }
+  ],
+  "completed": boolean
+}
+Do not include any other text. Only return the JSON object.`,
+
+  categoryClutter: `You are a spatial assistant for cleaning tasks.
+User Goal: "{goal}"
+
+Identify all CLUTTER items (clothes, papers, scattered items, messy areas) and return their bounding boxes.
+
+Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "item": "string - object name",
+      "coordinates": [x, y, width, height],
+      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
+      "category": "string - one of: trash, clutter, keep, tool, unknown"
+    }
+  ],
+  "completed": boolean
+}
+Do not include any other text. Only return the JSON object.`,
+
+  categoryGeneral: `You are a spatial assistant for cleaning tasks.
+User Goal: "{goal}"
+
+Identify all objects and their categories. Use "keep" for items to preserve, "trash" for waste, "clutter" for items to organize.
+
+Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "item": "string - object name",
+      "coordinates": [x, y, width, height],
+      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
+      "category": "string - one of: trash, clutter, keep, tool, unknown"
+    }
+  ],
+  "completed": boolean
+}
+Do not include any other text. Only return the JSON object.`,
+};
+
+export function getVisionPrompt(): string {
+  return PROMPT_TEMPLATES.vision;
+}
+
+export function getPlanningPrompt(userGoal: string): string {
+  const isCleaningMode = /clean|organize|trash|garbage|mess/i.test(userGoal);
+  const template = isCleaningMode ? PROMPT_TEMPLATES.planningCleaning : PROMPT_TEMPLATES.planningGeneral;
+  return template.replace('{goal}', userGoal);
+}
+
+export function getCategoryPrompt(userGoal: string): string {
+  const isTrash = /trash|garbage|discard|throw away|waste/i.test(userGoal);
+  const isClutter = /clean|organize|mess|tidy|put away/i.test(userGoal);
+
+  if (isTrash) {
+    return PROMPT_TEMPLATES.categoryTrash.replace('{goal}', userGoal);
+  }
+  if (isClutter) {
+    return PROMPT_TEMPLATES.categoryClutter.replace('{goal}', userGoal);
+  }
+  return PROMPT_TEMPLATES.categoryGeneral.replace('{goal}', userGoal);
+}
+
 export function buildCategoryPrompt(userGoal: string): string {
   const isTrash = /trash|garbage|discard|throw away|waste/i.test(userGoal);
   const isClutter = /clean|organize|mess|tidy|put away/i.test(userGoal);
