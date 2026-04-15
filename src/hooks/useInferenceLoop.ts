@@ -37,6 +37,7 @@ export function useInferenceLoop({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [status, setStatus] = useState<InferenceStatus>('idle');
+  const isProcessingRef = useRef(false);
 
   const abortCurrentInference = useCallback(() => {
     if (abortControllerRef.current) {
@@ -47,26 +48,34 @@ export function useInferenceLoop({
 
   const processQueue = useCallback(
     async () => {
-      if (!frameRef.current || status !== 'idle' || inferenceQueueRef.current.length === 0) {
+      if (!frameRef.current || isProcessingRef.current || inferenceQueueRef.current.length === 0) {
         return;
       }
 
       const nextInference = inferenceQueueRef.current.shift();
       if (!nextInference) return;
 
+      isProcessingRef.current = true;
       setStatus('capturing');
 
+      let frame: ImageBitmap | null = null;
       try {
-        const frame = await captureFrame(frameRef.current);
+        frame = await captureFrame(frameRef.current);
         if (!frame) {
           setStatus('idle');
-          processQueue();
+          isProcessingRef.current = false;
+          if (inferenceQueueRef.current.length > 0) {
+            processQueue();
+          }
           return;
         }
 
         if (abortControllerRef.current?.signal.aborted) {
           setStatus('idle');
-          processQueue();
+          isProcessingRef.current = false;
+          if (inferenceQueueRef.current.length > 0) {
+            processQueue();
+          }
           return;
         }
 
@@ -83,14 +92,18 @@ export function useInferenceLoop({
         console.error('[useInferenceLoop] Inference error:', error);
         nextInference.reject(error);
       } finally {
+        if (frame) {
+          frame.close();
+        }
         setStatus('idle');
+        isProcessingRef.current = false;
 
         if (inferenceQueueRef.current.length > 0) {
           processQueue();
         }
       }
     },
-    [status, runInference, captureFrame, onObjectsDetected]
+    [runInference, captureFrame, onObjectsDetected]
   );
 
   const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
@@ -123,7 +136,7 @@ export function useInferenceLoop({
         return null;
       }
 
-      if (voiceTriggered && status !== 'idle') {
+      if (voiceTriggered && isProcessingRef.current) {
         abortCurrentInference();
         inferenceQueueRef.current = [];
         if (intervalRef.current) {
@@ -140,33 +153,39 @@ export function useInferenceLoop({
           timestamp: Date.now(),
         });
 
-        if (status === 'idle') {
+        if (!isProcessingRef.current) {
           processQueue();
         }
       });
     },
-    [status, abortCurrentInference, processQueue]
+    [abortCurrentInference, processQueue]
   );
 
   const executeInference = useCallback(
     async (prompt: string, shouldAbort?: boolean) => {
+      if (isProcessingRef.current) return;
+
       if (shouldAbort) {
         abortCurrentInference();
       }
 
-      if (!frameRef.current || status !== 'idle') return;
+      if (!frameRef.current) return;
 
+      isProcessingRef.current = true;
       setStatus('capturing');
 
+      let frame: ImageBitmap | null = null;
       try {
-        const frame = await captureFrame(frameRef.current);
+        frame = await captureFrame(frameRef.current);
         if (!frame) {
           setStatus('idle');
+          isProcessingRef.current = false;
           return;
         }
 
         if (abortControllerRef.current?.signal.aborted) {
           setStatus('idle');
+          isProcessingRef.current = false;
           return;
         }
 
@@ -180,17 +199,21 @@ export function useInferenceLoop({
       } catch (error) {
         console.error('[useInferenceLoop] Inference error:', error);
       } finally {
+        if (frame) {
+          frame.close();
+        }
         setStatus('idle');
+        isProcessingRef.current = false;
       }
     },
-    [status, runInference, captureFrame, onObjectsDetected, abortCurrentInference]
+    [runInference, captureFrame, onObjectsDetected, abortCurrentInference]
   );
 
   useEffect(() => {
     if (!isActiveRef.current) return undefined;
 
     intervalRef.current = setInterval(() => {
-      if (status === 'idle') {
+      if (!isProcessingRef.current) {
         executeInference('Identify objects in this scene.');
       }
     }, intervalMs);
@@ -202,7 +225,7 @@ export function useInferenceLoop({
       }
       cancelPending();
     };
-  }, [intervalMs, status, executeInference, cancelPending]);
+  }, [intervalMs, executeInference, cancelPending]);
 
   return {
     status,

@@ -6,7 +6,6 @@ import { checkWebGPU, CONFIG, SYSTEM_PROMPT } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
 
-const INFERENCE_TIMEOUT_MS = 15000;
 const HEARTBEAT_INTERVAL_MS = 30000;
 
 export interface WebLLMContextValue {
@@ -214,7 +213,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
             setIsInferring(false);
             resolve(null);
           }
-        }, INFERENCE_TIMEOUT_MS);
+        }, CONFIG.INFERENCE_TIMEOUT_MS);
 
         pendingRef.current.set(messageId, { resolve, timeoutId });
 
@@ -266,7 +265,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
             setIsInferring(false);
             resolve([]);
           }
-        }, 30000);
+        }, CONFIG.PLANNING_TIMEOUT_MS);
 
         planningPendingRef.current.set(messageId, { resolve, timeoutId });
 
@@ -307,7 +306,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
             setIsInferring(false);
             resolve(null);
           }
-        }, INFERENCE_TIMEOUT_MS);
+        }, CONFIG.INFERENCE_TIMEOUT_MS);
 
         pendingRef.current.set(messageId, { resolve, timeoutId });
 
