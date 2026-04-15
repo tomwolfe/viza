@@ -6,7 +6,7 @@ import ARControls from '@/components/ARControls';
 import { ARScene, PlaceholderScene } from '@/components/ARScene';
 import { WebLLMProvider, useWebLLM } from '@/contexts/WebLLMContext';
 import { useVoice } from '@/hooks/useVoice';
-import type { DetectedObject } from '@/hooks/useWebLLM';
+import type { DetectedObject } from '@/schemas/vision';
 
 function ARContent() {
   const [isARActive, setIsARActive] = useState(false);

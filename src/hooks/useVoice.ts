@@ -34,6 +34,8 @@ declare global {
   }
 }
 
+type VoiceStatus = 'idle' | 'listening' | 'starting';
+
 interface UseVoiceReturn {
   isListening: boolean;
   isSpeaking: boolean;
@@ -47,7 +49,7 @@ interface UseVoiceReturn {
 }
 
 export function useVoice(onCommand?: (transcript: string) => void): UseVoiceReturn {
-  const [isListening, setIsListening] = useState(false);
+  const [status, setStatus] = useState<VoiceStatus>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
 
@@ -66,7 +68,6 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   });
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const isListeningRef = useRef(false);
 
   useEffect(() => {
     onCommandRef.current = onCommand;
@@ -94,8 +95,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
     console.error('[Voice] Speech recognition error:', event.error);
-    isListeningRef.current = false;
-    setIsListening(false);
+    setStatus('idle');
 
     switch (event.error) {
       case 'no-speech':
@@ -113,13 +113,11 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   }, []);
 
   const handleEnd = useCallback(() => {
-    isListeningRef.current = false;
-    setIsListening(false);
+    setStatus('idle');
   }, []);
 
   const handleStart = useCallback(() => {
-    isListeningRef.current = true;
-    setIsListening(true);
+    setStatus('listening');
     setError(null);
   }, []);
 
@@ -159,16 +157,25 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       return;
     }
 
+    if (status !== 'idle') {
+      return;
+    }
+
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
+    setStatus('starting');
 
     try {
       setTranscript('');
       recognitionRef.current.start();
     } catch (err: unknown) {
+      setStatus('idle');
       const errorMessage = err instanceof Error ? err.message : String(err);
       if (errorMessage.includes('already started')) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch {
+        }
         setTimeout(() => {
           try {
             recognitionRef.current?.start();
@@ -181,15 +188,14 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         setError('Failed to start speech recognition.');
       }
     }
-  }, []);
+  }, [status]);
 
   const stopListening = useCallback((): void => {
-    if (recognitionRef.current && isListeningRef.current) {
+    if (recognitionRef.current && status === 'listening') {
       recognitionRef.current.stop();
     }
-    isListeningRef.current = false;
-    setIsListening(false);
-  }, []);
+    setStatus('idle');
+  }, [status]);
 
   const speak = useCallback((text: string): void => {
     if (!window.speechSynthesis) {
@@ -229,7 +235,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   }, []);
 
   return {
-    isListening,
+    isListening: status === 'listening',
     isSpeaking,
     transcript,
     startListening,

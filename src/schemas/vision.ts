@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const DetectedObjectSchema = z.object({
   name: z.string().min(1),
-  bbox_2d: z.array(z.number()).length(4),
-  action: z.string().optional(),
+  bbox_2d: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  action: z.string().default(''),
 });
 
 export const VisionResponseSchema = z.object({

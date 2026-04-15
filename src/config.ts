@@ -25,7 +25,7 @@ export async function checkWebGPU() {
     await adapter.requestDevice();
     return { supported: true, memoryGB: 4 };
   } catch {
-    return { supported: true, memoryGB: 4 };
+    return { supported: false, memoryGB: 0 };
   }
 }
 

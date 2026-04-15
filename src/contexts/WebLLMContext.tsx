@@ -1,8 +1,9 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
-import type { VisionResponse } from '@/hooks/useWebLLM';
+import type { VisionResponse } from '@/schemas/vision';
 import { checkWebGPU, CONFIG } from '@/config';
+import { parseVisionResponse } from '@/schemas/vision';
 
 export interface WebLLMContextValue {
   isModelLoading: boolean;
@@ -74,10 +75,13 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           if (data.messageId) {
             const resolve = pendingRef.current.get(data.messageId);
             if (resolve) {
-              resolve({
-                objects: data.response?.objects || [],
-                rawText: data.rawText,
-              });
+              const validated = parseVisionResponse(data.response);
+              if (validated) {
+                resolve(validated);
+              } else {
+                resolve(null);
+                setError('Invalid response schema from worker');
+              }
               pendingRef.current.delete(data.messageId);
             }
           }

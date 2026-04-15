@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { captureVideoFrame } from '@/utils/frameCapture';
 
 /**
  * CameraFallback component.
@@ -199,6 +200,7 @@ function VideoPlane({ video }: VideoPlaneProps) {
 /**
  * Hook to capture frames from a video element.
  * Returns a function to grab the current frame as ImageBitmap.
+ * Uses singleton OffscreenCanvas to prevent GC pressure in AR loop.
  */
 export function useFrameCapture() {
   const captureFrame = useCallback(async (video: HTMLVideoElement | null): Promise<ImageBitmap | null> => {
@@ -206,28 +208,7 @@ export function useFrameCapture() {
       return null;
     }
 
-    // Create offscreen canvas for frame capture
-    const canvas = document.createElement('canvas');
-    const targetSize = 512;
-    canvas.width = targetSize;
-    canvas.height = targetSize;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    // Center crop to square
-    const size = Math.min(video.videoWidth, video.videoHeight);
-    const sx = (video.videoWidth - size) / 2;
-    const sy = (video.videoHeight - size) / 2;
-
-    ctx.drawImage(video, sx, sy, size, size, 0, 0, targetSize, targetSize);
-
-    // transferToImageBitmap is available in modern browsers
-    const bitmap = (canvas as unknown as { transferToImageBitmap: () => ImageBitmap }).transferToImageBitmap?.();
-    if (bitmap) return bitmap;
-
-    // Fallback: create ImageBitmap from canvas
-    return createImageBitmap(canvas);
+    return captureVideoFrame(video);
   }, []);
 
   return { captureFrame };

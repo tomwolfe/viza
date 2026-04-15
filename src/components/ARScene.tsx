@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { XR, createXRStore } from '@react-three/xr';
 import { CameraFallback, useFrameCapture } from './CameraFallback';
 import { DetectedObject3D } from './DetectedObject3D';
-import type { DetectedObject } from '@/hooks/useWebLLM';
+import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 
 const xrStore = createXRStore();

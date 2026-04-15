@@ -3,7 +3,7 @@
 import { Text } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { DetectedObject } from '@/hooks/useWebLLM';
+import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 
 interface DetectedObject3DProps {
