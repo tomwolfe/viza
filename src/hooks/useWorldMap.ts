@@ -45,9 +45,9 @@ function categorizeObject(name: string, action?: string): ObjectCategory {
     return 'keep';
   }
 
-  const toolKeywords = ['screwdriver', 'wrench', 'hammer', 'tool', 'driver', 'pliers', 'saw'];
-  const trashKeywords = ['trash', 'garbage', 'waste', 'paper', 'bottle', 'can', 'wrapper'];
-  const clutterKeywords = ['mess', 'clothes', 'cloth', 'pile', ' scattered', 'untidy'];
+  const toolKeywords = CONFIG.CATEGORIES.TOOL.keywords;
+  const trashKeywords = CONFIG.CATEGORIES.TRASH.keywords;
+  const clutterKeywords = CONFIG.CATEGORIES.CLUTTER.keywords;
 
   if (toolKeywords.some(k => lower.includes(k))) return 'tool';
   if (trashKeywords.some(k => lower.includes(k))) return 'trash';

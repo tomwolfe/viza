@@ -17,7 +17,7 @@ interface ARSceneProps {
   isARActive: boolean;
   isModelReady: boolean;
   runInference: (
-    image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement,
+    image: ImageBitmap,
     prompt: string
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
   detectedObjects: DetectedObject[];

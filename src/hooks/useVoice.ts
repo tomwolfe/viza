@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { logger } from '@/config';
 
 interface SpeechRecognitionEvent extends Event {
   readonly resultIndex: number;
@@ -99,7 +100,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   }, []);
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
-    console.error('[Voice] Speech recognition error:', event.error);
+    logger.error('[Voice] Speech recognition error:', event.error);
     setStatus('idle');
 
     switch (event.error) {
@@ -150,7 +151,8 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
-        } catch {
+        } catch (e) {
+          logger.debug('[Voice] Abort ignored during cleanup:', e);
         }
       }
     };
@@ -182,14 +184,14 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         } catch {
         }
         setTimeout(() => {
-          try {
-            recognitionRef.current?.start();
-          } catch {
-            console.error('[Voice] Failed to restart recognition');
+try {
+          recognitionRef.current?.start();
+        } catch {
+            logger.error('[Voice] Failed to restart recognition');
           }
         }, 100);
       } else {
-        console.error('[Voice] Failed to start recognition');
+        logger.error('[Voice] Failed to start recognition');
         setError('Failed to start speech recognition.');
       }
     }
@@ -234,7 +236,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
   const speak = useCallback((text: string): void => {
     if (!window.speechSynthesis) {
-      console.warn('[Voice] Speech synthesis not supported.');
+      logger.warn('[Voice] Speech synthesis not supported.');
       return;
     }
 
@@ -255,7 +257,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     };
 
     utterance.onerror = () => {
-      console.error('[Voice] Speech synthesis error');
+      logger.error('[Voice] Speech synthesis error');
       setIsSpeaking(false);
     };
 

@@ -8,7 +8,7 @@ export type InferenceStatus = 'idle' | 'capturing' | 'inferring';
 
 interface UseInferenceLoopOptions {
   runInference: (
-    image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement,
+    image: ImageBitmap,
     prompt: string
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
   captureFrame: (video: HTMLVideoElement | null) => Promise<ImageBitmap | null>;

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
+import { logger } from '@/config';
 
 export interface TaskStep {
   id: string;
@@ -123,7 +124,7 @@ export function useTaskState(): UseTaskStateReturn {
         startTask(userGoal, steps);
       }
     } catch (error) {
-      console.error('[TaskState] Failed to generate task plan:', error);
+      logger.error('[TaskState] Failed to generate task plan:', error);
       startTask('Assembly Task', DEFAULT_ASSEMBLY_TASK);
     } finally {
       setIsPlanning(false);

@@ -11,6 +11,17 @@ export type WorkerOutgoingMessage =
   | { type: 'ping' }
   | { type: 'app_reset' };
 
+function isImageBitmap(obj: unknown): obj is ImageBitmap {
+  return obj instanceof ImageBitmap;
+}
+
+export function assertImageBitmap(obj: unknown): ImageBitmap {
+  if (!isImageBitmap(obj)) {
+    throw new Error('Invalid payload: expected ImageBitmap for Structured Clone transfer');
+  }
+  return obj;
+}
+
 export type WorkerIncomingMessage =
   | { type: 'worker_ready' }
   | { type: 'init_progress'; progress: number; status: string; details?: unknown }

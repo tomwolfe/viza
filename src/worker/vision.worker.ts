@@ -1,7 +1,7 @@
 import * as webllm from '@mlc-ai/web-llm';
 import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage } from '@/types/worker';
-import { CONFIG, logger } from '@/config';
+import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt } from '@/config';
 
 type MessageHandler = (msg: { type: string; [key: string]: unknown }) => Promise<void> | void;
 
@@ -113,7 +113,7 @@ function extractJsonFromText(text: string): unknown {
 
 const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
   chat: {
-    promptBuilder: (prompt: string) => prompt || 'Analyze this scene and identify objects of interest.',
+    promptBuilder: (userInput: string) => userInput || getVisionPrompt(),
     schema: VisionResponseSchema,
     normalizeFn: (raw: unknown) => {
       const r = raw as InferenceResult;
@@ -132,45 +132,7 @@ const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
     maxTokens: 1024,
   },
   planning: {
-    promptBuilder: (goal: string) => {
-      const isCleaningMode = /clean|organize|trash|garbage|mess/i.test(goal);
-      if (isCleaningMode) {
-        return `You are a spatial planning assistant. The user wants to: "${goal}"
-
-Analyze this image and create a detailed task plan. Identify all objects that match the goal category.
-
-Return ONLY a valid JSON object with this structure:
-{
-  "taskSteps": [
-    {
-      "id": "step-N",
-      "instruction": "Clear description of what to do",
-      "targetObject": "The specific object or category to target",
-      "validationPrompt": "How to verify this step is complete"
-    }
-  ]
-}
-
-Provide 5-10 specific steps. Focus on actionable items. Do not include any other text.`;
-      }
-      return `You are a spatial planning assistant. The user wants to: "${goal}"
-
-Analyze this image and create a detailed task plan for completing this goal.
-
-Return ONLY a valid JSON object with this structure:
-{
-  "taskSteps": [
-    {
-      "id": "step-N",
-      "instruction": "Clear description of what to do",
-      "targetObject": "The specific object or category to target",
-      "validationPrompt": "How to verify this step is complete"
-    }
-  ]
-}
-
-Provide 5-10 specific steps in logical order. Do not include any other text.`;
-    },
+    promptBuilder: (goal: string) => getPlanningPrompt(goal),
     schema: PlanningResponseSchema,
     normalizeFn: (raw: unknown) => raw as object,
     defaultValue: { taskSteps: [] },
@@ -178,68 +140,7 @@ Provide 5-10 specific steps in logical order. Do not include any other text.`;
     maxTokens: 2048,
   },
   category: {
-    promptBuilder: (goal: string) => {
-      const isTrash = /trash|garbage|discard|throw away|waste/i.test(goal);
-      const isClutter = /clean|organize|mess|tidy|put away/i.test(goal);
-      if (isTrash) {
-        return `You are a spatial assistant for cleaning tasks.
-User Goal: "${goal}"
-
-Identify all TRASH items (wrappers, bottles, cans, paper waste, food containers, etc.) and return their bounding boxes.
-
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string - object name",
-      "coordinates": [x, y, width, height],
-      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
-      "category": "string - one of: trash, clutter, keep, tool, unknown"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-      }
-      if (isClutter) {
-        return `You are a spatial assistant for cleaning tasks.
-User Goal: "${goal}"
-
-Identify all CLUTTER items (clothes, papers, scattered items, messy areas) and return their bounding boxes.
-
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string - object name",
-      "coordinates": [x, y, width, height],
-      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
-      "category": "string - one of: trash, clutter, keep, tool, unknown"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-      }
-      return `You are a spatial assistant for cleaning tasks.
-User Goal: "${goal}"
-
-Identify all objects and their categories. Use "keep" for items to preserve, "trash" for waste, "clutter" for items to organize.
-
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string - object name",
-      "coordinates": [x, y, width, height],
-      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
-      "category": "string - one of: trash, clutter, keep, tool, unknown"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-    },
+    promptBuilder: (goal: string) => getCategoryPrompt(goal),
     schema: VisionResponseSchema,
     normalizeFn: (raw: unknown) => {
       const r = raw as InferenceResult;
@@ -338,8 +239,8 @@ async function runTask(
   } finally {
     try {
       image.close();
-    } catch {
-      // ImageBitmap may already be closed or invalid
+    } catch (e) {
+      logger.debug('[Worker] ImageBitmap already closed or invalid:', e);
     }
   }
 }

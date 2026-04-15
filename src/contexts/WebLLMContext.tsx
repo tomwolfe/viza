@@ -26,7 +26,7 @@ export interface WebLLMContextValue {
   isInferring: boolean;
   isDeviceCompatible: boolean;
   initModel: () => Promise<void>;
-  runInference: (image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement, prompt: string) => Promise<VisionResponse | null>;
+  runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
   runPlanningInference: (image: ImageBitmap, goal: string) => Promise<TaskStep[]>;
   runCategoryInference: (image: ImageBitmap, goal: string) => Promise<VisionResponse | null>;
   dispose: () => void;
@@ -210,7 +210,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
   const _dispatchInference = useCallback(
     async (
-      image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement,
+      image: ImageBitmap,
       prompt: string,
       inferenceType: InferenceType
     ): Promise<InferenceResult> => {
@@ -247,18 +247,12 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         const payload = {
           type: inferenceType,
           messageId,
-          image: image instanceof ImageBitmap ? image : undefined,
-          videoElement: image instanceof HTMLVideoElement ? image : undefined,
-          canvasElement: image instanceof HTMLCanvasElement ? image : undefined,
+          image,
           prompt,
           goal: prompt,
         };
 
-        if (image instanceof ImageBitmap) {
-          workerRef.current!.postMessage(payload, [image]);
-        } else {
-          workerRef.current!.postMessage(payload);
-        }
+        workerRef.current!.postMessage(payload, [image]);
       });
     },
     [isModelReady]
@@ -266,7 +260,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
   const runInference = useCallback(
     async (
-      image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement,
+      image: ImageBitmap,
       prompt: string
     ): Promise<VisionResponse | null> => {
       const result = await _dispatchInference(image, prompt, 'chat');

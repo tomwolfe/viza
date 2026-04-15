@@ -8,6 +8,7 @@ import { WebLLMProvider, useWebLLM } from '@/contexts/WebLLMContext';
 import { useVoice } from '@/hooks/useVoice';
 import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
 import type { DetectedObject } from '@/schemas/vision';
+import { logger } from '@/config';
 
 function ARContent() {
   const [isARActive, setIsARActive] = useState(false);
@@ -67,7 +68,7 @@ function ARContent() {
       setIsARActive(true);
       setShowWarnings(false);
     } catch (error) {
-      console.error('Failed to start AR:', error);
+      logger.error('Failed to start AR:', error);
       alert('Failed to start AR session');
     }
   }, [isModelReady, initModel, startTask]);
@@ -110,7 +111,7 @@ function ARContent() {
 
   const generatePlanFromGoal = useCallback(async (goal: string, _image: unknown): Promise<TaskStep[]> => {
     if (!sceneImageRef.current) {
-      console.warn('[App] No scene image available for planning');
+      logger.warn('[App] No scene image available for planning');
       return DEFAULT_ASSEMBLY_TASK;
     }
     
@@ -120,7 +121,7 @@ function ARContent() {
         return steps;
       }
     } catch (error) {
-      console.error('[App] Planning inference failed:', error);
+      logger.error('[App] Planning inference failed:', error);
     }
     return DEFAULT_ASSEMBLY_TASK;
   }, [runPlanningInference]);
@@ -145,13 +146,13 @@ function ARContent() {
 
   useEffect(() => {
     if (llmError) {
-      console.error('[App] WebLLM Error:', llmError);
+      logger.error('[App] WebLLM Error:', llmError);
     }
   }, [llmError]);
 
   useEffect(() => {
     if (voiceError) {
-      console.warn('[App] Voice Error:', voiceError);
+      logger.warn('[App] Voice Error:', voiceError);
     }
   }, [voiceError]);
 
