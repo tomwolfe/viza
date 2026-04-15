@@ -1,12 +1,26 @@
 /**
  * Frame capture and downsampling utilities.
  * Converts camera frames to ImageBitmap for WebLLM inference.
- * Creates local OffscreenCanvas per capture to ensure thread-safety.
+ * Uses singleton OffscreenCanvas to prevent memory leaks on mobile.
  */
 
 import { CONFIG } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
+
+let offscreenCanvas: OffscreenCanvas | null = null;
+let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
+
+function getOffscreenCanvas(): OffscreenCanvas {
+  if (!offscreenCanvas) {
+    offscreenCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+    offscreenCtx = offscreenCanvas.getContext('2d');
+    if (!offscreenCtx) {
+      throw new Error('Failed to get 2D context from OffscreenCanvas');
+    }
+  }
+  return offscreenCanvas;
+}
 
 /**
  * Downsample a video frame or canvas to TARGET_SIZE x TARGET_SIZE.
@@ -15,8 +29,8 @@ const TARGET_SIZE = CONFIG.TARGET_SIZE;
 export async function downsampleFrame(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  const canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-  const ctx = canvas.getContext('2d');
+  const canvas = getOffscreenCanvas();
+  const ctx = offscreenCtx;
   if (!ctx) {
     throw new Error('Failed to get 2D context from OffscreenCanvas');
   }

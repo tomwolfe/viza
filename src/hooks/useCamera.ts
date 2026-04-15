@@ -26,6 +26,8 @@ export interface UseCameraResult {
   xrSession: XRSession | null;
   cameraAccessSupported: boolean;
   startXRSession: () => Promise<boolean>;
+  retryCount: number;
+  resetError: () => void;
 }
 
 function mapCameraError(err: unknown): CameraError {
@@ -65,6 +67,8 @@ export function useCamera({
   const [cameraAccessSupported, setCameraAccessSupported] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const isActiveRef = useRef(isActive);
+  const retryCountRef = useRef(0);
+  const [retryCount, setRetryCount] = useState(0);
 
   const startXRSession = useCallback(async (): Promise<boolean> => {
     if (!navigator.xr) {
@@ -99,6 +103,12 @@ export function useCamera({
       return false;
     }
   }, [onXRSessionReady]);
+
+  const resetError = useCallback(() => {
+    setError(null);
+    setRetryCount(0);
+    retryCountRef.current = 0;
+  }, []);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -204,7 +214,23 @@ export function useCamera({
       }
 
       if (!cancelled && isActiveRef.current) {
-        await requestUserMedia();
+        let lastError: CameraError | null = null;
+        const maxRetries = 3;
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          const success = await requestUserMedia();
+          if (success || cancelled || !isActiveRef.current) {
+            return;
+          }
+          lastError = error;
+          retryCountRef.current = attempt + 1;
+          setRetryCount(attempt + 1);
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+
+        if (lastError) {
+          setError(lastError);
+        }
       }
     };
 
@@ -224,5 +250,7 @@ export function useCamera({
     xrSession,
     cameraAccessSupported,
     startXRSession,
+    retryCount,
+    resetError,
   };
 }

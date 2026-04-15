@@ -1,4 +1,5 @@
 import * as webllm from '@mlc-ai/web-llm';
+import { z } from 'zod';
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -14,9 +15,31 @@ const pendingRef = new Map<string, PendingRequest>();
 
 let systemPrompt = '';
 
+export const VisionResponseSchema = z.object({
+  objects: z.array(z.object({
+    item: z.string(),
+    coordinates: z.array(z.number()).length(4),
+    action_step: z.string().optional(),
+    category: z.string().optional(),
+  })),
+  completed: z.boolean().optional(),
+});
+
+export const PlanningResponseSchema = z.object({
+  taskSteps: z.array(z.object({
+    id: z.string(),
+    instruction: z.string(),
+    targetObject: z.string().optional(),
+    validationPrompt: z.string(),
+  })),
+});
+
+export type InferenceResult = z.infer<typeof VisionResponseSchema>;
+export type PlanningResult = z.infer<typeof PlanningResponseSchema>;
+
 function extractJsonFromText(text: string): unknown {
   const trimmed = text.trim();
-  
+
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (codeBlockMatch) {
     try {
@@ -24,10 +47,10 @@ function extractJsonFromText(text: string): unknown {
     } catch {
     }
   }
-  
+
   const firstBrace = trimmed.indexOf('{');
   const lastBrace = trimmed.lastIndexOf('}');
-  
+
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
     try {
@@ -35,20 +58,107 @@ function extractJsonFromText(text: string): unknown {
     } catch {
     }
   }
-  
+
   return null;
 }
 
-function validateVisionResponse(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
-  const obj = data as { objects?: unknown };
-  return Array.isArray(obj.objects);
+function validateVisionResponse(data: unknown): InferenceResult | null {
+  try {
+    return VisionResponseSchema.parse(data);
+  } catch {
+    return null;
+  }
 }
 
-function validatePlanningResponse(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
-  const obj = data as { taskSteps?: unknown };
-  return Array.isArray(obj.taskSteps);
+function validatePlanningResponse(data: unknown): PlanningResult | null {
+  try {
+    return PlanningResponseSchema.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeVisionResponse(raw: InferenceResult) {
+  return {
+    objects: raw.objects.map((obj) => ({
+      name: obj.item,
+      bbox_2d: obj.coordinates,
+      action: obj.action_step || '',
+      category: obj.category || 'unknown',
+    })),
+    completed: raw.completed || false,
+  };
+}
+
+async function executeInference<T>(
+  image: ImageBitmap,
+  userPrompt: string,
+  messageId: string,
+  responseSchema: (data: unknown) => T | null,
+  normalizeFn: (raw: T) => object,
+  defaultValue: object,
+  messageType: string
+): Promise<void> {
+  if (!engine || !isInitialized) {
+    postMessage({
+      type: 'error',
+      message: 'Engine not initialized. Call init first.',
+      messageId,
+    });
+    return;
+  }
+
+  try {
+    postMessage({ type: 'inference_start' });
+
+    const messages: webllm.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: image } },
+          { type: 'text', text: userPrompt },
+        ],
+      },
+    ] as webllm.ChatCompletionMessageParam[];
+
+    const response = await engine.chat.completions.create({
+      messages,
+      temperature: 0.1,
+      max_tokens: 2048,
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+    let parsedResponse = extractJsonFromText(content);
+
+    const validated = responseSchema(parsedResponse);
+    if (!validated) {
+      parsedResponse = defaultValue;
+      postMessage({
+        type: 'warning',
+        message: 'JSON parse required fallback extraction',
+        rawResponse: content,
+      });
+    }
+
+    postMessage({
+      type: messageType,
+      messageId,
+      response: validated ? normalizeFn(validated) : defaultValue,
+      rawText: content,
+      usage: response.usage,
+    } as object);
+  } catch (error) {
+    const err = error as Error;
+    postMessage({
+      type: 'error',
+      messageId,
+      message: `Inference failed: ${err.message}`,
+      error: err.toString(),
+    });
+  } finally {
+    image.close();
+  }
 }
 
 async function initializeModel(modelId: string): Promise<void> {

@@ -1,6 +1,7 @@
 'use client';
 
 import { Play, Mic, Loader2, AlertTriangle } from 'lucide-react';
+import { useId } from 'react';
 
 interface ARControlsProps {
   onStartAR: () => void;
@@ -21,23 +22,45 @@ export default function ARControls({
   isListening,
   isDeviceIncompatible,
 }: ARControlsProps) {
+  const statusId = useId();
+
+  const getStatusText = () => {
+    if (isDeviceIncompatible) return 'Device not compatible. WebGPU required.';
+    if (isModelLoading) return `Loading AI model. ${modelProgress}% complete.`;
+    if (isARActive) return 'AR session active. Tap microphone to issue voice command.';
+    return 'Ready to start AR session.';
+  };
+
+  const getStatusAnnouncement = () => {
+    if (isDeviceIncompatible) return 'incompatible';
+    if (isModelLoading) return 'loading';
+    if (isARActive) return 'active';
+    return 'ready';
+  };
+
   return (
     <div className="fixed top-0 left-0 right-0 z-50 p-4 pointer-events-none">
       <div className="flex flex-col items-center gap-4">
-        <div className="bg-black/60 backdrop-blur-md rounded-xl px-6 py-3 text-white">
+        <div
+          id={statusId}
+          className="bg-black/60 backdrop-blur-md rounded-xl px-6 py-3 text-white"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           {isDeviceIncompatible ? (
             <div className="flex items-center gap-2 text-red-400">
-              <AlertTriangle className="w-5 h-5" />
+              <AlertTriangle className="w-5 h-5" aria-hidden="true" />
               <span>Device Incompatible</span>
             </div>
           ) : isModelLoading ? (
             <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
               <span>Loading AI Model (~2.3GB)... {modelProgress}%</span>
             </div>
           ) : isARActive ? (
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" aria-hidden="true" />
               <span>AR Active</span>
             </div>
           ) : (
@@ -53,8 +76,9 @@ export default function ARControls({
               className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 
                          text-white rounded-full p-4 shadow-lg transition-all
                          flex items-center gap-2"
+              aria-label="Start AR session"
             >
-              <Play className="w-6 h-6" />
+              <Play className="w-6 h-6" aria-hidden="true" />
               <span>Start AR</span>
             </button>
           )}
@@ -68,12 +92,18 @@ export default function ARControls({
                 disabled:bg-gray-600 text-white rounded-full p-4 
                 shadow-lg transition-all flex items-center gap-2
               `}
+              aria-label={isListening ? 'Listening for voice command' : 'Activate voice input'}
+              aria-pressed={isListening}
             >
-              <Mic className="w-6 h-6" />
+              <Mic className="w-6 h-6" aria-hidden="true" />
               <span>{isListening ? 'Listening...' : 'Ask'}</span>
             </button>
           )}
         </div>
+
+        <span className="sr-only" aria-live="assertive">
+          {getStatusText()}
+        </span>
       </div>
     </div>
   );
