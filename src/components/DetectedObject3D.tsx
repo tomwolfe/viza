@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Text } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/hooks/useWebLLM';
 
@@ -10,18 +11,30 @@ interface DetectedObject3DProps {
   index: number;
 }
 
+// Input resolution for bbox (standardized 512x512)
+const BBOX_SIZE = 512;
+
 export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
+  const { viewport } = useThree();
   const [x, y, width, height] = obj.bbox_2d;
 
-  const worldX = ((x + width / 2) / 512 - 0.5) * 4;
-  const worldY = -((y + height / 2) / 512 - 0.5) * 3;
+  const worldX = ((x + width / 2) / BBOX_SIZE - 0.5) * viewport.width;
+  const worldY = -((y + height / 2) / BBOX_SIZE - 0.5) * viewport.height;
   const worldZ = -3 - index * 0.5;
 
-  const boxWidth = (width / 512) * 4;
-  const boxHeight = (height / 512) * 3;
+  const boxWidth = (width / BBOX_SIZE) * viewport.width;
+  const boxHeight = (height / BBOX_SIZE) * viewport.height;
 
   const planeGeom = useMemo(() => new THREE.PlaneGeometry(boxWidth, boxHeight), [boxWidth, boxHeight]);
   const edgeGeom = useMemo(() => new THREE.EdgesGeometry(planeGeom), [planeGeom]);
+
+  // Cleanup geometries on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      planeGeom.dispose();
+      edgeGeom.dispose();
+    };
+  }, [planeGeom, edgeGeom]);
 
   return (
     <group position={[worldX, worldY, worldZ]}>

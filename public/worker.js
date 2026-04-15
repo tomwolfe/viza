@@ -91,12 +91,14 @@ async function initializeModel(modelId) {
  * Run vision inference with an image and prompt.
  * @param {ImageBitmap} image - The camera frame (512x512 downscaled)
  * @param {string} userPrompt - The user's voice request
+ * @param {string} [messageId] - Correlation ID for response routing
  */
-async function runVisionInference(image, userPrompt) {
+async function runVisionInference(image, userPrompt, messageId) {
   if (!engine || !isInitialized) {
     postMessage({ 
       type: 'error', 
-      message: 'Engine not initialized. Call init first.' 
+      message: 'Engine not initialized. Call init first.',
+      messageId 
     });
     return;
   }
@@ -178,6 +180,7 @@ async function runVisionInference(image, userPrompt) {
 
     postMessage({
       type: 'inference_complete',
+      messageId,
       response: parsedResponse,
       rawText: content,
       usage: response.usage
@@ -185,6 +188,7 @@ async function runVisionInference(image, userPrompt) {
   } catch (error) {
     postMessage({
       type: 'error',
+      messageId,
       message: `Inference failed: ${error.message}`,
       error: error.toString()
     });
@@ -218,7 +222,7 @@ self.onmessage = async (event) => {
       break;
 
     case 'chat':
-      await runVisionInference(data.image, data.prompt);
+      await runVisionInference(data.image, data.prompt, data.messageId);
       break;
 
     case 'reload':

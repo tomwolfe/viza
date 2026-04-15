@@ -176,6 +176,13 @@ function VideoPlane({ video }: VideoPlaneProps) {
     return newTexture;
   }, [video]);
 
+  // Cleanup texture on unmount to prevent WebGL memory leak
+  useEffect(() => {
+    return () => {
+      texture.dispose();
+    };
+  }, [texture]);
+
   // Update texture every frame
   useFrame(() => {
     texture.updateMatrix(); // Force render update

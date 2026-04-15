@@ -39,7 +39,7 @@ export function useWebLLM(modelId?: string): UseWebLLMReturn {
 
   const workerRef = useRef<Worker | null>(null);
   const modelIdRef = useRef(modelId || DEFAULT_MODEL);
-  const resolveRef = useRef<((value: VisionResponse | null) => void) | null>(null);
+  const pendingRef = useRef<Map<string, (value: VisionResponse | null) => void>>(new Map());
 
   // Initialize the worker and listen to messages
   useEffect(() => {
@@ -69,12 +69,15 @@ export function useWebLLM(modelId?: string): UseWebLLMReturn {
 
         case 'inference_complete':
           setIsInferring(false);
-          if (resolveRef.current) {
-            resolveRef.current({
-              objects: data.response?.objects || [],
-              rawText: data.rawText,
-            });
-            resolveRef.current = null;
+          if (data.messageId) {
+            const resolve = pendingRef.current.get(data.messageId);
+            if (resolve) {
+              resolve({
+                objects: data.response?.objects || [],
+                rawText: data.rawText,
+              });
+              pendingRef.current.delete(data.messageId);
+            }
           }
           break;
 
@@ -83,9 +86,12 @@ export function useWebLLM(modelId?: string): UseWebLLMReturn {
           setError(data.message);
           setIsModelLoading(false);
           setIsInferring(false);
-          if (resolveRef.current) {
-            resolveRef.current(null);
-            resolveRef.current = null;
+          if (data.messageId) {
+            const resolve = pendingRef.current.get(data.messageId);
+            if (resolve) {
+              resolve(null);
+              pendingRef.current.delete(data.messageId);
+            }
           }
           break;
 
@@ -147,9 +153,11 @@ export function useWebLLM(modelId?: string): UseWebLLMReturn {
       setIsInferring(true);
       setError(null);
 
+      const messageId = crypto.randomUUID();
+
       // Create a promise that resolves when inference completes
       const result = new Promise<VisionResponse | null>((resolve) => {
-        resolveRef.current = resolve;
+        pendingRef.current.set(messageId, resolve);
 
         // Transfer image to worker
         // For video/canvas elements, we need to convert to ImageBitmap
@@ -158,6 +166,7 @@ export function useWebLLM(modelId?: string): UseWebLLMReturn {
         workerRef.current!.postMessage(
           {
             type: 'chat',
+            messageId,
             image: imageSource,
             prompt,
           },
