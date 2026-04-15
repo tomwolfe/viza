@@ -59,7 +59,9 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    const worker = new Worker('/worker.js');
+    const worker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
+      type: 'module',
+    });
     workerRef.current = worker;
 
     worker.onmessage = (event) => {

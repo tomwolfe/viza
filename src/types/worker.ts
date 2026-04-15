@@ -33,7 +33,10 @@ export type VizaErrorCode =
   | 'INFERENCE_TIMEOUT'
   | 'MODEL_NOT_READY'
   | 'WORKER_CRASHED'
-  | 'INVALID_RESPONSE';
+  | 'INVALID_RESPONSE'
+  | 'CAMERA_NOT_ALLOWED'
+  | 'CAMERA_NOT_FOUND'
+  | 'CAMERA_XR_UNAVAILABLE';
 
 export function createVizaError(message: string, code: VizaErrorCode): VizaError {
   const error = new Error(message) as VizaError;

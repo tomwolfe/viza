@@ -20,17 +20,24 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
   const [x, y, width, height] = obj.bbox_2d;
 
   const { SPATIAL } = CONFIG;
+  const targetSize = SPATIAL.TARGET_SIZE;
   const worldDepth = SPATIAL.DEFAULT_DEPTH - index * SPATIAL.DEPTH_INCREMENT;
 
   const cameraPerspective = camera as THREE.PerspectiveCamera;
+
+  const aspect = viewport.width / viewport.height;
+  const scale = aspect > 1 ? 1 : aspect;
+  const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
+  const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
+
   const worldPosition = useMemo(
     () =>
       new THREE.Vector3(
-        ((x + width / 2) / 512 - 0.5) * viewport.width,
-        -((y + height / 2) / 512 - 0.5) * viewport.height,
+        ((x / targetSize) - offsetX) / scale * viewport.width,
+        -(((y / targetSize) - offsetY) / scale * viewport.height),
         worldDepth
       ),
-    [x, y, width, height, viewport.width, viewport.height, worldDepth]
+    [x, y, viewport.width, viewport.height, worldDepth, targetSize, scale, offsetX, offsetY]
   );
 
   const size = useMemo(
@@ -38,11 +45,11 @@ export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
       projectBoundingBoxSize(
         { x, y, width, height },
         cameraPerspective,
-        512,
-        512,
+        targetSize,
+        targetSize,
         Math.abs(worldDepth)
       ),
-    [x, y, width, height, cameraPerspective, worldDepth]
+    [x, y, width, height, cameraPerspective, worldDepth, targetSize]
   );
 
   const boxWidth = Math.max(size.width, 0.1);

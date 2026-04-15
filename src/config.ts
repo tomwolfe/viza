@@ -10,6 +10,7 @@ export const CONFIG = {
   ENABLE_TELEMETRY: process.env.NODE_ENV === 'development',
 
   SPATIAL: {
+    TARGET_SIZE: 512,
     DEFAULT_DEPTH: -3,
     DEPTH_INCREMENT: 0.5,
     LABEL_OFFSET: 0.15,
