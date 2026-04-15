@@ -2,6 +2,7 @@ import * as webllm from '@mlc-ai/web-llm';
 import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage } from '@/types/worker';
 import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt } from '@/config';
+import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
 
 type MessageHandler = (msg: { type: string; [key: string]: unknown }) => Promise<void> | void;
 
@@ -90,27 +91,6 @@ const PlanningResponseSchema = z.object({
 export type InferenceResult = z.infer<typeof VisionResponseSchema>;
 export type PlanningResult = z.infer<typeof PlanningResponseSchema>;
 
-function extractJsonFromText(text: string): unknown {
-  const trimmed = text.trim();
-  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (codeBlockMatch) {
-    try {
-      return JSON.parse(codeBlockMatch[1].trim());
-    } catch {
-    }
-  }
-  const firstBrace = trimmed.indexOf('{');
-  const lastBrace = trimmed.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
-    try {
-      return JSON.parse(jsonCandidate);
-    } catch {
-    }
-  }
-  return null;
-}
-
 const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
   chat: {
     promptBuilder: (userInput: string) => userInput || getVisionPrompt(),
@@ -198,26 +178,19 @@ async function runTask(
     });
 
     const content = response.choices[0]?.message?.content || '';
-    const parsedResponse = extractJsonFromText(content);
+    const parseResult = parseJsonResponse(content, config.schema);
 
-    let validated = null;
-    try {
-      validated = config.schema.parse(parsedResponse);
-    } catch {
-      validated = null;
-    }
+    const normalized = parseResult.data ? config.normalizeFn(parseResult.data) : config.defaultValue;
 
-    if (!validated) {
+    if (!parseResult.success) {
       postMessage({
         type: 'warning',
         message: 'JSON parse required fallback extraction',
         rawResponse: content,
       });
     }
-
-    const normalized = validated ? config.normalizeFn(validated) : config.defaultValue;
-    const completed = validated && typeof validated === 'object' && validated !== null
-      ? (validated as { completed?: boolean }).completed
+    const completed = parseResult.data && typeof parseResult.data === 'object' && parseResult.data !== null
+      ? (parseResult.data as { completed?: boolean }).completed
       : false;
 
     postMessage({

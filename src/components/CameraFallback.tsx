@@ -12,9 +12,8 @@ interface CameraFallbackProps {
 }
 
 export function CameraFallback({ isActive, onFrameReady }: CameraFallbackProps) {
-  const { videoElement, streamActive, error, isXRMode } = useCamera({
+  const { videoElement, stream, status, error, isXRMode } = useCamera({
     isActive,
-    onFrameReady,
   });
 
   const errorMessage = error?.message ?? null;
@@ -23,7 +22,7 @@ export function CameraFallback({ isActive, onFrameReady }: CameraFallbackProps) 
 
   return (
     <>
-      {streamActive && videoElement && !isXRMode && (
+      {status === 'active' && videoElement && !isXRMode && (
         <VideoPlane video={videoElement} />
       )}
 

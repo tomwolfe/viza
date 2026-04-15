@@ -51,6 +51,10 @@ export class MockWorker {
       this.onerror(new Event(message));
     }
   }
+
+  terminate = () => {
+    // Mock implementation - no-op for testing
+  };
 }
 
 export function createMockWorker(): MockWorker {
