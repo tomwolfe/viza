@@ -4,29 +4,40 @@ import { Text } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
-import { CONFIG } from '@/config';
+import { projectBoundingBoxSize } from '@/utils/spatial';
 
 interface DetectedObject3DProps {
   obj: DetectedObject;
   index: number;
 }
 
-const BBOX_SIZE = CONFIG.TARGET_SIZE;
-
 export function DetectedObject3D({ obj, index }: DetectedObject3DProps) {
-  const { viewport } = useThree();
+  const { camera, viewport } = useThree();
   const [x, y, width, height] = obj.bbox_2d;
 
-  const worldX = ((x + width / 2) / BBOX_SIZE - 0.5) * viewport.width;
-  const worldY = -((y + height / 2) / BBOX_SIZE - 0.5) * viewport.height;
-  const worldZ = -3 - index * 0.5;
+  const worldDepth = -3 - index * 0.5;
 
-  const boxWidth = (width / BBOX_SIZE) * viewport.width;
-  const boxHeight = (height / BBOX_SIZE) * viewport.height;
+  const cameraPerspective = camera as THREE.PerspectiveCamera;
+  const worldPosition = new THREE.Vector3(
+    ((x + width / 2) / 512 - 0.5) * viewport.width,
+    -((y + height / 2) / 512 - 0.5) * viewport.height,
+    worldDepth
+  );
+
+  const size = projectBoundingBoxSize(
+    { x, y, width, height },
+    cameraPerspective,
+    512,
+    512,
+    Math.abs(worldDepth)
+  );
+
+  const boxWidth = Math.max(size.width, 0.1);
+  const boxHeight = Math.max(size.height, 0.1);
   const labelWidth = Math.max(boxWidth * 0.9, 0.5);
 
   return (
-    <group position={[worldX, worldY, worldZ]}>
+    <group position={[worldPosition.x, worldPosition.y, worldPosition.z]}>
       <mesh>
         <planeGeometry args={[boxWidth, boxHeight]} />
         <meshBasicMaterial

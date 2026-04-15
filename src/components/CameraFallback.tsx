@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { captureVideoFrame } from '@/utils/frameCapture';
 
@@ -12,9 +12,6 @@ import { captureVideoFrame } from '@/utils/frameCapture';
  * Falls back to getUserMedia "Magic Window" mode if unavailable.
  * Renders the camera feed as a fullscreen background plane.
  */
-
-// Scale for the background plane (large enough to fill FOV)
-const PLANE_SCALE: [number, number, number] = [20, 10, 1];
 
 interface CameraFallbackProps {
   isActive: boolean;
@@ -166,6 +163,7 @@ interface VideoPlaneProps {
 
 function VideoPlane({ video }: VideoPlaneProps) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const { viewport } = useThree();
 
   // Create video texture - memoized per video
   const texture = useMemo(() => {
@@ -177,6 +175,11 @@ function VideoPlane({ video }: VideoPlaneProps) {
     return newTexture;
   }, [video]);
 
+  // Use viewport dimensions for proper scaling
+  const planeScale: [number, number, number] = useMemo(() => {
+    return [viewport.width, viewport.height, 1];
+  }, [viewport.width, viewport.height]);
+
   // Cleanup texture on unmount to prevent WebGL memory leak
   useEffect(() => {
     return () => {
@@ -186,11 +189,11 @@ function VideoPlane({ video }: VideoPlaneProps) {
 
   // Update texture every frame
   useFrame(() => {
-    texture.updateMatrix(); // Force render update
+    texture.updateMatrix();
   });
 
   return (
-    <mesh ref={meshRef} position={[0, 0, -5]} scale={PLANE_SCALE}>
+    <mesh ref={meshRef} position={[0, 0, -5]} scale={planeScale}>
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
     </mesh>

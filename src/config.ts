@@ -10,6 +10,19 @@ export const CONFIG = {
   ENABLE_TELEMETRY: process.env.NODE_ENV === 'development',
 };
 
+export const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
+Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "name": "string",
+      "bbox_2d": [x, y, width, height],
+      "action": "string"
+    }
+  ]
+}
+Do not include any other text. Only return the JSON object.`;
+
 export async function checkWebGPU() {
   const result = { supported: false, memoryGB: 0 };
   if (typeof navigator === 'undefined' || !navigator.gpu) {

@@ -1,10 +1,10 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useRef, useCallback, useEffect } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import { CameraFallback, useFrameCapture } from './CameraFallback';
 import { DetectedObject3D } from './DetectedObject3D';
+import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 
@@ -32,75 +32,38 @@ export function ARScene({
 }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { captureFrame } = useFrameCapture();
-  const [lastInferenceTime, setLastInferenceTime] = useState(0);
-  const isProcessingRef = useRef(false);
   const lastVoiceCommandRef = useRef<string | null>(null);
 
   const handleFrameReady = useCallback((video: HTMLVideoElement) => {
     videoRef.current = video;
   }, []);
 
-  const executeInference = useCallback(async (prompt: string) => {
-    if (!videoRef.current || isProcessingRef.current) return;
+  const handleObjectsDetected = useCallback(
+    (objects: DetectedObject[]) => {
+      onObjectsDetected(objects);
+    },
+    [onObjectsDetected]
+  );
 
-    isProcessingRef.current = true;
+  const { setVideoSource, setActive, executeInference, cancelPending } = useInferenceLoop({
+    runInference,
+    captureFrame,
+    onObjectsDetected: handleObjectsDetected,
+    intervalMs: CONFIG.INFERENCE_INTERVAL,
+  });
 
-    try {
-      const frame = await captureFrame(videoRef.current);
-      if (!frame) return;
-
-      const result = await runInference(frame, prompt);
-      if (result?.objects && result.objects.length > 0) {
-        onObjectsDetected(result.objects);
-      }
-    } catch (error) {
-      console.error('[ARScene] Inference error:', error);
-    } finally {
-      isProcessingRef.current = false;
-    }
-  }, [runInference, captureFrame, onObjectsDetected]);
+  useEffect(() => {
+    setActive(isARActive && isModelReady);
+    setVideoSource(videoRef.current);
+  }, [isARActive, isModelReady, setActive, setVideoSource]);
 
   useEffect(() => {
     if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
       lastVoiceCommandRef.current = voiceCommand;
-      executeInference(voiceCommand);
+      cancelPending();
+      executeInference(voiceCommand, true);
     }
-  }, [voiceCommand, isModelReady, executeInference]);
-
-  useFrame((state) => {
-    if (!isARActive || !isModelReady || !videoRef.current) return;
-
-    const now = state.clock.elapsedTime * 1000;
-
-    if (isProcessingRef.current || now - lastInferenceTime < CONFIG.INFERENCE_INTERVAL) {
-      return;
-    }
-
-    isProcessingRef.current = true;
-    setLastInferenceTime(now);
-
-    const runAutoInference = async () => {
-      try {
-        const frame = await captureFrame(videoRef.current);
-        if (!frame) {
-          isProcessingRef.current = false;
-          return;
-        }
-
-        const result = await runInference(frame, 'Identify objects in this scene.');
-
-        if (result?.objects && result.objects.length > 0) {
-          onObjectsDetected(result.objects);
-        }
-      } catch (error) {
-        console.error('[ARScene] Inference error:', error);
-      } finally {
-        isProcessingRef.current = false;
-      }
-    };
-
-    runAutoInference();
-  });
+  }, [voiceCommand, isModelReady, executeInference, cancelPending]);
 
   if (!isARActive) return null;
 
@@ -118,9 +81,6 @@ export function ARScene({
   );
 }
 
-/**
- * Static placeholder AR scene (before AI kicks in).
- */
 export function PlaceholderScene() {
   return (
     <XR store={xrStore}>

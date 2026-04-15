@@ -2,8 +2,11 @@
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
 import type { VisionResponse } from '@/schemas/vision';
-import { checkWebGPU, CONFIG } from '@/config';
+import { checkWebGPU, CONFIG, SYSTEM_PROMPT } from '@/config';
 import { parseVisionResponse } from '@/schemas/vision';
+
+const INFERENCE_TIMEOUT_MS = 15000;
+const HEARTBEAT_INTERVAL_MS = 30000;
 
 export interface WebLLMContextValue {
   isModelLoading: boolean;
@@ -33,8 +36,10 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
   const workerRef = useRef<Worker | null>(null);
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
-  const pendingRef = useRef<Map<string, (value: VisionResponse | null) => void>>(new Map());
+  const pendingRef = useRef<Map<string, { resolve: (value: VisionResponse | null) => void; timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
   const isInitializedRef = useRef(false);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     checkWebGPU().then((result) => {
@@ -73,13 +78,14 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         case 'inference_complete':
           setIsInferring(false);
           if (data.messageId) {
-            const resolve = pendingRef.current.get(data.messageId);
-            if (resolve) {
+            const pending = pendingRef.current.get(data.messageId);
+            if (pending) {
+              clearTimeout(pending.timeoutId);
               const validated = parseVisionResponse(data.response);
               if (validated) {
-                resolve(validated);
+                pending.resolve(validated);
               } else {
-                resolve(null);
+                pending.resolve(null);
                 setError('Invalid response schema from worker');
               }
               pendingRef.current.delete(data.messageId);
@@ -93,12 +99,16 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           setIsModelLoading(false);
           setIsInferring(false);
           if (data.messageId) {
-            const resolve = pendingRef.current.get(data.messageId);
-            if (resolve) {
-              resolve(null);
+            const pending = pendingRef.current.get(data.messageId);
+            if (pending) {
+              clearTimeout(pending.timeoutId);
+              pending.resolve(null);
               pendingRef.current.delete(data.messageId);
             }
           }
+          break;
+
+        case 'pong':
           break;
 
         case 'warning':
@@ -139,6 +149,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     workerRef.current.postMessage({
       type: 'init',
       model: modelIdRef.current,
+      systemPrompt: SYSTEM_PROMPT,
     });
   }, [isDeviceCompatible]);
 
@@ -152,13 +163,27 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         return null;
       }
 
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       setIsInferring(true);
       setError(null);
 
       const messageId = crypto.randomUUID();
 
       const result = new Promise<VisionResponse | null>((resolve) => {
-        pendingRef.current.set(messageId, resolve);
+        const timeoutId = setTimeout(() => {
+          if (pendingRef.current.has(messageId)) {
+            pendingRef.current.delete(messageId);
+            setError('Inference timeout after 15s');
+            setIsInferring(false);
+            resolve(null);
+          }
+        }, INFERENCE_TIMEOUT_MS);
+
+        pendingRef.current.set(messageId, { resolve, timeoutId });
 
         const imageSource: ImageBitmap | typeof image = image;
 
@@ -177,6 +202,25 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     },
     [isModelReady]
   );
+
+  useEffect(() => {
+    const worker = workerRef.current;
+    if (!worker) return;
+
+    const startHeartbeat = () => {
+      heartbeatRef.current = setInterval(() => {
+        worker.postMessage({ type: 'ping' });
+      }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    startHeartbeat();
+
+    return () => {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+      }
+    };
+  }, []);
 
   return (
     <WebLLMContext.Provider

@@ -16,9 +16,7 @@ importScripts('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/dist/webllm.m
 let engine = null;
 let isInitialized = false;
 let currentModel = null;
-
-// System prompt for spatial task analysis
-const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
+let systemPrompt = `You are a spatial assistant. Analyze this image based on the user's audio request. 
 Return ONLY a valid JSON object with the structure:
 {
   "objects": [
@@ -108,7 +106,7 @@ async function runVisionInference(image, userPrompt, messageId) {
 
     // Build the multimodal request
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       {
         role: 'user',
         content: [
@@ -218,6 +216,9 @@ self.onmessage = async (event) => {
 
   switch (type) {
     case 'init':
+      if (data.systemPrompt) {
+        systemPrompt = data.systemPrompt;
+      }
       await initializeModel(data.model || 'Llama-3.2-11B-Vision-Instruct-q4f16_1-MLC');
       break;
 
@@ -229,11 +230,20 @@ self.onmessage = async (event) => {
       await reloadEngine();
       break;
 
+    case 'ping':
+      postMessage({ type: 'pong' });
+      break;
+
     default:
       postMessage({ type: 'unknown_message', received: type });
       break;
   }
 };
+
+// Heartbeat to detect worker crashes
+setInterval(() => {
+  postMessage({ type: 'pong' });
+}, 30000);
 
 // Notify main thread that worker is ready
 postMessage({ type: 'worker_ready' });
