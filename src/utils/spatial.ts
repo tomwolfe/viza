@@ -141,3 +141,52 @@ export function smoothPosition(
   
   return current.clone().add(delta.multiplyScalar(dampening));
 }
+
+interface OneEuroFilterState {
+  lastValue: THREE.Vector3;
+  lastTime: number;
+}
+
+export function createOneEuroFilter(
+  initialValue: THREE.Vector3 = new THREE.Vector3(),
+  minCutoff: number = 0.5,
+  beta: number = 0.7,
+  dCutoff: number = 1.0
+): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
+  let state: OneEuroFilterState = {
+    lastValue: initialValue.clone(),
+    lastTime: 0,
+  };
+
+  return (value: THREE.Vector3, timestamp: number) => {
+    if (state.lastTime === 0) {
+      state.lastValue = value.clone();
+      state.lastTime = timestamp;
+      return value.clone();
+    }
+
+    const dt = (timestamp - state.lastTime) / 1000;
+    if (dt <= 0) {
+      return state.lastValue.clone();
+    }
+
+    const dx = (value.x - state.lastValue.x) / dt;
+    const dy = (value.y - state.lastValue.y) / dt;
+    const dz = (value.z - state.lastValue.z) / dt;
+
+    const rate = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const cutoff = minCutoff + beta * Math.max(0, rate - dCutoff);
+    const alpha = Math.min(1, (cutoff * dt) / (1 + cutoff * dt));
+
+    const filtered = new THREE.Vector3(
+      state.lastValue.x + alpha * (value.x - state.lastValue.x),
+      state.lastValue.y + alpha * (value.y - state.lastValue.y),
+      state.lastValue.z + alpha * (value.z - state.lastValue.z)
+    );
+
+    state.lastValue = filtered;
+    state.lastTime = timestamp;
+
+    return filtered;
+  };
+}

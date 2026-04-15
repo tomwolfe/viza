@@ -9,9 +9,6 @@ import type { VizaErrorCode } from '@/types/worker';
 const HEARTBEAT_INTERVAL_MS = 30000;
 const HEARTBEAT_TIMEOUT_MS = 60000;
 
-let globalWorker: Worker | null = null;
-let globalWorkerModelId: string | null = null;
-
 type InferenceResult = VisionResponse | null | TaskStep[];
 
 interface PendingRequest {
@@ -62,7 +59,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const isInitializedRef = useRef(false);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const lastPongRef = useRef<number>(Date.now());
+  const lastPongRef = useRef<number>(0);
   const reconnectAttemptRef = useRef<number>(0);
 
   useEffect(() => {
@@ -79,12 +76,12 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    if (!globalWorker) {
-      globalWorker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
+    if (!workerRef.current) {
+      workerRef.current = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
         type: 'module',
       });
     }
-    const worker = globalWorker;
+    const worker = workerRef.current;
     workerRef.current = worker;
 
     worker.onmessage = (event) => {
@@ -192,7 +189,11 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     };
 
     return () => {
-      // NO worker.terminate() here - worker persists across navigation
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+      isInitializedRef.current = false;
     };
   }, []);
 
@@ -311,13 +312,11 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           
           if (reconnectAttemptRef.current <= 3) {
             worker.terminate();
-            globalWorker = null;
             isInitializedRef.current = false;
             
             const newWorker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
               type: 'module',
             });
-            globalWorker = newWorker;
             workerRef.current = newWorker;
             
             setTimeout(() => {
@@ -354,14 +353,12 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       workerRef.current.terminate();
       workerRef.current = null;
     }
-    globalWorker = null;
-    globalWorkerModelId = null;
+    isInitializedRef.current = false;
     setIsModelReady(false);
     setIsModelLoading(false);
     setIsInferring(false);
     setError(null);
     setErrorCode(null);
-    isInitializedRef.current = false;
   }, []);
 
   return (

@@ -58,3 +58,7 @@ export function createVizaError(message: string, code: VizaErrorCode): VizaError
   error.code = code;
   return error;
 }
+
+export type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E };

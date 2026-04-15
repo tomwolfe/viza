@@ -27,6 +27,11 @@ export const CONFIG = {
     ACTION_OUTLINE_WIDTH: 0.01,
     DISTANCE_THRESHOLD: 0.5,
     DAMPENING_FACTOR: 0.3,
+    ONE_EURO: {
+      MIN_CUTOFF: 0.5,
+      BETA: 0.7,
+      DCUTOFF: 1.0,
+    },
   },
 
   CATEGORIES: {

@@ -1,11 +1,12 @@
 'use client';
 
-import { Play, Mic, Loader2, AlertTriangle } from 'lucide-react';
+import { Play, Mic, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useId } from 'react';
 
 interface ARControlsProps {
   onStartAR: () => void;
   onVoiceInput: () => void;
+  onResetCamera?: () => void;
   isARActive: boolean;
   isModelLoading: boolean;
   modelProgress: number;
@@ -16,6 +17,7 @@ interface ARControlsProps {
 export default function ARControls({
   onStartAR,
   onVoiceInput,
+  onResetCamera,
   isARActive,
   isModelLoading,
   modelProgress,
@@ -84,20 +86,32 @@ export default function ARControls({
           )}
 
           {isARActive && (
-            <button
-              onClick={onVoiceInput}
-              disabled={isListening || isModelLoading}
-              className={`
-                ${isListening ? 'bg-red-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}
-                disabled:bg-gray-600 text-white rounded-full p-4 
-                shadow-lg transition-all flex items-center gap-2
-              `}
-              aria-label={isListening ? 'Listening for voice command' : 'Activate voice input'}
-              aria-pressed={isListening}
-            >
-              <Mic className="w-6 h-6" aria-hidden="true" />
-              <span>{isListening ? 'Listening...' : 'Ask'}</span>
-            </button>
+            <>
+              {onResetCamera && (
+                <button
+                  onClick={onResetCamera}
+                  className="bg-gray-600 hover:bg-gray-700 text-white rounded-full p-4 
+                           shadow-lg transition-all flex items-center gap-2"
+                  aria-label="Reset camera"
+                >
+                  <RotateCcw className="w-6 h-6" aria-hidden="true" />
+                </button>
+              )}
+              <button
+                onClick={onVoiceInput}
+                disabled={isListening || isModelLoading}
+                className={`
+                  ${isListening ? 'bg-red-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}
+                  disabled:bg-gray-600 text-white rounded-full p-4 
+                  shadow-lg transition-all flex items-center gap-2
+                `}
+                aria-label={isListening ? 'Listening for voice command' : 'Activate voice input'}
+                aria-pressed={isListening}
+              >
+                <Mic className="w-6 h-6" aria-hidden="true" />
+                <span>{isListening ? 'Listening...' : 'Ask'}</span>
+              </button>
+            </>
           )}
         </div>
 

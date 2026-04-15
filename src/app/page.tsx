@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ARControls from '@/components/ARControls';
 import { ARScene, PlaceholderScene } from '@/components/ARScene';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { WebLLMProvider, useWebLLM } from '@/contexts/WebLLMContext';
 import { useVoice } from '@/hooks/useVoice';
 import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
@@ -183,26 +184,28 @@ function ARContent() {
         </div>
       )}
 
-      <Canvas
-        camera={{ position: [0, 0, 0], fov: 75 }}
-        style={{ width: '100%', height: '100%' }}
-        gl={{ preserveDrawingBuffer: true }}
-      >
-        {isARActive ? (
-          <ARScene
-            isARActive={isARActive}
-            isModelReady={isModelReady}
-            runInference={runInference}
-            detectedObjects={detectedObjects}
-            onObjectsDetected={handleObjectsDetected}
-            voiceCommand={voiceCommand}
-            taskActive={taskState.isActive}
-            currentStepTarget={taskState.steps[taskState.currentStepIndex]?.targetObject}
-          />
-        ) : (
-          <PlaceholderScene />
-        )}
-      </Canvas>
+      <ErrorBoundary>
+        <Canvas
+          camera={{ position: [0, 0, 0], fov: 75 }}
+          style={{ width: '100%', height: '100%' }}
+          gl={{ preserveDrawingBuffer: true }}
+        >
+          {isARActive ? (
+            <ARScene
+              isARActive={isARActive}
+              isModelReady={isModelReady}
+              runInference={runInference}
+              detectedObjects={detectedObjects}
+              onObjectsDetected={handleObjectsDetected}
+              voiceCommand={voiceCommand}
+              taskActive={taskState.isActive}
+              currentStepTarget={taskState.steps[taskState.currentStepIndex]?.targetObject}
+            />
+          ) : (
+            <PlaceholderScene />
+          )}
+        </Canvas>
+      </ErrorBoundary>
 
       <ARControls
         onStartAR={handleStartAR}
