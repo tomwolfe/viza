@@ -5,8 +5,11 @@ import { XR, createXRStore } from '@react-three/xr';
 import { CameraFallback, useFrameCapture } from './CameraFallback';
 import { DetectedObject3D } from './DetectedObject3D';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
+import { useWorldMap, type WorldObject, getCategoryColor } from '@/hooks/useWorldMap';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
+import * as THREE from 'three';
+import { projectBoundingBoxToWorld } from '@/utils/spatial';
 
 const xrStore = createXRStore();
 
@@ -37,6 +40,14 @@ export function ARScene({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { captureFrame } = useFrameCapture();
   const lastVoiceCommandRef = useRef<string | null>(null);
+  const { addOrUpdateObject, getAllObjects } = useWorldMap();
+  const worldObjectsRef = useRef<WorldObject[]>([]);
+  const cameraRef = useRef<THREE.Camera | null>(null);
+  const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
+
+  useEffect(() => {
+    worldObjectsRef.current = getAllObjects();
+  }, [getAllObjects]);
 
   const handleFrameReady = useCallback((video: HTMLVideoElement) => {
     videoRef.current = video;
@@ -44,9 +55,24 @@ export function ARScene({
 
   const handleObjectsDetected = useCallback(
     (objects: DetectedObject[]) => {
+      if (cameraRef.current) {
+        objects.forEach((obj) => {
+          const position = projectBoundingBoxToWorld(
+            { x: obj.bbox_2d[0], y: obj.bbox_2d[1], width: obj.bbox_2d[2], height: obj.bbox_2d[3] },
+            {
+              camera: cameraRef.current!,
+              viewport: viewportRef.current,
+              imageWidth: CONFIG.SPATIAL.TARGET_SIZE,
+              imageHeight: CONFIG.SPATIAL.TARGET_SIZE,
+              depth: CONFIG.SPATIAL.DEFAULT_DEPTH,
+            }
+          );
+          addOrUpdateObject(obj, new THREE.Vector3(position.x, position.y, position.z));
+        });
+      }
       onObjectsDetected(objects);
     },
-    [onObjectsDetected]
+    [addOrUpdateObject, onObjectsDetected]
   );
 
   const { setVideoSource, setActive, executeInference, cancelPending } = useInferenceLoop({
@@ -87,6 +113,26 @@ export function ARScene({
           targetName={currentStepTarget}
         />
       ))}
+
+      {worldObjectsRef.current.map((obj) => {
+        const categoryColor = getCategoryColor(obj.category);
+        return (
+          <DetectedObject3D
+            key={`world-${obj.id}`}
+            obj={{
+              name: obj.name,
+              bbox_2d: [0, 0, 0, 0],
+              action: '',
+              category: obj.category,
+            }}
+            index={0}
+            isTarget={false}
+            useCategoryColor
+            categoryColor={categoryColor}
+            position={obj.smoothedPosition}
+          />
+        );
+      })}
     </XR>
   );
 }

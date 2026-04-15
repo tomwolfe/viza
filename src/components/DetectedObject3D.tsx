@@ -15,9 +15,12 @@ interface DetectedObject3DProps {
   index: number;
   isTarget?: boolean;
   targetName?: string;
+  useCategoryColor?: boolean;
+  categoryColor?: string;
+  position?: THREE.Vector3;
 }
 
-export function DetectedObject3D({ obj, index, isTarget, targetName }: DetectedObject3DProps) {
+export function DetectedObject3D({ obj, index, isTarget, targetName, useCategoryColor, categoryColor, position }: DetectedObject3DProps) {
   const { camera, viewport } = useThree();
   const [x, y, width, height] = obj.bbox_2d;
 
@@ -33,13 +36,17 @@ export function DetectedObject3D({ obj, index, isTarget, targetName }: DetectedO
   const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
 
   const worldPosition = useMemo(
-    () =>
-      new THREE.Vector3(
+    () => {
+      if (position) {
+        return position;
+      }
+      return new THREE.Vector3(
         ((x / targetSize) - offsetX) / scale * viewport.width,
         -(((y / targetSize) - offsetY) / scale * viewport.height),
         worldDepth
-      ),
-    [x, y, viewport.width, viewport.height, worldDepth, targetSize, scale, offsetX, offsetY]
+      );
+    },
+    [position, x, y, viewport.width, viewport.height, worldDepth, targetSize, scale, offsetX, offsetY]
   );
 
   const size = useMemo(
@@ -62,13 +69,16 @@ export function DetectedObject3D({ obj, index, isTarget, targetName }: DetectedO
   const labelScale = useMemo(() => [labelWidth, 0.25, 1] as const, [labelWidth]);
 
   const isCurrentTarget = isTarget && targetName && obj.name.toLowerCase().includes(targetName.toLowerCase());
+  const displayColor = useCategoryColor && categoryColor 
+    ? categoryColor 
+    : (isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR);
 
   return (
     <group position={[worldPosition.x, worldPosition.y, worldPosition.z]}>
       <mesh scale={boxScale}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial
-          color={isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR}
+          color={displayColor}
           transparent
           opacity={isCurrentTarget ? 0.3 : 0.15}
           side={THREE.DoubleSide}
@@ -78,7 +88,7 @@ export function DetectedObject3D({ obj, index, isTarget, targetName }: DetectedO
 
       <lineSegments scale={boxScale}>
         <edgesGeometry args={[PLANE_GEOMETRY]} />
-        <lineBasicMaterial color={isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR} linewidth={2} />
+        <lineBasicMaterial color={displayColor} linewidth={2} />
       </lineSegments>
 
       {isCurrentTarget && (
@@ -102,7 +112,7 @@ export function DetectedObject3D({ obj, index, isTarget, targetName }: DetectedO
       <Text
         position={[0, -boxHeight / 2 - SPATIAL.LABEL_OFFSET, 0.02]}
         fontSize={SPATIAL.FONT_SIZE}
-        color={isCurrentTarget ? '#ff6b00' : SPATIAL.BOX_COLOR}
+        color={displayColor}
         anchorX="center"
         anchorY="middle"
         outlineWidth={SPATIAL.OUTLINE_WIDTH}

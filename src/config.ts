@@ -23,6 +23,15 @@ export const CONFIG = {
     ACTION_FONT_SIZE: 0.08,
     OUTLINE_WIDTH: 0.02,
     ACTION_OUTLINE_WIDTH: 0.01,
+    DISTANCE_THRESHOLD: 0.5,
+    DAMPENING_FACTOR: 0.3,
+  },
+
+  CATEGORIES: {
+    TRASH: { color: '#ff4444', label: 'Trash', keywords: ['trash', 'garbage', 'waste', 'paper', 'bottle', 'can', 'wrapper', 'discard'] },
+    CLUTTER: { color: '#ffaa00', label: 'Clutter', keywords: ['mess', 'clothes', 'cloth', 'pile', 'scattered', 'untidy', 'organize'] },
+    KEEP: { color: '#44ff44', label: 'Keep', keywords: ['keep', 'save', 'important', 'valuable'] },
+    TOOL: { color: '#4488ff', label: 'Tool', keywords: ['screwdriver', 'wrench', 'hammer', 'driver', 'pliers', 'saw', 'tool'] },
   },
 };
 
@@ -48,6 +57,48 @@ export function buildSystemPrompt(taskContext: string, currentStep: string): str
     .replace('{currentStep}', currentStep);
 }
 
+export function buildPlanningPrompt(userGoal: string): string {
+  const isCleaningMode = /clean|organize|trash|garbage|mess/i.test(userGoal);
+  
+  if (isCleaningMode) {
+    return `You are a spatial planning assistant. The user wants to: "${userGoal}"
+
+Analyze this image and create a detailed task plan. Identify all objects that match the goal category.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "taskSteps": [
+    {
+      "id": "step-N",
+      "instruction": "Clear description of what to do",
+      "targetObject": "The specific object or category to target",
+      "validationPrompt": "How to verify this step is complete"
+    }
+  ]
+}
+
+Provide 5-10 specific steps. Focus on actionable items. Do not include any other text.`;
+  }
+
+  return `You are a spatial planning assistant. The user wants to: "${userGoal}"
+
+Analyze this image and create a detailed task plan for completing this goal.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "taskSteps": [
+    {
+      "id": "step-N",
+      "instruction": "Clear description of what to do",
+      "targetObject": "The specific object or category to target",
+      "validationPrompt": "How to verify this step is complete"
+    }
+  ]
+}
+
+Provide 5-10 specific steps in logical order. Do not include any other text.`;
+}
+
 export const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
 Return ONLY a valid JSON object with the structure:
 {
@@ -61,6 +112,40 @@ Return ONLY a valid JSON object with the structure:
   "completed": boolean
 }
 Do not include any other text. Only return the JSON object.`;
+
+export function buildCategoryPrompt(userGoal: string): string {
+  const isTrash = /trash|garbage|discard|throw away|waste/i.test(userGoal);
+  const isClutter = /clean|organize|mess|tidy|put away/i.test(userGoal);
+  
+  let categoryFocus = '';
+  
+  if (isTrash) {
+    categoryFocus = 'Identify all TRASH items (wrappers, bottles, cans, paper waste, food containers, etc.) and return their bounding boxes.';
+  } else if (isClutter) {
+    categoryFocus = 'Identify all CLUTTER items (clothes, papers, scattered items, messy areas) and return their bounding boxes.';
+  } else {
+    categoryFocus = 'Identify all objects and their categories. Use "keep" for items to preserve, "trash" for waste, "clutter" for items to organize.';
+  }
+
+  return `You are a spatial assistant for cleaning tasks.
+User Goal: "${userGoal}"
+
+${categoryFocus}
+
+Return ONLY a valid JSON object with the structure:
+{
+  "objects": [
+    {
+      "item": "string - object name",
+      "coordinates": [x, y, width, height],
+      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
+      "category": "string - one of: trash, clutter, keep, tool, unknown"
+    }
+  ],
+  "completed": boolean
+}
+Do not include any other text. Only return the JSON object.`;
+}
 
 export async function checkWebGPU() {
   const result = { supported: false, memoryGB: 0, recommendedGB: 8 };

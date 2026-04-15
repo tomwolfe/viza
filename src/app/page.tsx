@@ -1,19 +1,22 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ARControls from '@/components/ARControls';
 import { ARScene, PlaceholderScene } from '@/components/ARScene';
 import { WebLLMProvider, useWebLLM } from '@/contexts/WebLLMContext';
 import { useVoice } from '@/hooks/useVoice';
-import { useTaskState, DEFAULT_ASSEMBLY_TASK } from '@/hooks/useTaskState';
+import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
 import type { DetectedObject } from '@/schemas/vision';
+import { CONFIG } from '@/config';
 
 function ARContent() {
   const [isARActive, setIsARActive] = useState(false);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [voiceCommand, setVoiceCommand] = useState<string | null>(null);
   const [showWarnings, setShowWarnings] = useState(true);
+  const [currentSceneImage, setCurrentSceneImage] = useState<ImageBitmap | null>(null);
+  const sceneImageRef = useRef<ImageBitmap | null>(null);
   
   const {
     isModelLoading,
@@ -23,6 +26,8 @@ function ARContent() {
     isDeviceCompatible,
     initModel,
     runInference,
+    runPlanningInference,
+    runCategoryInference,
     error: llmError,
     lastCompleted,
   } = useWebLLM();
@@ -30,11 +35,13 @@ function ARContent() {
   const {
     taskState,
     startTask,
+    generateTaskPlan,
     nextStep,
     completeCurrentStep,
     resetTask,
     getCurrentInstruction,
     setSpeak,
+    isPlanning,
   } = useTaskState();
 
   const handleTranscriptReady = useCallback((transcript: string) => {
@@ -105,6 +112,41 @@ function ARContent() {
       speak(actions);
     }
   }, [speak, taskState, completeCurrentStep]);
+
+  const generatePlanFromGoal = useCallback(async (goal: string, _image: ImageBitmap): Promise<TaskStep[]> => {
+    if (!sceneImageRef.current) {
+      console.warn('[App] No scene image available for planning');
+      return DEFAULT_ASSEMBLY_TASK;
+    }
+    
+    try {
+      const steps = await runPlanningInference(sceneImageRef.current, goal);
+      if (steps && steps.length > 0) {
+        return steps;
+      }
+    } catch (error) {
+      console.error('[App] Planning inference failed:', error);
+    }
+    return DEFAULT_ASSEMBLY_TASK;
+  }, [runPlanningInference]);
+
+  const triggerPlanningMode = useCallback(async (userGoal: string) => {
+    if (!isModelReady || isPlanning) return;
+    
+    await generateTaskPlan(userGoal, sceneImageRef.current!, generatePlanFromGoal);
+  }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal]);
+
+  useEffect(() => {
+    if (voiceCommand && isModelReady) {
+      const isCleaningGoal = /clean|organize|trash|garbage|mess|fix|help/i.test(voiceCommand);
+      
+      if (isCleaningGoal && !taskState.isActive) {
+        triggerPlanningMode(voiceCommand);
+      } else {
+        setVoiceCommand(null);
+      }
+    }
+  }, [voiceCommand, isModelReady, taskState.isActive, triggerPlanningMode]);
 
   useEffect(() => {
     if (llmError) {
@@ -183,7 +225,14 @@ function ARContent() {
         </div>
       )}
 
-      {taskState.isActive && currentInstruction && (
+      {isPlanning && (
+        <div className="fixed top-32 left-1/2 -translate-x-1/2 z-50 
+                        bg-purple-600/90 backdrop-blur-md text-white rounded-lg px-6 py-3 max-w-lg border-2 border-purple-400">
+          <p className="text-sm font-semibold">Analyzing scene and generating task plan...</p>
+        </div>
+      )}
+
+      {taskState.isActive && currentInstruction && !isPlanning && (
         <div className="fixed top-32 left-1/2 -translate-x-1/2 z-50 
                         bg-orange-600/90 backdrop-blur-md text-white rounded-lg px-6 py-3 max-w-lg border-2 border-orange-400">
           <p className="text-xs font-bold uppercase tracking-wider mb-1">Step {taskState.currentStepIndex + 1}/{taskState.steps.length}</p>
@@ -205,7 +254,7 @@ function ARContent() {
         </div>
       )}
 
-      {isInferring && (
+      {isInferring && !isPlanning && (
         <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 
                         bg-blue-900/80 backdrop-blur-md text-white rounded-lg px-6 py-3">
           <p className="text-sm">Analyzing scene...</p>

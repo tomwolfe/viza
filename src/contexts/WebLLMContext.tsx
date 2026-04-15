@@ -1,9 +1,9 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
-import type { VisionResponse } from '@/schemas/vision';
+import type { VisionResponse, PlanningResponse, TaskStep } from '@/schemas/vision';
 import { checkWebGPU, CONFIG, SYSTEM_PROMPT } from '@/config';
-import { parseVisionResponse } from '@/schemas/vision';
+import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
 
 const INFERENCE_TIMEOUT_MS = 15000;
@@ -17,6 +17,8 @@ export interface WebLLMContextValue {
   isDeviceCompatible: boolean;
   initModel: () => Promise<void>;
   runInference: (image: ImageBitmap | HTMLVideoElement | HTMLCanvasElement, prompt: string) => Promise<VisionResponse | null>;
+  runPlanningInference: (image: ImageBitmap, goal: string) => Promise<TaskStep[]>;
+  runCategoryInference: (image: ImageBitmap, goal: string) => Promise<VisionResponse | null>;
   dispose: () => void;
   error: string | null;
   errorCode: VizaErrorCode | null;
@@ -43,6 +45,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const workerRef = useRef<Worker | null>(null);
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
   const pendingRef = useRef<Map<string, { resolve: (value: VisionResponse | null) => void; timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
+  const planningPendingRef = useRef<Map<string, { resolve: (value: TaskStep[]) => void; timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
   const isInitializedRef = useRef(false);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -99,6 +102,24 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
                 setError('Invalid response schema from worker');
               }
               pendingRef.current.delete(data.messageId);
+            }
+          }
+          break;
+
+        case 'planning_complete':
+          setIsInferring(false);
+          if (data.messageId) {
+            const pending = planningPendingRef.current.get(data.messageId);
+            if (pending) {
+              clearTimeout(pending.timeoutId);
+              const validated = parsePlanningResponse(data.response);
+              if (validated && validated.taskSteps) {
+                pending.resolve(validated.taskSteps);
+              } else {
+                pending.resolve([]);
+                setError('Invalid planning response from worker');
+              }
+              planningPendingRef.current.delete(data.messageId);
             }
           }
           break;
@@ -215,6 +236,88 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     [isModelReady]
   );
 
+  const runPlanningInference = useCallback(
+    async (image: ImageBitmap, goal: string): Promise<TaskStep[]> => {
+      if (!workerRef.current || !isModelReady) {
+        setError('Model not ready. Call initModel first.');
+        return [];
+      }
+
+      setIsInferring(true);
+      setError(null);
+
+      const messageId = crypto.randomUUID();
+
+      const result = new Promise<TaskStep[]>((resolve) => {
+        const timeoutId = setTimeout(() => {
+          if (planningPendingRef.current.has(messageId)) {
+            planningPendingRef.current.delete(messageId);
+            setError('Planning inference timeout after 30s');
+            setErrorCode('INFERENCE_TIMEOUT');
+            setIsInferring(false);
+            resolve([]);
+          }
+        }, 30000);
+
+        planningPendingRef.current.set(messageId, { resolve, timeoutId });
+
+        workerRef.current!.postMessage(
+          {
+            type: 'planning',
+            messageId,
+            image,
+            goal,
+          },
+          [image]
+        );
+      });
+
+      return result;
+    },
+    [isModelReady]
+  );
+
+  const runCategoryInference = useCallback(
+    async (image: ImageBitmap, goal: string): Promise<VisionResponse | null> => {
+      if (!workerRef.current || !isModelReady) {
+        setError('Model not ready. Call initModel first.');
+        return null;
+      }
+
+      setIsInferring(true);
+      setError(null);
+
+      const messageId = crypto.randomUUID();
+
+      const result = new Promise<VisionResponse | null>((resolve) => {
+        const timeoutId = setTimeout(() => {
+          if (pendingRef.current.has(messageId)) {
+            pendingRef.current.delete(messageId);
+            setError('Category inference timeout after 15s');
+            setErrorCode('INFERENCE_TIMEOUT');
+            setIsInferring(false);
+            resolve(null);
+          }
+        }, INFERENCE_TIMEOUT_MS);
+
+        pendingRef.current.set(messageId, { resolve, timeoutId });
+
+        workerRef.current!.postMessage(
+          {
+            type: 'category',
+            messageId,
+            image,
+            goal,
+          },
+          [image]
+        );
+      });
+
+      return result;
+    },
+    [isModelReady]
+  );
+
   useEffect(() => {
     const worker = workerRef.current;
     if (!worker) return;
@@ -262,6 +365,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         isDeviceCompatible,
         initModel,
         runInference,
+        runPlanningInference,
+        runCategoryInference,
         dispose,
         error,
         errorCode,

@@ -68,3 +68,54 @@ export function projectBoundingBoxSize(
     height: projectedHeight,
   };
 }
+
+export function calculateDistance2D(
+  pos1: { x: number; y: number },
+  pos2: { x: number; y: number }
+): number {
+  const dx = pos2.x - pos1.x;
+  const dy = pos2.y - pos1.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function calculateDistance3D(
+  pos1: { x: number; y: number; z: number },
+  pos2: { x: number; y: number; z: number }
+): number {
+  const dx = pos2.x - pos1.x;
+  const dy = pos2.y - pos1.y;
+  const dz = pos2.z - pos1.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+export function isWithinThreshold(
+  pos1: THREE.Vector3,
+  pos2: THREE.Vector3,
+  threshold: number
+): boolean {
+  return pos1.distanceTo(pos2) < threshold;
+}
+
+export function lerpPosition(
+  current: THREE.Vector3,
+  target: THREE.Vector3,
+  factor: number
+): THREE.Vector3 {
+  return current.clone().lerp(target, factor);
+}
+
+export function smoothPosition(
+  current: THREE.Vector3,
+  target: THREE.Vector3,
+  dampening: number,
+  maxSpeed?: number
+): THREE.Vector3 {
+  const delta = target.clone().sub(current);
+  const distance = delta.length();
+  
+  if (maxSpeed && distance > maxSpeed) {
+    delta.normalize().multiplyScalar(maxSpeed);
+  }
+  
+  return current.clone().add(delta.multiplyScalar(dampening));
+}
