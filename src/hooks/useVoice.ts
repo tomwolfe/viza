@@ -72,6 +72,8 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const shouldRestartRef = useRef(false);
+  const isIntendingToListenRef = useRef(false);
 
   useEffect(() => {
     onCommandRef.current = onCommand;
@@ -122,6 +124,14 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
   const handleEnd = useCallback(() => {
     setStatus('idle');
+    if (shouldRestartRef.current && isIntendingToListenRef.current) {
+      shouldRestartRef.current = false;
+      try {
+        recognitionRef.current?.start();
+      } catch (e) {
+        logger.debug('[Voice] Auto-restart failed:', e);
+      }
+    }
   }, []);
 
   const handleStart = useCallback(() => {
@@ -173,25 +183,22 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     setStatus('starting');
+    isIntendingToListenRef.current = true;
+    shouldRestartRef.current = false;
 
     try {
       setTranscript('');
       recognitionRef.current.start();
     } catch (err: unknown) {
+      isIntendingToListenRef.current = false;
       setStatus('idle');
       const errorMessage = err instanceof Error ? err.message : String(err);
       if (errorMessage.includes('already started')) {
+        shouldRestartRef.current = true;
         try {
           recognitionRef.current.stop();
         } catch {
         }
-        setTimeout(() => {
-try {
-          recognitionRef.current?.start();
-        } catch {
-            logger.error('[Voice] Failed to restart recognition');
-          }
-        }, 100);
       } else {
         logger.error('[Voice] Failed to start recognition');
         setError('Failed to start speech recognition.');
@@ -200,6 +207,8 @@ try {
   }, [status]);
 
   const stopListening = useCallback((): void => {
+    isIntendingToListenRef.current = false;
+    shouldRestartRef.current = false;
     if (recognitionRef.current && status === 'listening') {
       recognitionRef.current.stop();
     }

@@ -33,7 +33,7 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
         width={boxWidth}
         height={boxHeight}
         color={displayColor}
-        opacity={isCurrentTarget ? 0.3 : 0.15}
+        opacity={isCurrentTarget ? CONFIG.SPATIAL.HIGHLIGHT_OPACITY : CONFIG.SPATIAL.BOX_OPACITY}
       />
 
       {isCurrentTarget && <TargetHighlighter height={boxHeight} />}

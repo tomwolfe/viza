@@ -91,7 +91,11 @@ function loadWorldMapFromStorage(): Map<string, WorldObject> {
 
 function saveWorldMapToStorage(map: Map<string, WorldObject>): void {
   const data = Array.from(map.entries());
-  safeSet(data, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
+  try {
+    safeSet(data, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
+  } catch (e) {
+    logger.error('[WorldMap] Failed to save to storage:', e);
+  }
 }
 
 const { ONE_EURO } = CONFIG.SPATIAL;
@@ -121,7 +125,15 @@ export function useWorldMap(): UseWorldMapReturn {
     }
     saveTimeoutRef.current = setTimeout(() => {
       saveWorldMapToStorage(worldMapRef.current);
-    }, 1000);
+    }, 500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, []);
 
   const addOrUpdateObject = useCallback((obj: DetectedObject, position: THREE.Vector3) => {

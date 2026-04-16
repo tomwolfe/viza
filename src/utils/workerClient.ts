@@ -50,6 +50,7 @@ export class WorkerClient {
   private maxReconnectAttempts = 3;
   private onReconnect: (() => void) | null = null;
   private isModelReadyState = false;
+  private abortController: AbortController | null = null;
 
   constructor(options: WorkerClientOptions = {}) {
     this.options = {
@@ -226,15 +227,22 @@ export class WorkerClient {
       pending.reject(new Error(reason));
     });
     this.pendingRequests.clear();
+    this.abortController?.abort();
+    this.abortController = null;
   }
 
   sendMessage<T>(
     type: WorkerMessageType,
     payload: Record<string, unknown>,
-    transfer?: Transferable[]
+    transfer?: Transferable[],
+    signal?: AbortSignal
   ): Promise<T> {
     if (!this.worker) {
       return Promise.reject(new Error('Worker not initialized'));
+    }
+
+    if (signal?.aborted) {
+      return Promise.reject(new Error('Request aborted'));
     }
 
     const messageId = this.createRequestId();
@@ -250,10 +258,26 @@ export class WorkerClient {
         type: inferenceType,
       });
 
-      this.worker!.postMessage(
-        { type, messageId, ...payload },
-        transfer
-      );
+      const abortHandler = () => {
+        clearTimeout(timeoutId);
+        this.pendingRequests.delete(messageId);
+        reject(new Error('Request aborted'));
+      };
+
+      if (signal) {
+        signal.addEventListener('abort', abortHandler, { once: true });
+      }
+
+      try {
+        this.worker!.postMessage(
+          { type, messageId, ...payload },
+          transfer
+        );
+      } catch (err) {
+        clearTimeout(timeoutId);
+        this.pendingRequests.delete(messageId);
+        reject(err);
+      }
     });
   }
 
@@ -283,6 +307,8 @@ export class WorkerClient {
 
   terminate(): void {
     this.rejectAllPending('Worker terminated');
+    this.abortController?.abort();
+    this.abortController = null;
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;

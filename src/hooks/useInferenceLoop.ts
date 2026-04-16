@@ -36,6 +36,7 @@ export function useInferenceLoop({
       performance.mark('inference-loop-start');
 
       let frame: ImageBitmap | null = null;
+      let frameClosed = false;
       try {
         frame = captureFrame(videoRef.current);
         if (!frame) {
@@ -51,6 +52,14 @@ export function useInferenceLoop({
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
       } finally {
+        if (frame && !frameClosed && frame.width > 0) {
+          try {
+            frame.close();
+            frameClosed = true;
+          } catch {
+            logger.debug('[useInferenceLoop] Frame already closed');
+          }
+        }
         isRunningRef.current = false;
         performance.mark('inference-loop-complete');
         performance.measure('inference-cycle', 'inference-loop-start', 'inference-loop-complete');
@@ -103,6 +112,7 @@ export function useInferenceLoop({
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      isRunningRef.current = false;
     };
   }, [isActive, isInferring, intervalMs, processFrame]);
 

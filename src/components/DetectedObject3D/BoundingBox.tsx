@@ -2,6 +2,7 @@
 
 import { memo, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
+import { CONFIG } from '@/config';
 
 const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 
@@ -12,9 +13,9 @@ interface BoundingBoxProps {
   opacity?: number;
 }
 
-export const BoundingBox = memo(function BoundingBox({ width, height, color, opacity = 0.15 }: BoundingBoxProps) {
-  const boxWidth = Math.max(width, 0.1);
-  const boxHeight = Math.max(height, 0.1);
+export const BoundingBox = memo(function BoundingBox({ width, height, color, opacity = CONFIG.SPATIAL.BOX_OPACITY }: BoundingBoxProps) {
+  const boxWidth = Math.max(width, CONFIG.SPATIAL.MIN_BOX_SIZE);
+  const boxHeight = Math.max(height, CONFIG.SPATIAL.MIN_BOX_SIZE);
   const boxScale: [number, number, number] = [boxWidth, boxHeight, 1];
 
   const material = useMemo(
