@@ -4,8 +4,6 @@ import { memo, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { CONFIG } from '@/config';
 
-const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
-
 interface BoundingBoxProps {
   width: number;
   height: number;
@@ -18,6 +16,7 @@ export const BoundingBox = memo(function BoundingBox({ width, height, color, opa
   const boxHeight = Math.max(height, CONFIG.SPATIAL.MIN_BOX_SIZE);
   const boxScale: [number, number, number] = [boxWidth, boxHeight, 1];
 
+  const planeGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
   const material = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
@@ -36,8 +35,8 @@ export const BoundingBox = memo(function BoundingBox({ width, height, color, opa
   );
 
   const edgesGeometry = useMemo(
-    () => new THREE.EdgesGeometry(PLANE_GEOMETRY),
-    []
+    () => new THREE.EdgesGeometry(planeGeometry),
+    [planeGeometry]
   );
 
   useEffect(() => {
@@ -45,8 +44,9 @@ export const BoundingBox = memo(function BoundingBox({ width, height, color, opa
       material.dispose();
       lineMaterial.dispose();
       edgesGeometry.dispose();
+      planeGeometry.dispose();
     };
-  }, [material, lineMaterial, edgesGeometry]);
+  }, [material, lineMaterial, edgesGeometry, planeGeometry]);
 
   return (
     <group>

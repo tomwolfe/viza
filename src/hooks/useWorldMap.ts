@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
@@ -111,6 +111,7 @@ export function useWorldMap(): UseWorldMapReturn {
   const dampeningRef = useRef(DEFAULT_DAMPENING);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterCacheRef = useRef<Map<string, (value: THREE.Vector3, timestamp: number) => THREE.Vector3>>(new Map());
+  const [, setVersion] = useState(0);
 
   useEffect(() => {
     const map = worldMapRef.current;
@@ -185,6 +186,7 @@ export function useWorldMap(): UseWorldMapReturn {
     }
 
     scheduleSave();
+    setVersion(v => v + 1);
   }, [scheduleSave]);
 
   const getObjectAtPosition = useCallback((position: THREE.Vector3, threshold: number, name?: string): WorldObject | null => {

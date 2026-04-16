@@ -37,7 +37,8 @@ export function get3DPosition(
   viewport: { width: number; height: number },
   targetSize: number,
   depth: number,
-  hitTestResult?: HitTestResult
+  hitTestResult?: HitTestResult,
+  cameraOffset?: THREE.Vector3
 ): THREE.Vector3 {
   if (hitTestResult) {
     const hitPosition = hitTestResult.position.clone();
@@ -51,10 +52,14 @@ export function get3DPosition(
   const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
   const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
 
+  const relX = ((x / targetSize) - offsetX) / scale * viewport.width;
+  const relY = -(((y / targetSize) - offsetY) / scale * viewport.height);
+
+  const cameraPosition = cameraOffset || camera.position.clone();
   return new THREE.Vector3(
-    ((x / targetSize) - offsetX) / scale * viewport.width,
-    -(((y / targetSize) - offsetY) / scale * viewport.height),
-    depth
+    cameraPosition.x + relX,
+    cameraPosition.y + relY,
+    cameraPosition.z + depth
   );
 }
 
