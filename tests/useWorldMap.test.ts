@@ -2,9 +2,49 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
 import type { DetectedObject } from '../src/schemas/vision';
 import { categorizeObject, generateObjectId } from '../src/utils/objectProcessing';
-import { findExistingObjectKey, type WorldObject } from '../src/hooks/useWorldMap';
+import { findExistingObjectKey, type WorldObject, saveWorldMapToStorage } from '../src/hooks/useWorldMap';
+import { safeSet } from '../src/utils/safeStorage';
+
+vi.mock('../src/utils/safeStorage', () => ({
+  safeSet: vi.fn(),
+  safeGet: vi.fn(),
+  safeRemove: vi.fn(),
+  SCHEMA_VERSION: 1,
+}));
 
 describe('useWorldMap logic', () => {
+  describe('saveWorldMapToStorage LRU capping', () => {
+    it('should cap the number of stored objects to MAX_WORLD_OBJECTS', () => {
+      const map = new Map<string, WorldObject>();
+      // Create 105 objects with different lastSeen times
+      for (let i = 0; i < 105; i++) {
+        map.set(`obj-${i}`, {
+          id: `obj-${i}`,
+          name: `object ${i}`,
+          position: new THREE.Vector3(i, 0, 0),
+          category: 'unknown',
+          confidence: 1,
+          lastSeen: i, // Using i as timestamp for easy sorting
+          detectionCount: 1,
+          smoothedPosition: new THREE.Vector3(i, 0, 0),
+        });
+      }
+
+      saveWorldMapToStorage(map);
+
+      expect(safeSet).toHaveBeenCalled();
+      const savedData = (vi.mocked(safeSet).mock.calls[0][0] as [string, WorldObject][]);
+      expect(savedData.length).toBe(100);
+      
+      // Should contain the 100 most recent items (i=5 to i=104)
+      const ids = savedData.map(([id]) => id);
+      expect(ids).toContain('obj-104');
+      expect(ids).toContain('obj-5');
+      expect(ids).not.toContain('obj-0');
+      expect(ids).not.toContain('obj-4');
+    });
+  });
+
   describe('findExistingObjectKey', () => {
     it('should return key when position is within threshold', () => {
       const map = new Map<string, WorldObject>([

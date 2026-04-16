@@ -58,8 +58,15 @@ function loadWorldMapFromStorage(): Map<string, WorldObject> {
   return map;
 }
 
-function saveWorldMapToStorage(map: Map<string, WorldObject>): void {
-  const data = Array.from(map.entries());
+export function saveWorldMapToStorage(map: Map<string, WorldObject>): void {
+  let data = Array.from(map.entries());
+  
+  // LRU Capping: keep only the most recent items
+  if (data.length > CONFIG.SPATIAL.MAX_WORLD_OBJECTS) {
+    data.sort((a, b) => b[1].lastSeen - a[1].lastSeen);
+    data = data.slice(0, CONFIG.SPATIAL.MAX_WORLD_OBJECTS);
+  }
+
   try {
     safeSet(data, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
   } catch (e) {

@@ -23,25 +23,6 @@ export function useObject3DTransform({ obj, index, position }: UseObject3DTransf
 
   const cameraPerspective = camera as THREE.PerspectiveCamera;
 
-  const worldPosition = useMemo(
-    () => {
-      if (position) {
-        return position;
-      }
-      return get3DPosition(
-        x,
-        y,
-        width,
-        height,
-        cameraPerspective,
-        { width: viewport.width, height: viewport.height },
-        targetSize,
-        worldDepth
-      );
-    },
-    [position, x, y, width, height, cameraPerspective, viewport.width, viewport.height, worldDepth, targetSize]
-  );
-
   const size = useMemo(
     () =>
       projectBoundingBoxSize(
@@ -64,7 +45,6 @@ export function useObject3DTransform({ obj, index, position }: UseObject3DTransf
     height,
     worldDepth,
     targetSize,
-    worldPosition,
     boxWidth,
     boxHeight,
     displayColor: SPATIAL.BOX_COLOR,

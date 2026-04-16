@@ -1,12 +1,11 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import type { VisionResponse, TaskStep } from '@/schemas/vision';
-import { SYSTEM_PROMPT, logger, CONFIG } from '@/config';
+import { logger } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
-import { WorkerClient, createWorkerClient, type WorkerMessageType } from '@/utils/workerClient';
-import { checkWebGPU } from '@/config';
+import { useWebLLMWorker } from '@/hooks/useWebLLMWorker';
 
 type InferenceResult = VisionResponse | null | TaskStep[];
 
@@ -36,118 +35,37 @@ interface WebLLMProviderProps {
 }
 
 export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
-  const [isModelLoading, setIsModelLoading] = useState(false);
-  const [modelProgress, setModelProgress] = useState(0);
-  const [isModelReady, setIsModelReady] = useState(false);
-  const [isInferring, setIsInferring] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
-  const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
+  const {
+    isModelLoading,
+    modelProgress,
+    isModelReady,
+    isInferring,
+    isDeviceCompatible,
+    error,
+    errorCode,
+    workerClient,
+    isModelReadyRef,
+    initModel,
+    dispose,
+    setIsInferring,
+    setError,
+    setErrorCode,
+  } = useWebLLMWorker({ modelId });
+
   const [lastCompleted, setLastCompleted] = useState(false);
-
-  const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
-  const workerClientRef = useRef<WorkerClient | null>(null);
-  const isInitializedRef = useRef(false);
-  const isModelReadyRef = useRef(false);
-
-  const initWorker = useCallback(async () => {
-    if (isInitializedRef.current) return;
-
-    const gpuCheck = await checkWebGPU();
-    if (!gpuCheck.supported || gpuCheck.memoryGB < 8) {
-      setIsDeviceCompatible(false);
-      setError(`WebGPU not supported or insufficient memory (requires ${gpuCheck.recommendedGB}GB+).`);
-      setErrorCode('WEBGPU_NOT_SUPPORTED');
-      return;
-    }
-    setIsDeviceCompatible(true);
-
-    const client = createWorkerClient({
-      onReady: () => {
-        logger.info('[WebLLM] Worker ready');
-      },
-      onProgress: (progress) => {
-        setModelProgress(progress);
-        if (progress > 0 && progress < 100) {
-          setIsModelLoading(true);
-        }
-      },
-      onError: (message, code) => {
-        logger.error('[WebLLM] Error:', message);
-        setError(message);
-        setErrorCode(code);
-        setIsModelLoading(false);
-        setIsInferring(false);
-      },
-      onWarning: (message) => {
-        logger.warn('[WebLLM] Warning:', message);
-      },
-      onPong: () => {},
-      onUnresponsive: () => {
-        logger.warn('[WebLLM] Worker unresponsive');
-        setError('AI Engine Lost - Restarting...');
-        setIsModelReady(false);
-        isModelReadyRef.current = false;
-      },
-      inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
-      planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
-    });
-
-    client.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
-    workerClientRef.current = client;
-    isInitializedRef.current = true;
-  }, []);
-
-  const initModel = useCallback(async () => {
-    if (!isInitializedRef.current) {
-      await initWorker();
-    }
-
-    if (!isDeviceCompatible) {
-      setError('Device not compatible with WebGPU');
-      return;
-    }
-
-    const client = workerClientRef.current;
-    if (!client) {
-      setError('Worker not initialized');
-      return;
-    }
-
-    setIsModelReady(false);
-    setModelProgress(0);
-    setIsModelLoading(true);
-    setError(null);
-
-    try {
-      await client.init(modelIdRef.current, SYSTEM_PROMPT);
-      isModelReadyRef.current = true;
-      setIsModelLoading(false);
-      setIsModelReady(true);
-      setModelProgress(100);
-      client.startHeartbeat(() => {
-        logger.info('[WebLLM] Heartbeat reconnected');
-      });
-    } catch (err) {
-      setError((err as Error).message);
-      setErrorCode('WORKER_INIT_FAILED');
-      setIsModelLoading(false);
-    }
-  }, [initWorker, isDeviceCompatible]);
 
   const dispatchInference = useCallback(
     async (
       image: ImageBitmap,
       prompt: string,
-      inferenceType: InferenceType,
-      signal?: AbortSignal
+      inferenceType: InferenceType
     ): Promise<InferenceResult> => {
       if (!isModelReadyRef.current) {
         setError('Model not ready. Call initModel first.');
         return inferenceType === 'planning' ? [] : null;
       }
 
-      const client = workerClientRef.current;
+      const client = workerClient;
       if (!client) {
         setError('Worker not initialized');
         return inferenceType === 'planning' ? [] : null;
@@ -189,7 +107,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         setIsInferring(false);
       }
     },
-    []
+    [isModelReadyRef, workerClient, setIsInferring, setError, setErrorCode]
   );
 
   const runInference = useCallback(
@@ -215,28 +133,6 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     },
     [dispatchInference]
   );
-
-  const dispose = useCallback(() => {
-    const client = workerClientRef.current;
-    if (client) {
-      client.stopHeartbeat();
-      client.terminate();
-      workerClientRef.current = null;
-    }
-    isInitializedRef.current = false;
-    isModelReadyRef.current = false;
-    setIsModelReady(false);
-    setIsModelLoading(false);
-    setIsInferring(false);
-    setError(null);
-    setErrorCode(null);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      dispose();
-    };
-  }, [dispose]);
 
   return (
     <WebLLMContext.Provider

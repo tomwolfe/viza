@@ -33,7 +33,9 @@ export function useInferenceLoop({
       if (isRunningRef.current || !videoRef.current) return;
 
       isRunningRef.current = true;
-      performance.mark('inference-loop-start');
+      if (CONFIG.ENABLE_TELEMETRY) {
+        performance.mark('inference-loop-start');
+      }
 
       let frame: ImageBitmap | null = null;
       let frameClosed = false;
@@ -62,8 +64,10 @@ export function useInferenceLoop({
           }
         }
         isRunningRef.current = false;
-        performance.mark('inference-loop-complete');
-        performance.measure('inference-cycle', 'inference-loop-start', 'inference-loop-complete');
+        if (CONFIG.ENABLE_TELEMETRY) {
+          performance.mark('inference-loop-complete');
+          performance.measure('inference-cycle', 'inference-loop-start', 'inference-loop-complete');
+        }
       }
     },
     [runInference, captureFrame, onObjectsDetected]

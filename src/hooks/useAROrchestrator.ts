@@ -5,6 +5,7 @@ import { useWebLLM } from '@/contexts/WebLLMContext';
 import { useVoice } from '@/hooks/useVoice';
 import { useWebXR } from '@/hooks/useWebXR';
 import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
+import { useVoiceIntent } from '@/hooks/useVoiceIntent';
 import type { DetectedObject } from '@/schemas/vision';
 import { logger } from '@/config';
 
@@ -13,6 +14,8 @@ export function useAROrchestrator() {
   const [error, setError] = useState<string | null>(null);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [isXRMode, setIsXRMode] = useState(false);
+
+  const { isCleaningIntent } = useVoiceIntent();
 
   const {
     isModelLoading,
@@ -44,13 +47,14 @@ export function useAROrchestrator() {
   const voiceCommandRef = useRef<string | null>(null);
 
   const generatePlanFromGoal = useCallback(async (goal: string): Promise<TaskStep[]> => {
-    if (!sceneImageRef.current) {
+    const sceneImage = sceneImageRef.current;
+    if (!sceneImage) {
       logger.warn('[Orchestrator] No scene image available for planning');
       return DEFAULT_ASSEMBLY_TASK;
     }
 
     try {
-      const steps = await runPlanningInference(sceneImageRef.current, goal);
+      const steps = await runPlanningInference(sceneImage, goal);
       if (steps && steps.length > 0) {
         return steps;
       }
@@ -63,15 +67,20 @@ export function useAROrchestrator() {
   const triggerPlanningMode = useCallback(async (userGoal: string) => {
     if (!isModelReady || isPlanning) return;
 
-    await generateTaskPlan(userGoal, sceneImageRef.current!, generatePlanFromGoal);
+    // Use current frame if available, otherwise planning will use default task
+    const sceneImage = sceneImageRef.current;
+    if (!sceneImage) {
+      logger.warn('[Orchestrator] Triggering planning without scene image');
+    }
+
+    await generateTaskPlan(userGoal, sceneImage!, generatePlanFromGoal);
   }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal]);
 
   const handleTranscriptReady = useCallback((transcript: string) => {
     voiceCommandRef.current = transcript;
 
     if (isModelReady && !taskState.isActive) {
-      const isCleaningGoal = /clean|organize|trash|garbage|mess|fix|help/i.test(transcript);
-      if (isCleaningGoal) {
+      if (isCleaningIntent(transcript)) {
         triggerPlanningMode(transcript);
         voiceCommandRef.current = null;
         return;
@@ -79,7 +88,7 @@ export function useAROrchestrator() {
     }
 
     voiceCommandRef.current = null;
-  }, [isModelReady, taskState.isActive, triggerPlanningMode]);
+  }, [isModelReady, taskState.isActive, triggerPlanningMode, isCleaningIntent]);
 
   const {
     isListening,

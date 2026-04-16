@@ -5,7 +5,7 @@ import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
 import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
-import { useCamera } from '@/hooks/useCamera';
+import { useUserMedia } from '@/hooks/useUserMedia';
 import { useWebLLM } from '@/contexts/WebLLMContext';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
@@ -26,6 +26,7 @@ interface ARSceneProps {
   checkTargetFound?: (objects: DetectedObject[]) => void;
   speak?: (text: string) => void;
   isXRMode?: boolean;
+  sceneImageRef?: React.MutableRefObject<ImageBitmap | null>;
 }
 
 export interface ARSceneHandle {
@@ -44,6 +45,7 @@ export function ARScene({
   checkTargetFound,
   speak,
   isXRMode = false,
+  sceneImageRef,
 }: ARSceneProps) {
   const lastVoiceCommandRef = useRef<string | null>(null);
   const { getAllObjects } = useWorldMap();
@@ -51,7 +53,7 @@ export function ARScene({
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
-  const { videoElement } = useCamera({ isActive: isARActive && isModelReady && !isXRMode });
+  const { videoElement } = useUserMedia({ isActive: isARActive && isModelReady && !isXRMode });
   const { isInferring } = useWebLLM();
 
   useEffect(() => {
@@ -79,9 +81,27 @@ export function ARScene({
   );
 
   const { captureFrame } = useFrameCapture();
+
+  const handleCaptureFrame = useCallback(async (video: HTMLVideoElement | null) => {
+    const frame = await captureFrame(video);
+    if (frame && sceneImageRef) {
+      // Update the shared ref for planning
+      if (sceneImageRef.current) {
+        sceneImageRef.current.close();
+      }
+      // Create a copy for the ref to avoid closing it when inference is done
+      // Actually ImageBitmap is transferable, but if we want to keep it we might need to clone it
+      // or just manage its lifecycle carefully.
+      // Since runInference might close it, we should probably clone it if we want to keep it.
+      // But createImageBitmap from ImageBitmap is a way to clone it.
+      sceneImageRef.current = await createImageBitmap(frame);
+    }
+    return frame;
+  }, [captureFrame, sceneImageRef]);
+
   const { setVideoSource, run, cancelPending } = useInferenceLoop({
     runInference,
-    captureFrame,
+    captureFrame: handleCaptureFrame,
     onObjectsDetected: handleObjectsDetected,
     isInferring,
     intervalMs: CONFIG.INFERENCE_INTERVAL,

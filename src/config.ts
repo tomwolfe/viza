@@ -34,6 +34,7 @@ export const CONFIG = {
     DISTANCE_THRESHOLD: 0.5,
     DAMPENING_FACTOR: 0.3,
     MIN_BOX_SIZE: 0.1,
+    MAX_WORLD_OBJECTS: 100,
     ONE_EURO: {
       MIN_CUTOFF: 0.5,
       BETA: 0.7,

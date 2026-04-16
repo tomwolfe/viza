@@ -35,6 +35,7 @@ export function ARContent() {
     handleObjectsDetected,
     currentInstruction,
     voiceCommandRef,
+    sceneImageRef,
     isXRMode,
   } = useAROrchestrator();
 
@@ -76,6 +77,7 @@ export function ARContent() {
               checkTargetFound={checkTargetFound}
               speak={speak}
               isXRMode={isXRMode}
+              sceneImageRef={sceneImageRef}
             />
           ) : (
             <color attach="background" args={['#1a1a1a']} />
