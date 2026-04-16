@@ -119,11 +119,6 @@ export function useInferenceLoop({
         } catch (error) {
           logger.error('[useInferenceLoop] Inference error:', error);
           dispatch({ type: 'ERROR', error: (error as Error).message });
-          if (pendingInferenceRef.current) {
-            pendingInferenceRef.current.reject(error);
-            pendingInferenceRef.current = null;
-          }
-        } finally {
           if (frame) {
             try {
               frame.close();
@@ -131,6 +126,11 @@ export function useInferenceLoop({
               // Frame may already be closed
             }
           }
+          if (pendingInferenceRef.current) {
+            pendingInferenceRef.current.reject(error);
+            pendingInferenceRef.current = null;
+          }
+        } finally {
           dispatch({ type: 'COMPLETE' });
           isProcessingRef.current = false;
 
@@ -146,35 +146,7 @@ export function useInferenceLoop({
       [runInference, captureFrame, onObjectsDetected]
     );
 
-    const run = useCallback(
-      async (prompt: string, voiceTriggered: boolean = false): Promise<unknown> => {
-        // 1. Cancel any existing inference and clear all outstanding requests
-        abortCurrentInference();
-        if (pendingInferenceRef.current) {
-          pendingInferenceRef.current.reject(new Error('Cancelled by new run trigger'));
-          pendingInferenceRef.current = null;
-        }
-        latestRequestRef.current = null;
-        
-        if (!frameRef.current) {
-          return null;
-        }
-
-        // 4. Set the new request in the reference
-        latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered };
-
-        return new Promise((resolve, reject) => {
-          // 5. Trigger processing
-          processInference(prompt, voiceTriggered);
-
-          // 6. Set up the resolver for the current request
-          pendingInferenceRef.current = { resolve, reject, prompt, timestamp: Date.now(), voiceTriggered };
-        });
-      },
-      [processInference, abortCurrentInference]
-    );
-
-  const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
+    const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
     frameRef.current = video;
   }, []);
 
@@ -229,7 +201,10 @@ export function useInferenceLoop({
 
     intervalRef.current = setInterval(() => {
       if (!isProcessingRef.current) {
-        processInference('Identify objects in this scene.', false);
+        const hasPendingVoiceRequest = latestRequestRef.current?.voiceTriggered;
+        if (!hasPendingVoiceRequest) {
+          processInference('Identify objects in this scene.', false);
+        }
       }
     }, intervalMs);
 

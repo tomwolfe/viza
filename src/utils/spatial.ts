@@ -168,7 +168,7 @@ export function createOneEuroFilter(
   beta: number = 0.7,
   dCutoff: number = 1.0
 ): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
-  let state: OneEuroFilterState = {
+  const state: OneEuroFilterState = {
     lastValue: initialValue.clone(),
     lastTime: 0,
   };
