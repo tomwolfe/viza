@@ -1,17 +1,11 @@
 'use client';
 
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { XR, createXRStore } from '@react-three/xr';
-import { CameraFallback, useFrameCapture } from './CameraFallback';
-import { DetectedObject3D } from './DetectedObject3D';
-import { useInferenceLoop } from '@/hooks/useInferenceLoop';
-import { useWorldMap, type WorldObject, getCategoryColor } from '@/hooks/useWorldMap';
+import { WorldMapRenderer } from './WorldMapRenderer';
+import { InferenceOrchestrator } from './InferenceOrchestrator';
+import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
 import type { DetectedObject } from '@/schemas/vision';
-import { CONFIG } from '@/config';
 import * as THREE from 'three';
-import { get3DPosition } from '@/utils/spatial';
-
-const xrStore = createXRStore();
 
 interface ARSceneProps {
   isARActive: boolean;
@@ -38,9 +32,8 @@ export function ARScene({
   currentStepTarget,
 }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const { captureFrame } = useFrameCapture();
   const lastVoiceCommandRef = useRef<string | null>(null);
-  const { addOrUpdateObject, getAllObjects } = useWorldMap();
+  const { getAllObjects } = useWorldMap();
   const [worldObjects, setWorldObjects] = useState<WorldObject[]>([]);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
@@ -55,96 +48,38 @@ export function ARScene({
 
   const handleObjectsDetected = useCallback(
     (objects: DetectedObject[]) => {
-      if (cameraRef.current) {
-        objects.forEach((obj) => {
-          const position = get3DPosition(
-            obj.bbox_2d[0],
-            obj.bbox_2d[1],
-            obj.bbox_2d[2],
-            obj.bbox_2d[3],
-            cameraRef.current as THREE.PerspectiveCamera,
-            { width: viewportRef.current.x, height: viewportRef.current.y },
-            CONFIG.SPATIAL.TARGET_SIZE,
-            CONFIG.SPATIAL.DEFAULT_DEPTH
-          );
-          addOrUpdateObject(obj, new THREE.Vector3(position.x, position.y, position.z));
-        });
-      }
       onObjectsDetected(objects);
     },
-    [addOrUpdateObject, onObjectsDetected]
+    [onObjectsDetected]
   );
-
-  const { setVideoSource, setActive, run, cancelPending } = useInferenceLoop({
-    runInference,
-    captureFrame,
-    onObjectsDetected: handleObjectsDetected,
-    intervalMs: CONFIG.INFERENCE_INTERVAL,
-  });
-
-  useEffect(() => {
-    setActive(isARActive && isModelReady);
-    setVideoSource(videoRef.current);
-  }, [isARActive, isModelReady, setActive, setVideoSource]);
 
   useEffect(() => {
     if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
       lastVoiceCommandRef.current = voiceCommand;
-      cancelPending();
-      run(voiceCommand, true);
     }
-  }, [voiceCommand, isModelReady, run, cancelPending]);
+  }, [voiceCommand, isModelReady]);
 
   if (!isARActive) return null;
 
   return (
-    <XR store={xrStore}>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={0.5} />
-
-      <CameraFallback isActive={isARActive} onFrameReady={handleFrameReady} />
-
-      {detectedObjects.map((obj, index) => (
-        <DetectedObject3D 
-          key={`${obj.name}-${index}`} 
-          obj={obj} 
-          index={index}
-          isTarget={taskActive}
-          targetName={currentStepTarget}
-        />
-      ))}
-
-      {worldObjects.map((obj) => {
-        const categoryColor = getCategoryColor(obj.category);
-        return (
-          <DetectedObject3D
-            key={`world-${obj.id}`}
-            obj={{
-              name: obj.name,
-              bbox_2d: [0, 0, 0, 0],
-              action: '',
-              category: obj.category,
-            }}
-            index={0}
-            isTarget={false}
-            useCategoryColor
-            categoryColor={categoryColor}
-            position={obj.smoothedPosition}
-          />
-        );
-      })}
-    </XR>
-  );
-}
-
-export function PlaceholderScene() {
-  return (
-    <XR store={xrStore}>
-      <ambientLight intensity={0.5} />
-      <mesh position={[0, 0, -3]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="blue" transparent opacity={0.5} />
-      </mesh>
-    </XR>
+    <>
+      <InferenceOrchestrator
+        runInference={runInference}
+        onObjectsDetected={handleObjectsDetected}
+        videoRef={videoRef}
+        voiceCommand={voiceCommand}
+        isARActive={isARActive}
+        isModelReady={isModelReady}
+      />
+      <WorldMapRenderer
+        detectedObjects={detectedObjects}
+        worldObjects={worldObjects}
+        taskActive={taskActive ?? false}
+        currentStepTarget={currentStepTarget}
+        onFrameReady={handleFrameReady}
+        cameraRef={cameraRef}
+        viewportRef={viewportRef}
+      />
+    </>
   );
 }

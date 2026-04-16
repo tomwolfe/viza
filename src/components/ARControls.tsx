@@ -2,6 +2,7 @@
 
 import { Play, Mic, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useId } from 'react';
+import type { VizaErrorCode } from '@/types/worker';
 
 interface ARControlsProps {
   onStartAR: () => void;
@@ -12,6 +13,8 @@ interface ARControlsProps {
   modelProgress: number;
   isListening: boolean;
   isDeviceIncompatible?: boolean;
+  errorCode?: VizaErrorCode | null;
+  error?: string | null;
 }
 
 export default function ARControls({
@@ -23,8 +26,32 @@ export default function ARControls({
   modelProgress,
   isListening,
   isDeviceIncompatible,
+  errorCode,
+  error,
 }: ARControlsProps) {
   const statusId = useId();
+
+  const getSpecificAdvice = (code?: VizaErrorCode | null, err?: string | null): string | null => {
+    if (!code && !err) return null;
+    switch (code) {
+      case 'WEBGPU_NOT_SUPPORTED':
+        return 'Please use a WebGPU-capable browser (Chrome 113+, Edge 113+) on a compatible device.';
+      case 'CAMERA_NOT_ALLOWED':
+      case 'MICROPHONE_NOT_ALLOWED':
+        return 'Please allow camera/microphone access in your browser settings.';
+      case 'CAMERA_NOT_FOUND':
+      case 'MICROPHONE_NOT_FOUND':
+        return 'Please connect a camera/microphone to your device.';
+      case 'WORKER_INIT_FAILED':
+        return 'Failed to initialize AI worker. Please refresh and try again.';
+      case 'INFERENCE_TIMEOUT':
+        return 'AI processing timed out. Please try again.';
+      default:
+        return err ? `Error: ${err}` : null;
+    }
+  };
+
+  const specificAdvice = getSpecificAdvice(errorCode, error);
 
   const getStatusText = () => {
     if (isDeviceIncompatible) return 'Device not compatible. WebGPU required.';
@@ -54,6 +81,16 @@ export default function ARControls({
             <div className="flex items-center gap-2 text-red-400">
               <AlertTriangle className="w-5 h-5" aria-hidden="true" />
               <span>Device Incompatible</span>
+            </div>
+          ) : error && errorCode ? (
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertTriangle className="w-5 h-5" aria-hidden="true" />
+                <span>Error</span>
+              </div>
+              {specificAdvice && (
+                <span className="text-xs text-red-300">{specificAdvice}</span>
+              )}
             </div>
           ) : isModelLoading ? (
             <div className="flex items-center gap-3">

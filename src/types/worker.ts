@@ -51,7 +51,11 @@ export type VizaErrorCode =
   | 'INVALID_RESPONSE'
   | 'CAMERA_NOT_ALLOWED'
   | 'CAMERA_NOT_FOUND'
-  | 'CAMERA_XR_UNAVAILABLE';
+  | 'CAMERA_XR_UNAVAILABLE'
+  | 'NO_SPEECH_DETECTED'
+  | 'MICROPHONE_NOT_FOUND'
+  | 'MICROPHONE_NOT_ALLOWED'
+  | 'VOICE_ERROR';
 
 export function createVizaError(message: string, code: VizaErrorCode): VizaError {
   const error = new Error(message) as VizaError;

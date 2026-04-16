@@ -62,84 +62,117 @@ export function useInferenceLoop({
   const [state, dispatch] = useReducer(inferenceReducer, { status: 'idle', error: null });
   const status = state.status;
 
-  const abortCurrentInference = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-  }, []);
-
-  const processInference = useCallback(
-    async (prompt: string, shouldDropFrame: boolean = false) => {
-      if (!frameRef.current) return;
-
-      if (isProcessingRef.current) {
-        if (shouldDropFrame && latestRequestRef.current) {
-          latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered: shouldDropFrame };
-          logger.debug('[useInferenceLoop] Dropping stale frame, queuing new request');
-          return;
-        }
-        latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered: shouldDropFrame };
-        return;
+   const abortCurrentInference = useCallback(() => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
+      abortControllerRef.current = new AbortController();
+    }, []);
 
-      isProcessingRef.current = true;
-      dispatch({ type: 'START_CAPTURE' });
+    const processInference = useCallback(
+      async (prompt: string, shouldDropFrame: boolean = false) => {
+        if (!frameRef.current) return;
 
-      let frame: ImageBitmap | null = null;
-      try {
-        frame = await captureFrame(frameRef.current);
-        if (!frame) {
-          dispatch({ type: 'RESET' });
-          isProcessingRef.current = false;
+        if (isProcessingRef.current) {
+          if (shouldDropFrame && latestRequestRef.current) {
+            latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered: shouldDropFrame };
+            logger.debug('[useInferenceLoop] Dropping stale frame, queuing new request');
+            return;
+          }
+          // If not dropping, and processing is active, we just queue/update the reference for the current run
+          if (latestRequestRef.current) {
+            latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered: shouldDropFrame };
+          }
           return;
         }
 
-        if (abortControllerRef.current?.signal.aborted) {
-          dispatch({ type: 'RESET' });
+        isProcessingRef.current = true;
+        dispatch({ type: 'START_CAPTURE' });
+
+        let frame: ImageBitmap | null = null;
+        try {
+          frame = await captureFrame(frameRef.current);
+          if (!frame) {
+            dispatch({ type: 'RESET' });
+            isProcessingRef.current = false;
+            return;
+          }
+
+          if (abortControllerRef.current?.signal.aborted) {
+            dispatch({ type: 'RESET' });
+            isProcessingRef.current = false;
+            return;
+          }
+
+          dispatch({ type: 'START_INFERENCE' });
+
+          const result = await runInference(frame, prompt);
+
+          if (!abortControllerRef.current?.signal.aborted && result?.objects && result.objects.length > 0) {
+            onObjectsDetected(result.objects);
+          }
+
+          if (pendingInferenceRef.current) {
+            pendingInferenceRef.current.resolve(result);
+            pendingInferenceRef.current = null;
+          }
+        } catch (error) {
+          logger.error('[useInferenceLoop] Inference error:', error);
+          dispatch({ type: 'ERROR', error: (error as Error).message });
+          if (pendingInferenceRef.current) {
+            pendingInferenceRef.current.reject(error);
+            pendingInferenceRef.current = null;
+          }
+        } finally {
+          if (frame) {
+            try {
+              frame.close();
+            } catch {
+              // Frame may already be closed
+            }
+          }
+          dispatch({ type: 'COMPLETE' });
           isProcessingRef.current = false;
-          return;
-        }
 
-        dispatch({ type: 'START_INFERENCE' });
-
-        const result = await runInference(frame, prompt);
-
-        if (!abortControllerRef.current?.signal.aborted && result?.objects && result.objects.length > 0) {
-          onObjectsDetected(result.objects);
-        }
-
-        if (pendingInferenceRef.current) {
-          pendingInferenceRef.current.resolve(result);
-          pendingInferenceRef.current = null;
-        }
-      } catch (error) {
-        logger.error('[useInferenceLoop] Inference error:', error);
-        dispatch({ type: 'ERROR', error: (error as Error).message });
-        if (pendingInferenceRef.current) {
-          pendingInferenceRef.current.reject(error);
-          pendingInferenceRef.current = null;
-        }
-      } finally {
-        if (frame) {
-          try {
-            frame.close();
-          } catch {
-            // Frame may already be closed
+          // After completion, check if there is a new request queued (either from another processInference call or from the run() function)
+          if (latestRequestRef.current) {
+            const { prompt, voiceTriggered } = latestRequestRef.current;
+            latestRequestRef.current = null;
+            // Recursively call processInference to handle the queued request
+            processInference(prompt, voiceTriggered);
           }
         }
-        dispatch({ type: 'COMPLETE' });
-        isProcessingRef.current = false;
+      },
+      [runInference, captureFrame, onObjectsDetected]
+    );
 
-        if (latestRequestRef.current) {
-          const { prompt, voiceTriggered } = latestRequestRef.current;
-          latestRequestRef.current = null;
-          processInference(prompt, voiceTriggered);
+    const run = useCallback(
+      async (prompt: string, voiceTriggered: boolean = false): Promise<unknown> => {
+        // 1. Cancel any existing inference and clear all outstanding requests
+        abortCurrentInference();
+        if (pendingInferenceRef.current) {
+          pendingInferenceRef.current.reject(new Error('Cancelled by new run trigger'));
+          pendingInferenceRef.current = null;
         }
-      }
-    },
-    [runInference, captureFrame, onObjectsDetected]
-  );
+        latestRequestRef.current = null;
+        
+        if (!frameRef.current) {
+          return null;
+        }
+
+        // 4. Set the new request in the reference
+        latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered };
+
+        return new Promise((resolve, reject) => {
+          // 5. Trigger processing
+          processInference(prompt, voiceTriggered);
+
+          // 6. Set up the resolver for the current request
+          pendingInferenceRef.current = { resolve, reject, prompt, timestamp: Date.now(), voiceTriggered };
+        });
+      },
+      [processInference, abortCurrentInference]
+    );
 
   const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
     frameRef.current = video;
@@ -169,33 +202,27 @@ export function useInferenceLoop({
     dispatch({ type: 'RESET' });
   }, [abortCurrentInference]);
 
-  const run = useCallback(
-    async (prompt: string, voiceTriggered: boolean = false): Promise<unknown> => {
-      if (!frameRef.current) {
-        return null;
-      }
+ const run = useCallback(
+     async (prompt: string, voiceTriggered: boolean = false): Promise<unknown> => {
+       if (!frameRef.current) {
+         return null;
+       }
 
-      if (voiceTriggered) {
-        abortCurrentInference();
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        pendingInferenceRef.current = null;
-      }
+       abortCurrentInference();
+       latestRequestRef.current = null;
+       if (pendingInferenceRef.current) {
+         pendingInferenceRef.current.reject(new Error('Cancelled by new run trigger'));
+         pendingInferenceRef.current = null;
+       }
 
-      return new Promise((resolve, reject) => {
-        pendingInferenceRef.current = { resolve, reject, prompt, timestamp: Date.now(), voiceTriggered };
-
-        if (!isProcessingRef.current) {
-          processInference(prompt, voiceTriggered);
-        } else {
-          latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered };
-        }
-      });
-    },
-    [abortCurrentInference, processInference]
-  );
+       return new Promise((resolve, reject) => {
+         latestRequestRef.current = { prompt, timestamp: Date.now(), voiceTriggered };
+         pendingInferenceRef.current = { resolve, reject, prompt, timestamp: Date.now(), voiceTriggered };
+         processInference(prompt, voiceTriggered);
+       });
+     },
+     [processInference, abortCurrentInference]
+   );
 
   useEffect(() => {
     if (!isActiveRef.current) return undefined;

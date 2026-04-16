@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/config';
+import type { VizaErrorCode } from '@/types/worker';
 
 interface SpeechRecognitionEvent extends Event {
   readonly resultIndex: number;
@@ -47,6 +48,7 @@ interface UseVoiceReturn {
   stopSpeaking: () => void;
   isSupported: boolean;
   error: string | null;
+  errorCode: VizaErrorCode | null;
   startAudioStream: () => Promise<MediaStream | null>;
   stopAudioStream: () => void;
   audioStream: MediaStream | null;
@@ -72,6 +74,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     }
     return null;
   });
+  const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
@@ -106,15 +109,19 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     switch (event.error) {
       case 'no-speech':
         setError('No speech detected. Please try again.');
+        setErrorCode('NO_SPEECH_DETECTED');
         break;
       case 'audio-capture':
         setError('No microphone found. Please ensure microphone is connected.');
+        setErrorCode('MICROPHONE_NOT_FOUND');
         break;
       case 'not-allowed':
         setError('Microphone permission denied. Please allow microphone access.');
+        setErrorCode('MICROPHONE_NOT_ALLOWED');
         break;
       default:
         setError(`Speech recognition error: ${event.error}`);
+        setErrorCode('VOICE_ERROR');
     }
   }, []);
 
@@ -281,6 +288,7 @@ try {
     stopSpeaking,
     isSupported,
     error,
+    errorCode,
     startAudioStream,
     stopAudioStream,
     audioStream,

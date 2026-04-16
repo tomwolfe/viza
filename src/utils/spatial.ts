@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONFIG } from '@/config';
 
 export interface BoundingBox2D {
   x: number;
@@ -21,6 +22,12 @@ interface ProjectToWorldOptions {
   depth?: number;
 }
 
+export interface HitTestResult {
+  distance: number;
+  position: THREE.Vector3;
+  orientation: THREE.Quaternion;
+}
+
 export function get3DPosition(
   x: number,
   y: number,
@@ -29,8 +36,16 @@ export function get3DPosition(
   camera: THREE.PerspectiveCamera,
   viewport: { width: number; height: number },
   targetSize: number,
-  depth: number
+  depth: number,
+  hitTestResult?: HitTestResult
 ): THREE.Vector3 {
+  if (hitTestResult) {
+    const hitPosition = hitTestResult.position.clone();
+    hitPosition.x += (x / targetSize - 0.5) * 0.3;
+    hitPosition.y += (y / targetSize - 0.5) * 0.3;
+    return hitPosition;
+  }
+
   const aspect = viewport.width / viewport.height;
   const scale = aspect > 1 ? 1 : aspect;
   const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
@@ -47,7 +62,7 @@ export function projectBoundingBoxToWorld(
   bbox: BoundingBox2D,
   options: ProjectToWorldOptions
 ): WorldPosition {
-  const { camera, imageWidth, imageHeight, depth = -3 } = options;
+  const { camera, imageWidth, imageHeight, depth = CONFIG.SPATIAL.DEFAULT_DEPTH } = options;
 
   const centerX = bbox.x + bbox.width / 2;
   const centerY = bbox.y + bbox.height / 2;
