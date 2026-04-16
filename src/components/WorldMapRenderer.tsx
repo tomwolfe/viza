@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
-import { useWorldMap, type WorldObject, getCategoryColor } from '@/hooks/useWorldMap';
+import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
+import { getCategoryColor } from '@/utils/objectProcessing';
 import { SharedVideoPlane } from './SharedVideoPlane';
 import type { DetectedObject } from '@/schemas/vision';
 
@@ -40,8 +41,7 @@ export function WorldMapRenderer({
     if (videoElement) {
       const video = videoElement;
       const checkReady = () => {
-        if (video.readyState >= 2) {
-        } else {
+        if (video.readyState < 2) {
           video.addEventListener('loadedmetadata', checkReady, { once: true });
         }
       };

@@ -87,7 +87,11 @@ describe('useWebXR', () => {
   });
 
   it('should clean up on unmount', async () => {
-    const { unmount } = renderHook(() => useWebXR());
+    const { result, unmount } = renderHook(() => useWebXR());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
 
     await act(async () => {
       await unmount();

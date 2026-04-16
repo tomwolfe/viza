@@ -138,10 +138,14 @@ describe('useVoice', () => {
     expect(mockRecognitionInstance.start).toHaveBeenCalled();
   });
 
-  it('should stop listening when stopListening is called', () => {
+  it('should stop listening when stopListening is called', async () => {
     const { result } = renderHook(() => useVoice());
     
     mockRecognitionInstance.onstart?.();
+    
+    await waitFor(() => {
+      expect(result.current.isListening).toBe(true);
+    });
     
     result.current.stopListening();
     

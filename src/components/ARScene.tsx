@@ -3,7 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
-import { useFrameCapture } from './CameraFallback';
+import { useFrameCapture } from '@/hooks/useFrameCapture';
 import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
 import { useCamera } from '@/hooks/useCamera';
 import { useWebLLM } from '@/contexts/WebLLMContext';

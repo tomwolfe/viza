@@ -1,7 +1,6 @@
 'use client';
 
 import { useCamera } from '@/hooks/useCamera';
-import { MediaProcessor } from '@/utils/frameCapture';
 
 interface CameraFallbackProps {
   isActive: boolean;
@@ -34,16 +33,4 @@ export function CameraFallback({ isActive, onFrameReady }: CameraFallbackProps) 
       )}
     </>
   );
-}
-
-export function useFrameCapture() {
-  const captureFrame = (video: HTMLVideoElement | null): ImageBitmap | null => {
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      return null;
-    }
-
-    return MediaProcessor.captureVideoFrame(video);
-  };
-
-  return { captureFrame };
 }

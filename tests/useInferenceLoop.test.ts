@@ -59,14 +59,16 @@ describe('useInferenceLoop', () => {
   });
 
   it('should process frame when not inferring', async () => {
-    const captureFrame = vi.fn().mockImplementation(() => {
-      return createMockImageBitmap();
-    });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    
+    const mockVideo = {
+      videoWidth: 640,
+      videoHeight: 480,
+    } as unknown as HTMLVideoElement;
+    
+    const captureFrame = vi.fn().mockResolvedValue(createMockImageBitmap());
 
-    const runInference = vi.fn().mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      return { objects: mockDetectedObjects };
-    });
+    const runInference = vi.fn().mockResolvedValue({ objects: mockDetectedObjects });
 
     const onObjectsDetected = vi.fn();
 
@@ -80,6 +82,7 @@ describe('useInferenceLoop', () => {
       })
     );
 
+    result.current.setVideoSource(mockVideo);
     result.current.run('test prompt');
 
     await act(async () => {
@@ -105,19 +108,22 @@ describe('useInferenceLoop', () => {
       })
     );
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
-
     expect(runInference).not.toHaveBeenCalled();
   });
 
   it('should set up interval when active', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    
+    const mockVideo = {
+      videoWidth: 640,
+      videoHeight: 480,
+    } as unknown as HTMLVideoElement;
+    
     const runInference = vi.fn().mockResolvedValue({ objects: mockDetectedObjects });
-    const captureFrame = vi.fn().mockReturnValue(createMockImageBitmap());
+    const captureFrame = vi.fn().mockResolvedValue(createMockImageBitmap());
     const onObjectsDetected = vi.fn();
 
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useInferenceLoop({
         runInference,
         captureFrame,
@@ -128,8 +134,10 @@ describe('useInferenceLoop', () => {
       })
     );
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
+    result.current.setVideoSource(mockVideo);
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
     });
 
     expect(runInference).toHaveBeenCalled();

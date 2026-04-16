@@ -9,7 +9,7 @@ interface UseInferenceLoopOptions {
     image: ImageBitmap,
     prompt: string
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
-  captureFrame: (video: HTMLVideoElement | null) => ImageBitmap | null;
+  captureFrame: (video: HTMLVideoElement | null) => Promise<ImageBitmap | null> | ImageBitmap | null;
   onObjectsDetected: (objects: DetectedObject[]) => void;
   isInferring: boolean;
   intervalMs?: number;
@@ -38,7 +38,8 @@ export function useInferenceLoop({
       let frame: ImageBitmap | null = null;
       let frameClosed = false;
       try {
-        frame = captureFrame(videoRef.current);
+        const frameResult = captureFrame(videoRef.current);
+        frame = frameResult instanceof Promise ? await frameResult : frameResult;
         if (!frame) {
           isRunningRef.current = false;
           return;

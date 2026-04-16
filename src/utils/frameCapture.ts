@@ -7,23 +7,35 @@ import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
 
-let sharedCanvas: OffscreenCanvas | null = null;
-let sharedCtx: OffscreenCanvasRenderingContext2D | null = null;
+let sharedCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
+let sharedCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
+let useOffscreenCanvas = true;
 
-function getSharedCanvas(): OffscreenCanvas {
+function getSharedCanvas(): OffscreenCanvas | HTMLCanvasElement {
   if (!sharedCanvas) {
-    sharedCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-    sharedCtx = sharedCanvas.getContext('2d');
+    if (typeof OffscreenCanvas !== 'undefined') {
+      sharedCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+      sharedCtx = sharedCanvas.getContext('2d');
+      useOffscreenCanvas = true;
+    } else if (typeof document !== 'undefined') {
+      sharedCanvas = document.createElement('canvas');
+      sharedCanvas.width = TARGET_SIZE;
+      sharedCanvas.height = TARGET_SIZE;
+      sharedCtx = sharedCanvas.getContext('2d');
+      useOffscreenCanvas = false;
+    } else {
+      throw new Error('Neither OffscreenCanvas nor document.createElement is available');
+    }
     if (!sharedCtx) {
-      throw new Error('Failed to get 2D context from OffscreenCanvas');
+      throw new Error('Failed to get 2D context from canvas');
     }
   }
   return sharedCanvas;
 }
 
-function downsampleToBitmap(
+async function downsampleToBitmap(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
-): ImageBitmap {
+): Promise<ImageBitmap> {
   const canvas = getSharedCanvas();
   const ctx = sharedCtx;
   if (!ctx) {
@@ -57,7 +69,10 @@ function downsampleToBitmap(
     0, 0, TARGET_SIZE, TARGET_SIZE
   );
 
-  return canvas.transferToImageBitmap();
+  if (useOffscreenCanvas) {
+    return (canvas as OffscreenCanvas).transferToImageBitmap();
+  }
+  return createImageBitmap(canvas as HTMLCanvasElement);
 }
 
 export class MediaProcessor {
@@ -68,24 +83,24 @@ export class MediaProcessor {
     return width > 0 && height > 0;
   }
 
-  static captureFrame(source: CanvasImageSource): ImageBitmap | null {
+  static async captureFrame(source: CanvasImageSource): Promise<ImageBitmap | null> {
     if (!this.isValidSource(source)) {
       return null;
     }
 
     try {
-      return downsampleToBitmap(source as HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas);
+      return await downsampleToBitmap(source as HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas);
     } catch (error) {
       logger.error('[MediaProcessor] Frame capture failed:', error);
       return null;
     }
   }
 
-  static captureVideoFrame(video: HTMLVideoElement): ImageBitmap | null {
+  static async captureVideoFrame(video: HTMLVideoElement): Promise<ImageBitmap | null> {
     return this.captureFrame(video);
   }
 
-  static captureCanvasFrame(canvas: HTMLCanvasElement): ImageBitmap | null {
+  static async captureCanvasFrame(canvas: HTMLCanvasElement): Promise<ImageBitmap | null> {
     return this.captureFrame(canvas);
   }
 
@@ -93,13 +108,13 @@ export class MediaProcessor {
     source: CanvasImageSource,
     onTransfer: (bitmap: ImageBitmap) => void
   ): Promise<void> {
-    const bitmap = this.captureFrame(source);
+    const bitmap = await this.captureFrame(source);
     if (bitmap) {
       onTransfer(bitmap);
     }
   }
 }
 
-export const captureFrame = MediaProcessor.captureFrame;
-export const captureVideoFrame = MediaProcessor.captureVideoFrame;
-export const captureCanvasFrame = MediaProcessor.captureCanvasFrame;
+export const captureFrame = MediaProcessor.captureFrame.bind(MediaProcessor);
+export const captureVideoFrame = MediaProcessor.captureVideoFrame.bind(MediaProcessor);
+export const captureCanvasFrame = MediaProcessor.captureCanvasFrame.bind(MediaProcessor);

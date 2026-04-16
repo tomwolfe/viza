@@ -6,7 +6,7 @@ import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { CONFIG, logger } from '@/config';
 import { createOneEuroFilter } from '@/utils/spatial';
-import { categorizeObject, generateObjectId, type ObjectCategory } from '@/utils/objectProcessing';
+import { categorizeObject, generateObjectId, getCategoryColor, type ObjectCategory } from '@/utils/objectProcessing';
 
 export interface WorldObject {
   id: string;
@@ -196,36 +196,4 @@ function findExistingObjectKey(map: Map<string, WorldObject>, position: THREE.Ve
     }
   }
   return null;
-}
-
-export function getCategoryColor(category: ObjectCategory): string {
-  switch (category) {
-    case 'trash':
-      return '#ff4444';
-    case 'clutter':
-      return '#ffaa00';
-    case 'keep':
-      return '#44ff44';
-    case 'tool':
-      return '#4488ff';
-    case 'unknown':
-    default:
-      return '#00ff88';
-  }
-}
-
-export function getCategoryLabel(category: ObjectCategory): string {
-  switch (category) {
-    case 'trash':
-      return 'Trash';
-    case 'clutter':
-      return 'Clutter';
-    case 'keep':
-      return 'Keep';
-    case 'tool':
-      return 'Tool';
-    case 'unknown':
-    default:
-      return 'Unknown';
-  }
 }
