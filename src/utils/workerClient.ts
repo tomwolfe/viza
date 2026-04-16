@@ -50,7 +50,6 @@ export class WorkerClient {
   private maxReconnectAttempts = 3;
   private onReconnect: (() => void) | null = null;
   private isModelReadyState = false;
-  private abortController: AbortController | null = null;
 
   constructor(options: WorkerClientOptions = {}) {
     this.options = {
@@ -208,15 +207,17 @@ export class WorkerClient {
     return crypto.randomUUID();
   }
 
-  private createTimeout(type: 'chat' | 'planning' | 'category'): ReturnType<typeof setTimeout> {
+  private createTimeout(type: 'chat' | 'planning' | 'category', messageId: string): ReturnType<typeof setTimeout> {
     const timeoutMs = type === 'planning' 
       ? this.options.planningTimeoutMs 
       : this.options.inferenceTimeoutMs;
     
     return setTimeout(() => {
+      this.pendingRequests.delete(messageId);
       this.options.onError(
         `${type === 'planning' ? 'Planning' : type === 'category' ? 'Category' : 'Inference'} timeout after ${timeoutMs / 1000}s`,
-        'INFERENCE_TIMEOUT'
+        'INFERENCE_TIMEOUT',
+        messageId
       );
     }, timeoutMs);
   }
@@ -227,8 +228,6 @@ export class WorkerClient {
       pending.reject(new Error(reason));
     });
     this.pendingRequests.clear();
-    this.abortController?.abort();
-    this.abortController = null;
   }
 
   sendMessage<T>(
@@ -249,7 +248,7 @@ export class WorkerClient {
     const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : 'chat';
 
     return new Promise<T>((resolve, reject) => {
-      const timeoutId = this.createTimeout(inferenceType);
+      const timeoutId = this.createTimeout(inferenceType, messageId);
 
       this.pendingRequests.set(messageId, {
         resolve: resolve as (value: unknown) => void,
@@ -307,8 +306,6 @@ export class WorkerClient {
 
   terminate(): void {
     this.rejectAllPending('Worker terminated');
-    this.abortController?.abort();
-    this.abortController = null;
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import type { VisionResponse, TaskStep } from '@/schemas/vision';
-import { SYSTEM_PROMPT, logger } from '@/config';
+import { SYSTEM_PROMPT, logger, CONFIG } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
 import { useWorkerManager } from '@/hooks/useWorkerManager';
@@ -44,7 +44,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
   const [lastCompleted, setLastCompleted] = useState(false);
 
-  const modelIdRef = useRef(modelId || 'Phi-3.5-vision-instruct-q4f16_1-MLC');
+  const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
   const pendingResolvesRef = useRef<Map<string, (value: InferenceResult) => void>>(new Map());
 
   const workerManager = useWorkerManager({
@@ -137,10 +137,15 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     async (
       image: ImageBitmap,
       prompt: string,
-      inferenceType: InferenceType
+      inferenceType: InferenceType,
+      signal?: AbortSignal
     ): Promise<InferenceResult> => {
       if (!workerManager.isModelReady) {
         setError('Model not ready. Call initModel first.');
+        return inferenceType === 'planning' ? [] : null;
+      }
+
+      if (signal?.aborted) {
         return inferenceType === 'planning' ? [] : null;
       }
 
@@ -152,28 +157,33 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       return new Promise<InferenceResult>((resolve) => {
         pendingResolvesRef.current.set(messageId, resolve);
 
-        if (inferenceType === 'planning') {
-          workerManager.planning(image, prompt, messageId).catch((err) => {
-            setError(err.message);
-            setErrorCode('INFERENCE_ERROR');
-            setIsInferring(false);
-            resolve([]);
-          });
-        } else if (inferenceType === 'category') {
-          workerManager.category(image, prompt, messageId).catch((err) => {
-            setError(err.message);
-            setErrorCode('INFERENCE_ERROR');
-            setIsInferring(false);
-            resolve(null);
-          });
-        } else {
-          workerManager.chat(image, prompt, messageId).catch((err) => {
-            setError(err.message);
-            setErrorCode('INFERENCE_ERROR');
-            setIsInferring(false);
-            resolve(null);
-          });
+        const abortHandler = () => {
+          pendingResolvesRef.current.delete(messageId);
+          setIsInferring(false);
+          resolve(inferenceType === 'planning' ? [] : null);
+        };
+
+        if (signal) {
+          signal.addEventListener('abort', abortHandler, { once: true });
         }
+
+        const workerMethod = inferenceType === 'planning'
+          ? workerManager.planning
+          : inferenceType === 'category'
+          ? workerManager.category
+          : workerManager.chat;
+
+        workerMethod(image, prompt, messageId).catch((err) => {
+          setError(err.message);
+          setErrorCode('INFERENCE_ERROR');
+          setIsInferring(false);
+          pendingResolvesRef.current.delete(messageId);
+          resolve(inferenceType === 'planning' ? [] : null);
+        }).finally(() => {
+          if (signal) {
+            signal.removeEventListener('abort', abortHandler);
+          }
+        });
       });
     },
     [workerManager]

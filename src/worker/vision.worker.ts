@@ -13,7 +13,7 @@ const messageHandlers: Record<string, MessageHandler> = {
     if (initMsg.systemPrompt) {
       systemPrompt = initMsg.systemPrompt;
     }
-    await initializeModel(initMsg.model || 'Phi-3.5-vision-instruct-q4f16_1-MLC');
+    await initializeModel(initMsg.model || CONFIG.DEFAULT_MODEL);
   },
 
   chat: async (msg) => {

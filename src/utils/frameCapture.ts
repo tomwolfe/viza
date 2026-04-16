@@ -1,8 +1,3 @@
-/**
- * Unified MediaProcessor for frame acquisition.
- * Handles OffscreenCanvas, aspect-ratio cropping, and ImageBitmap lifecycle.
- */
-
 import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
@@ -31,6 +26,13 @@ function getSharedCanvas(): OffscreenCanvas | HTMLCanvasElement {
     }
   }
   return sharedCanvas;
+}
+
+function isValidSource(source: CanvasImageSource): boolean {
+  if (!source) return false;
+  const width = 'videoWidth' in source ? (source as HTMLVideoElement).videoWidth : (source as { width: number }).width;
+  const height = 'videoHeight' in source ? (source as HTMLVideoElement).videoHeight : (source as { height: number }).height;
+  return width > 0 && height > 0;
 }
 
 async function downsampleToBitmap(
@@ -75,46 +77,33 @@ async function downsampleToBitmap(
   return createImageBitmap(canvas as HTMLCanvasElement);
 }
 
-export class MediaProcessor {
-  private static isValidSource(source: CanvasImageSource): boolean {
-    if (!source) return false;
-    const width = 'videoWidth' in source ? (source as HTMLVideoElement).videoWidth : (source as { width: number }).width;
-    const height = 'videoHeight' in source ? (source as HTMLVideoElement).videoHeight : (source as { height: number }).height;
-    return width > 0 && height > 0;
+export async function captureFrame(source: CanvasImageSource): Promise<ImageBitmap | null> {
+  if (!isValidSource(source)) {
+    return null;
   }
 
-  static async captureFrame(source: CanvasImageSource): Promise<ImageBitmap | null> {
-    if (!this.isValidSource(source)) {
-      return null;
-    }
-
-    try {
-      return await downsampleToBitmap(source as HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas);
-    } catch (error) {
-      logger.error('[MediaProcessor] Frame capture failed:', error);
-      return null;
-    }
-  }
-
-  static async captureVideoFrame(video: HTMLVideoElement): Promise<ImageBitmap | null> {
-    return this.captureFrame(video);
-  }
-
-  static async captureCanvasFrame(canvas: HTMLCanvasElement): Promise<ImageBitmap | null> {
-    return this.captureFrame(canvas);
-  }
-
-  static async captureAndTransfer(
-    source: CanvasImageSource,
-    onTransfer: (bitmap: ImageBitmap) => void
-  ): Promise<void> {
-    const bitmap = await this.captureFrame(source);
-    if (bitmap) {
-      onTransfer(bitmap);
-    }
+  try {
+    return await downsampleToBitmap(source as HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas);
+  } catch (error) {
+    logger.error('[MediaProcessor] Frame capture failed:', error);
+    return null;
   }
 }
 
-export const captureFrame = MediaProcessor.captureFrame.bind(MediaProcessor);
-export const captureVideoFrame = MediaProcessor.captureVideoFrame.bind(MediaProcessor);
-export const captureCanvasFrame = MediaProcessor.captureCanvasFrame.bind(MediaProcessor);
+export async function captureVideoFrame(video: HTMLVideoElement): Promise<ImageBitmap | null> {
+  return captureFrame(video);
+}
+
+export async function captureCanvasFrame(canvas: HTMLCanvasElement): Promise<ImageBitmap | null> {
+  return captureFrame(canvas);
+}
+
+export async function captureAndTransfer(
+  source: CanvasImageSource,
+  onTransfer: (bitmap: ImageBitmap) => void
+): Promise<void> {
+  const bitmap = await captureFrame(source);
+  if (bitmap) {
+    onTransfer(bitmap);
+  }
+}

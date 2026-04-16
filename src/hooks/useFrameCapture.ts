@@ -1,6 +1,6 @@
 'use client';
 
-import { MediaProcessor } from '@/utils/frameCapture';
+import { captureVideoFrame } from '@/utils/frameCapture';
 
 export function useFrameCapture() {
   const captureFrame = async (video: HTMLVideoElement | null): Promise<ImageBitmap | null> => {
@@ -8,7 +8,7 @@ export function useFrameCapture() {
       return null;
     }
 
-    return MediaProcessor.captureVideoFrame(video);
+    return captureVideoFrame(video);
   };
 
   return { captureFrame };
