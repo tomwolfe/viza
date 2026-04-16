@@ -94,6 +94,7 @@ export function useInferenceLoop({
         }
 
         if (abortControllerRef.current?.signal.aborted) {
+          frame.close();
           statusRef.current = 'idle';
           dispatch({ type: 'RESET' });
           return;
@@ -115,9 +116,6 @@ export function useInferenceLoop({
         }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
-        if (frame) {
-          try { frame.close(); } catch {}
-        }
         if (currentRunRejecterRef.current) {
           currentRunRejecterRef.current(error);
           currentRunResolverRef.current = null;

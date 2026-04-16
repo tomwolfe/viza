@@ -38,9 +38,12 @@ function ARContent() {
     getCurrentInstruction,
     setSpeak,
     isPlanning,
+    checkTargetFound,
+    handleVoiceCommand,
   } = useTaskState();
 
   const [voiceCommand, setVoiceCommand] = useState<string | null>(null);
+  const sceneImageRef = useRef<ImageBitmap | null>(null);
 
   const handleTranscriptReady = useCallback((transcript: string) => {
     setVoiceCommand(transcript);
@@ -57,7 +60,6 @@ function ARContent() {
   } = useVoice(handleTranscriptReady);
 
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
-  const sceneImageRef = useRef<ImageBitmap | null>(null);
 
   useEffect(() => {
     setSpeak(speak);
@@ -88,31 +90,7 @@ function ARContent() {
 
   const handleObjectsDetected = useCallback((objects: DetectedObject[]) => {
     setDetectedObjects(objects);
-
-    if (taskState.isActive && objects.length > 0) {
-      const currentStep = taskState.steps[taskState.currentStepIndex];
-      const targetObject = currentStep?.targetObject;
-
-      if (targetObject) {
-        const foundTarget = objects.find(obj =>
-          obj.name.toLowerCase().includes(targetObject.toLowerCase())
-        );
-
-        if (foundTarget) {
-          completeCurrentStep();
-        }
-      }
-    }
-
-    const actions = objects
-      .filter(obj => obj.action)
-      .map(obj => `${obj.name}: ${obj.action}`)
-      .join('. ');
-
-    if (actions) {
-      speak(actions);
-    }
-  }, [speak, taskState, completeCurrentStep]);
+  }, []);
 
   const generatePlanFromGoal = useCallback(async (goal: string): Promise<TaskStep[]> => {
     if (!sceneImageRef.current) {
@@ -204,6 +182,8 @@ function ARContent() {
               voiceCommand={voiceCommand}
               taskActive={taskState.isActive}
               currentStepTarget={taskState.steps[taskState.currentStepIndex]?.targetObject}
+              checkTargetFound={checkTargetFound}
+              speak={speak}
             />
           ) : (
             <PlaceholderScene />

@@ -5,8 +5,9 @@ import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from './CameraFallback';
 import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
+import { useCamera } from '@/hooks/useCamera';
 import type { DetectedObject } from '@/schemas/vision';
-import { CONFIG } from '@/config';
+import { CONFIG, logger } from '@/config';
 import * as THREE from 'three';
 
 interface ARSceneProps {
@@ -21,6 +22,8 @@ interface ARSceneProps {
   voiceCommand?: string | null;
   taskActive?: boolean;
   currentStepTarget?: string;
+  checkTargetFound?: (objects: DetectedObject[]) => void;
+  speak?: (text: string) => void;
 }
 
 export function ARScene({
@@ -32,27 +35,39 @@ export function ARScene({
   voiceCommand,
   taskActive,
   currentStepTarget,
+  checkTargetFound,
+  speak,
 }: ARSceneProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastVoiceCommandRef = useRef<string | null>(null);
   const { getAllObjects } = useWorldMap();
   const [worldObjects, setWorldObjects] = useState<WorldObject[]>([]);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
+  const { videoElement } = useCamera({ isActive: isARActive && isModelReady });
+
   useEffect(() => {
     setWorldObjects(getAllObjects());
   }, [getAllObjects]);
 
-  const handleFrameReady = useCallback((video: HTMLVideoElement) => {
-    videoRef.current = video;
-  }, []);
-
   const handleObjectsDetected = useCallback(
     (objects: DetectedObject[]) => {
       onObjectsDetected(objects);
+      
+      if (checkTargetFound) {
+        checkTargetFound(objects);
+      }
+
+      const actions = objects
+        .filter(obj => obj.action)
+        .map(obj => `${obj.name}: ${obj.action}`)
+        .join('. ');
+
+      if (actions && speak) {
+        speak(actions);
+      }
     },
-    [onObjectsDetected]
+    [onObjectsDetected, checkTargetFound, speak]
   );
 
   useEffect(() => {
@@ -71,8 +86,10 @@ export function ARScene({
   });
 
   useEffect(() => {
-    setVideoSource(videoRef.current);
-  }, [videoRef.current, setVideoSource]);
+    if (videoElement) {
+      setVideoSource(videoElement);
+    }
+  }, [videoElement, setVideoSource]);
 
   useEffect(() => {
     if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
@@ -95,7 +112,7 @@ export function ARScene({
         worldObjects={worldObjects}
         taskActive={taskActive ?? false}
         currentStepTarget={currentStepTarget}
-        onFrameReady={handleFrameReady}
+        videoElement={videoElement}
         cameraRef={cameraRef}
         viewportRef={viewportRef}
       />

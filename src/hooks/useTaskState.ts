@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { logger } from '@/config';
+import type { DetectedObject } from '@/schemas/vision';
 
 export interface TaskStep {
   id: string;
@@ -32,6 +33,8 @@ export interface UseTaskStateReturn {
   getCurrentInstruction: () => string;
   setSpeak: (speakFn: (text: string) => void) => void;
   isPlanning: boolean;
+  checkTargetFound: (detectedObjects: DetectedObject[]) => void;
+  handleVoiceCommand: (command: string, isModelReady: boolean) => void;
 }
 
 const STORAGE_KEY = 'viza_task_state';
@@ -212,6 +215,34 @@ export function useTaskState(): UseTaskStateReturn {
     safeRemove({ key: STORAGE_KEY });
   }, []);
 
+  const checkTargetFound = useCallback((detectedObjects: DetectedObject[]) => {
+    if (!taskState.isActive || detectedObjects.length === 0) return;
+    
+    const currentStep = taskState.steps[taskState.currentStepIndex];
+    const targetObject = currentStep?.targetObject;
+    
+    if (targetObject) {
+      const foundTarget = detectedObjects.find(obj =>
+        obj.name.toLowerCase().includes(targetObject.toLowerCase())
+      );
+      
+      if (foundTarget) {
+        nextStep();
+      }
+    }
+  }, [taskState, nextStep]);
+
+  const handleVoiceCommand = useCallback((command: string, isModelReady: boolean) => {
+    if (!isModelReady || isPlanning) return;
+    
+    const isCleaningGoal = /clean|organize|trash|garbage|mess|fix|help/i.test(command);
+    
+    if (isCleaningGoal && !taskState.isActive) {
+      return command;
+    }
+    return null;
+  }, [isPlanning, taskState.isActive]);
+
   return {
     taskState,
     startTask,
@@ -224,5 +255,7 @@ export function useTaskState(): UseTaskStateReturn {
     getCurrentInstruction,
     setSpeak,
     isPlanning,
+    checkTargetFound,
+    handleVoiceCommand,
   };
 }
