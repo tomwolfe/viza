@@ -18,7 +18,6 @@ interface WorldMapRendererProps {
   videoElement?: HTMLVideoElement | null;
   cameraRef?: React.MutableRefObject<THREE.Camera | null>;
   viewportRef?: React.MutableRefObject<THREE.Vector3>;
-  hitTestResult?: unknown;
 }
 
 export function WorldMapRenderer({

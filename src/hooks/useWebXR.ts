@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { VizaErrorCode } from '@/types/worker';
 import { createVizaError } from '@/types/worker';
+import { logger } from '@/config';
 
 export interface UseWebXROptions {
   sessionMode?: 'immersive-ar' | 'immersive-vr';
@@ -50,8 +51,8 @@ export function useWebXR({
     if (sessionRef.current) {
       try {
         await sessionRef.current.end();
-      } catch {
-        // Session may have already ended
+      } catch (e) {
+        logger.debug('[WebXR] End session error (likely already ended):', e);
       }
       sessionRef.current = null;
       setSession(null);

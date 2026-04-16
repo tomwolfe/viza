@@ -197,7 +197,8 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         shouldRestartRef.current = true;
         try {
           recognitionRef.current.stop();
-        } catch {
+        } catch (e) {
+          logger.debug('[Voice] Stop failed during restart handling:', e);
         }
       } else {
         logger.error('[Voice] Failed to start recognition');

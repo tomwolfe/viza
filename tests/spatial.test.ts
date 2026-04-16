@@ -1,9 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as THREE from 'three';
 import {
   calculateDistance2D,
   calculateDistance3D,
   isWithinThreshold,
 } from '../src/utils/spatial';
+
+const createMockVector3 = (x: number, y: number, z: number, distanceToReturn?: number): THREE.Vector3 => {
+  const mock = new THREE.Vector3(x, y, z);
+  if (distanceToReturn !== undefined) {
+    mock.distanceTo = vi.fn().mockReturnValue(distanceToReturn);
+  }
+  return mock;
+};
 
 describe('spatial.ts', () => {
   describe('calculateDistance2D', () => {
@@ -84,31 +93,28 @@ describe('spatial.ts', () => {
 
   describe('isWithinThreshold', () => {
     it('should return true when distance is below threshold', () => {
-      const pos1 = { x: 0, y: 0, z: 0, distanceTo: () => 0.3, clone: () => pos1 };
-      const pos2 = { x: 0.3, y: 0, z: 0 };
+      const pos1 = createMockVector3(0, 0, 0, 0.3);
+      const pos2 = createMockVector3(0.3, 0, 0);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = isWithinThreshold(pos1 as any, pos2 as any, 0.5);
+      const result = isWithinThreshold(pos1, pos2, 0.5);
 
       expect(result).toBe(true);
     });
 
     it('should return false when distance exceeds threshold', () => {
-      const pos1 = { x: 0, y: 0, z: 0, distanceTo: () => 1, clone: () => pos1 };
-      const pos2 = { x: 1, y: 0, z: 0 };
+      const pos1 = createMockVector3(0, 0, 0, 1);
+      const pos2 = createMockVector3(1, 0, 0);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = isWithinThreshold(pos1 as any, pos2 as any, 0.5);
+      const result = isWithinThreshold(pos1, pos2, 0.5);
 
       expect(result).toBe(false);
     });
 
     it('should return true when at exact threshold', () => {
-      const pos1 = { x: 0, y: 0, z: 0, distanceTo: () => 0.499999, clone: () => pos1 };
-      const pos2 = { x: 0.5, y: 0, z: 0 };
+      const pos1 = createMockVector3(0, 0, 0, 0.499999);
+      const pos2 = createMockVector3(0.5, 0, 0);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = isWithinThreshold(pos1 as any, pos2 as any, 0.5);
+      const result = isWithinThreshold(pos1, pos2, 0.5);
 
       expect(result).toBe(true);
     });

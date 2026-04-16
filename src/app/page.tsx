@@ -15,6 +15,7 @@ import ARControls from '@/components/ARControls';
 function ARContent() {
   const [isARActive, setIsARActive] = useState(false);
   const [showWarnings, setShowWarnings] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     isModelLoading,
@@ -73,9 +74,10 @@ function ARContent() {
       startTask('Assembly Task', DEFAULT_ASSEMBLY_TASK);
       setIsARActive(true);
       setShowWarnings(false);
-    } catch (error) {
-      logger.error('Failed to start AR:', error);
-      alert('Failed to start AR session');
+      setError(null);
+    } catch (err) {
+      logger.error('Failed to start AR:', err);
+      setError('Failed to start AR session. Please refresh and try again.');
     }
   }, [isModelReady, initModel, startTask]);
 
@@ -210,6 +212,7 @@ function ARContent() {
         isInferring={isInferring}
         llmError={llmError}
         voiceError={voiceError}
+        appError={error}
         isARActive={isARActive}
       />
     </main>

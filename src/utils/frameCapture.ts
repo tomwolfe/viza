@@ -3,7 +3,7 @@
  * Handles OffscreenCanvas, aspect-ratio cropping, and ImageBitmap lifecycle.
  */
 
-import { CONFIG } from '@/config';
+import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
 
@@ -76,7 +76,7 @@ export class MediaProcessor {
     try {
       return downsampleToBitmap(source as HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas);
     } catch (error) {
-      console.error('[MediaProcessor] Frame capture failed:', error);
+      logger.error('[MediaProcessor] Frame capture failed:', error);
       return null;
     }
   }

@@ -16,6 +16,7 @@ interface AROverlayProps {
   isInferring: boolean;
   llmError?: string | null;
   voiceError?: string | null;
+  appError?: string | null;
   isARActive: boolean;
 }
 
@@ -29,6 +30,7 @@ export default function AROverlay({
   isInferring,
   llmError,
   voiceError,
+  appError,
   isARActive,
 }: AROverlayProps) {
   if (!isARActive) return null;
@@ -78,11 +80,11 @@ export default function AROverlay({
         </div>
       )}
 
-      {(llmError || voiceError) && (
+      {(llmError || voiceError || appError) && (
         <div className="fixed bottom-4 left-4 right-4 z-50 bg-red-900/80 backdrop-blur-md 
                         text-white rounded-lg p-4">
           <p className="text-sm font-semibold">Error</p>
-          <p className="text-xs mt-1">{llmError || voiceError}</p>
+          <p className="text-xs mt-1">{appError || llmError || voiceError}</p>
         </div>
       )}
     </>
