@@ -61,8 +61,6 @@ export function ARScene({
     }
   }, [voiceCommand, isModelReady]);
 
-  if (!isARActive) return null;
-
   const { captureFrame } = useFrameCapture();
   const { setVideoSource, setActive, run, cancelPending } = useInferenceLoop({
     runInference,
@@ -87,6 +85,8 @@ export function ARScene({
   useEffect(() => {
     setActive(isARActive && isModelReady);
   }, [isARActive, isModelReady, setActive]);
+
+  if (!isARActive) return null;
 
   return (
     <>

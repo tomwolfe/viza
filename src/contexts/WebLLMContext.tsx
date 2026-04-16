@@ -16,6 +16,7 @@ interface PendingRequest {
   resolve: (value: InferenceResult) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   image?: ImageBitmap;
+  sequenceNumber: number;
 }
 
 type InferenceType = 'chat' | 'planning' | 'category';
@@ -61,6 +62,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastPongRef = useRef<number>(0);
   const reconnectAttemptRef = useRef<number>(0);
+  const sequenceNumberRef = useRef<number>(0);
 
   useEffect(() => {
     checkWebGPU().then((result) => {
@@ -107,7 +109,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           setLastCompleted(data.completed || false);
           if (data.messageId) {
             const pending = pendingRef.current.get(data.messageId);
-            if (pending) {
+            if (pending && pending.sequenceNumber === sequenceNumberRef.current) {
               clearTimeout(pending.timeoutId);
               pendingRef.current.delete(data.messageId);
               if (pending.type === 'planning') {
@@ -135,7 +137,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           setIsInferring(false);
           if (data.messageId) {
             const pending = pendingRef.current.get(data.messageId);
-            if (pending) {
+            if (pending && pending.sequenceNumber === sequenceNumberRef.current) {
               clearTimeout(pending.timeoutId);
               pendingRef.current.delete(data.messageId);
               const validated = parsePlanningResponse(data.response);
@@ -251,6 +253,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       setError(null);
 
       const messageId = crypto.randomUUID();
+      const sequenceNumber = ++sequenceNumberRef.current;
       const timeoutMs = inferenceType === 'planning' ? CONFIG.PLANNING_TIMEOUT_MS : CONFIG.INFERENCE_TIMEOUT_MS;
       const defaultValue: InferenceResult = inferenceType === 'planning' ? [] : null;
 
@@ -265,7 +268,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           }
         }, timeoutMs);
 
-        pendingRef.current.set(messageId, { type: inferenceType, resolve, timeoutId });
+        pendingRef.current.set(messageId, { type: inferenceType, resolve, timeoutId, sequenceNumber });
 
         const payload = {
           type: inferenceType,

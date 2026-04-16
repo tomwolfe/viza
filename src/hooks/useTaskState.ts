@@ -88,10 +88,18 @@ export function useTaskState(): UseTaskStateReturn {
   const [taskState, setTaskState] = useState<TaskState>(getInitialState);
   const [isPlanning, setIsPlanning] = useState(false);
   const speakRef = useRef<((text: string) => void) | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     saveToStorage(taskState);
   }, [taskState]);
+
+  const abortPlanning = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+  }, []);
 
   const setSpeak = useCallback((speakFn: (text: string) => void) => {
     speakRef.current = speakFn;
@@ -115,21 +123,26 @@ export function useTaskState(): UseTaskStateReturn {
   const generateTaskPlan = useCallback(async (
     userGoal: string,
     sceneImage: ImageBitmap,
-    generatePlanFn: (goal: string, image: ImageBitmap) => Promise<TaskStep[]>
+    generatePlanFn: (goal: string, image: ImageBitmap, signal?: AbortSignal) => Promise<TaskStep[]>
   ) => {
+    abortPlanning();
     setIsPlanning(true);
     try {
-      const steps = await generatePlanFn(userGoal, sceneImage);
+      const steps = await generatePlanFn(userGoal, sceneImage, abortControllerRef.current?.signal);
       if (steps.length > 0) {
         startTask(userGoal, steps);
       }
     } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        logger.debug('[TaskState] Plan generation aborted');
+        return;
+      }
       logger.error('[TaskState] Failed to generate task plan:', error);
       startTask('Assembly Task', DEFAULT_ASSEMBLY_TASK);
     } finally {
       setIsPlanning(false);
     }
-  }, [startTask]);
+  }, [startTask, abortPlanning]);
 
   const getCurrentStep = useCallback((): TaskStep | null => {
     if (!taskState.isActive || taskState.steps.length === 0) {

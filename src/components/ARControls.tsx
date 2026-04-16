@@ -60,13 +60,6 @@ export default function ARControls({
     return 'Ready to start AR session.';
   };
 
-  const getStatusAnnouncement = () => {
-    if (isDeviceIncompatible) return 'incompatible';
-    if (isModelLoading) return 'loading';
-    if (isARActive) return 'active';
-    return 'ready';
-  };
-
   return (
     <div className="fixed top-0 left-0 right-0 z-50 p-4 pointer-events-none">
       <div className="flex flex-col items-center gap-4">

@@ -82,6 +82,8 @@ export function useInferenceLoop({
       statusRef.current = 'capturing';
       dispatch({ type: 'START_CAPTURE' });
 
+      performance.mark('inference-loop-start');
+
       let frame: ImageBitmap | null = null;
       try {
         frame = await captureFrame(frameRef.current);
@@ -92,7 +94,6 @@ export function useInferenceLoop({
         }
 
         if (abortControllerRef.current?.signal.aborted) {
-          frame.close();
           statusRef.current = 'idle';
           dispatch({ type: 'RESET' });
           return;
@@ -131,6 +132,9 @@ export function useInferenceLoop({
 
         statusRef.current = 'idle';
         dispatch({ type: 'COMPLETE' });
+
+        performance.mark('inference-loop-complete');
+        performance.measure('inference-cycle', 'inference-loop-start', 'inference-loop-complete');
       }
     },
     [runInference, captureFrame, onObjectsDetected, abortCurrent]
