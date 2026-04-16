@@ -43,6 +43,7 @@ interface UseInferenceLoopOptions {
   captureFrame: (video: HTMLVideoElement | null) => Promise<ImageBitmap | null>;
   onObjectsDetected: (objects: DetectedObject[]) => void;
   intervalMs?: number;
+  isActive?: boolean;
 }
 
 export function useInferenceLoop({
@@ -50,39 +51,32 @@ export function useInferenceLoop({
   captureFrame,
   onObjectsDetected,
   intervalMs = CONFIG.INFERENCE_INTERVAL,
+  isActive = false,
 }: UseInferenceLoopOptions) {
   const statusRef = useRef<InferenceStatus>('idle');
-  const currentAbortRef = useRef<AbortController | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const frameRef = useRef<HTMLVideoElement | null>(null);
-  const isActiveRef = useRef(false);
+  const isActiveRef = useRef(isActive);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pendingQueueRef = useRef<{ prompt: string; voiceTriggered: boolean; resolver: (v: unknown) => void; rejecter: (e: unknown) => void } | null>(null);
+  const currentRunResolverRef = useRef<((v: unknown) => void) | null>(null);
+  const currentRunRejecterRef = useRef<((e: unknown) => void) | null>(null);
 
   const [state, dispatch] = useReducer(inferenceReducer, { status: 'idle', error: null });
   const status = state.status;
 
-  const abortCurrentInference = useCallback(() => {
-    if (currentAbortRef.current) {
-      currentAbortRef.current.abort();
+  const abortCurrent = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
-    currentAbortRef.current = new AbortController();
+    abortControllerRef.current = new AbortController();
   }, []);
 
   const processInference = useCallback(
-    async (prompt: string, voiceTriggered: boolean = false) => {
+    async (prompt: string, isVoiceCommand: boolean = false) => {
       if (!frameRef.current) return;
 
-      const isQueued = pendingQueueRef.current !== null;
-      if (isQueued && voiceTriggered) {
-        const existing = pendingQueueRef.current;
-        if (existing) {
-          pendingQueueRef.current = { prompt, voiceTriggered, resolver: existing.resolver, rejecter: existing.rejecter };
-        }
-        logger.debug('[useInferenceLoop] Replacing queued request with latest');
-        return;
-      }
-      if (isQueued && !voiceTriggered) {
-        return;
+      if (isVoiceCommand && abortControllerRef.current) {
+        abortCurrent();
       }
 
       statusRef.current = 'capturing';
@@ -97,7 +91,7 @@ export function useInferenceLoop({
           return;
         }
 
-        if (currentAbortRef.current?.signal.aborted) {
+        if (abortControllerRef.current?.signal.aborted) {
           frame.close();
           statusRef.current = 'idle';
           dispatch({ type: 'RESET' });
@@ -109,22 +103,24 @@ export function useInferenceLoop({
 
         const result = await runInference(frame, prompt);
 
-        if (!currentAbortRef.current?.signal.aborted && result?.objects && result.objects.length > 0) {
+        if (!abortControllerRef.current?.signal.aborted && result?.objects && result.objects.length > 0) {
           onObjectsDetected(result.objects);
         }
 
-        if (pendingQueueRef.current) {
-          pendingQueueRef.current.resolver(result);
-          pendingQueueRef.current = null;
+        if (currentRunResolverRef.current) {
+          currentRunResolverRef.current(result);
+          currentRunResolverRef.current = null;
+          currentRunRejecterRef.current = null;
         }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
         if (frame) {
           try { frame.close(); } catch {}
         }
-        if (pendingQueueRef.current) {
-          pendingQueueRef.current.rejecter(error);
-          pendingQueueRef.current = null;
+        if (currentRunRejecterRef.current) {
+          currentRunRejecterRef.current(error);
+          currentRunResolverRef.current = null;
+          currentRunRejecterRef.current = null;
         }
         statusRef.current = 'error';
         dispatch({ type: 'ERROR', error: (error as Error).message });
@@ -132,23 +128,15 @@ export function useInferenceLoop({
         if (frame) {
           try { frame.close(); } catch {}
         }
-        
-        const next = pendingQueueRef.current;
-        if (next) {
-          pendingQueueRef.current = null;
-          statusRef.current = 'idle';
-          dispatch({ type: 'COMPLETE' });
-          processInference(next.prompt, next.voiceTriggered);
-        } else {
-          statusRef.current = 'idle';
-          dispatch({ type: 'COMPLETE' });
-        }
+
+        statusRef.current = 'idle';
+        dispatch({ type: 'COMPLETE' });
       }
     },
-    [runInference, captureFrame, onObjectsDetected]
+    [runInference, captureFrame, onObjectsDetected, abortCurrent]
   );
 
-    const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
+  const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
     frameRef.current = video;
   }, []);
 
@@ -163,43 +151,41 @@ export function useInferenceLoop({
   }, []);
 
   const cancelPending = useCallback(() => {
-    abortCurrentInference();
-    if (pendingQueueRef.current) {
-      pendingQueueRef.current.rejecter(new Error('Cancelled'));
-      pendingQueueRef.current = null;
+    abortCurrent();
+    if (currentRunRejecterRef.current) {
+      currentRunRejecterRef.current(new Error('Cancelled'));
+      currentRunResolverRef.current = null;
+      currentRunRejecterRef.current = null;
     }
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     dispatch({ type: 'RESET' });
-  }, [abortCurrentInference]);
+  }, [abortCurrent]);
 
   const run = useCallback(
-    async (prompt: string, voiceTriggered: boolean = false): Promise<unknown> => {
+    async (prompt: string, isVoiceCommand: boolean = false): Promise<unknown> => {
       if (!frameRef.current) {
         return null;
       }
 
-      abortCurrentInference();
-      if (pendingQueueRef.current) {
-        pendingQueueRef.current.rejecter(new Error('Cancelled by new run trigger'));
-        pendingQueueRef.current = null;
-      }
+      abortCurrent();
 
       return new Promise((resolve, reject) => {
-        pendingQueueRef.current = { prompt, voiceTriggered, resolver: resolve, rejecter: reject };
-        processInference(prompt, voiceTriggered);
+        currentRunResolverRef.current = resolve;
+        currentRunRejecterRef.current = reject;
+        processInference(prompt, isVoiceCommand);
       });
     },
-    [processInference, abortCurrentInference]
+    [processInference, abortCurrent]
   );
 
   useEffect(() => {
     if (!isActiveRef.current) return undefined;
 
     intervalRef.current = setInterval(() => {
-      if (pendingQueueRef.current === null) {
+      if (statusRef.current === 'idle') {
         processInference('Identify objects in this scene.', false);
       }
     }, intervalMs);
@@ -212,6 +198,20 @@ export function useInferenceLoop({
       cancelPending();
     };
   }, [intervalMs, processInference, cancelPending]);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+    if (isActive && !intervalRef.current) {
+      intervalRef.current = setInterval(() => {
+        if (statusRef.current === 'idle') {
+          processInference('Identify objects in this scene.', false);
+        }
+      }, intervalMs);
+    } else if (!isActive && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [isActive, intervalMs, processInference]);
 
   return {
     status,

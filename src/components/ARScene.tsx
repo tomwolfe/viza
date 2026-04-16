@@ -2,9 +2,11 @@
 
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
-import { InferenceOrchestrator } from './InferenceOrchestrator';
+import { useInferenceLoop } from '@/hooks/useInferenceLoop';
+import { useFrameCapture } from './CameraFallback';
 import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
 import type { DetectedObject } from '@/schemas/vision';
+import { CONFIG } from '@/config';
 import * as THREE from 'three';
 
 interface ARSceneProps {
@@ -61,16 +63,33 @@ export function ARScene({
 
   if (!isARActive) return null;
 
+  const { captureFrame } = useFrameCapture();
+  const { setVideoSource, setActive, run, cancelPending } = useInferenceLoop({
+    runInference,
+    captureFrame,
+    onObjectsDetected: handleObjectsDetected,
+    intervalMs: CONFIG.INFERENCE_INTERVAL,
+    isActive: isARActive && isModelReady,
+  });
+
+  useEffect(() => {
+    setVideoSource(videoRef.current);
+  }, [videoRef.current, setVideoSource]);
+
+  useEffect(() => {
+    if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
+      lastVoiceCommandRef.current = voiceCommand;
+      cancelPending();
+      run(voiceCommand, true);
+    }
+  }, [voiceCommand, isModelReady, run, cancelPending]);
+
+  useEffect(() => {
+    setActive(isARActive && isModelReady);
+  }, [isARActive, isModelReady, setActive]);
+
   return (
     <>
-      <InferenceOrchestrator
-        runInference={runInference}
-        onObjectsDetected={handleObjectsDetected}
-        videoRef={videoRef}
-        voiceCommand={voiceCommand}
-        isARActive={isARActive}
-        isModelReady={isModelReady}
-      />
       <WorldMapRenderer
         detectedObjects={detectedObjects}
         worldObjects={worldObjects}

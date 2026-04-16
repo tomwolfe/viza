@@ -18,28 +18,23 @@ const RawDetectedObjectSchema = z.object({
 
 export const DetectedObjectSchema = RawDetectedObjectSchema;
 
-const RawVisionResponseSchema = z.object({
-  objects: z.array(RawDetectedObjectSchema),
+const LlmVisionResponseSchema = z.object({
+  objects: z.array(LlmDetectedObjectSchema),
   completed: z.boolean().default(false),
   rawText: z.string().optional(),
 });
 
-export const VisionResponseSchema = RawVisionResponseSchema;
-
-export const VisionResponseSchemaFromLlm = z.object({
-  objects: z.array(LlmDetectedObjectSchema),
-  completed: z.boolean().default(false),
-  rawText: z.string().optional(),
-}).transform((response) => ({
-  objects: response.objects.map((obj) => ({
-    name: obj.item,
-    bbox_2d: obj.coordinates,
-    action: obj.action_step || '',
-    category: obj.category || 'unknown',
-  })),
-  completed: response.completed,
-  rawText: response.rawText,
-}));
+export const VisionResponseSchema = LlmVisionResponseSchema
+  .transform((response) => ({
+    objects: response.objects.map((obj) => ({
+      name: obj.item,
+      bbox_2d: obj.coordinates,
+      action: obj.action_step || '',
+      category: obj.category || 'unknown',
+    })),
+    completed: response.completed,
+    rawText: response.rawText,
+  }));
 
 export const TaskStepSchema = z.object({
   id: z.string(),
@@ -68,12 +63,7 @@ export function parseVisionResponse(data: unknown): VisionResponse | null {
 }
 
 export function parseLlmVisionResponse(data: unknown): VisionResponse | null {
-  const result = VisionResponseSchemaFromLlm.safeParse(data);
-  if (result.success) {
-    return result.data;
-  }
-  logger.warn('[VisionSchema] Invalid LLM response:', result.error.flatten());
-  return null;
+  return parseVisionResponse(data);
 }
 
 export function parsePlanningResponse(data: unknown): PlanningResponse | null {

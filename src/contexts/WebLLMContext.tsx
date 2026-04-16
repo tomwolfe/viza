@@ -185,8 +185,19 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     worker.onerror = (errorEvent) => {
       logger.error('[WebLLM] Worker error:', errorEvent);
       setError(`Worker error: ${errorEvent.message}`);
+      setErrorCode('WORKER_CRASHED');
       setIsModelLoading(false);
       setIsInferring(false);
+
+      pendingRef.current.forEach((pending, messageId) => {
+        clearTimeout(pending.timeoutId);
+        if (pending.type === 'planning') {
+          pending.resolve([]);
+        } else {
+          pending.resolve(null);
+        }
+      });
+      pendingRef.current.clear();
     };
 
     return () => {

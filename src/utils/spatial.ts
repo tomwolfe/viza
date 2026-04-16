@@ -41,8 +41,8 @@ export function get3DPosition(
 ): THREE.Vector3 {
   if (hitTestResult) {
     const hitPosition = hitTestResult.position.clone();
-    hitPosition.x += (x / targetSize - 0.5) * 0.3;
-    hitPosition.y += (y / targetSize - 0.5) * 0.3;
+    hitPosition.x += (x / targetSize - 0.5) * CONFIG.SPATIAL.HIT_TEST_OFFSET;
+    hitPosition.y += (y / targetSize - 0.5) * CONFIG.SPATIAL.HIT_TEST_OFFSET;
     return hitPosition;
   }
 
@@ -106,24 +106,26 @@ export function projectBoundingBoxSize(
   };
 }
 
-export function calculateDistance2D(
+export function calculateDistance(
   pos1: { x: number; y: number },
   pos2: { x: number; y: number }
-): number {
-  const dx = pos2.x - pos1.x;
-  const dy = pos2.y - pos1.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-export function calculateDistance3D(
+): number;
+export function calculateDistance(
   pos1: { x: number; y: number; z: number },
   pos2: { x: number; y: number; z: number }
+): number;
+export function calculateDistance(
+  pos1: { x: number; y: number; z?: number },
+  pos2: { x: number; y: number; z?: number }
 ): number {
   const dx = pos2.x - pos1.x;
   const dy = pos2.y - pos1.y;
-  const dz = pos2.z - pos1.z;
+  const dz = (pos1.z ?? 0) - (pos2.z ?? 0);
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
+
+export const calculateDistance2D = calculateDistance;
+export const calculateDistance3D = calculateDistance;
 
 export function isWithinThreshold(
   pos1: THREE.Vector3,
