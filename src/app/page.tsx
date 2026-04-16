@@ -39,15 +39,48 @@ function ARContent() {
     setSpeak,
     isPlanning,
     checkTargetFound,
-    handleVoiceCommand,
   } = useTaskState();
 
-  const [voiceCommand, setVoiceCommand] = useState<string | null>(null);
   const sceneImageRef = useRef<ImageBitmap | null>(null);
+  const voiceCommandRef = useRef<string | null>(null);
+
+  const generatePlanFromGoal = useCallback(async (goal: string): Promise<TaskStep[]> => {
+    if (!sceneImageRef.current) {
+      logger.warn('[App] No scene image available for planning');
+      return DEFAULT_ASSEMBLY_TASK;
+    }
+
+    try {
+      const steps = await runPlanningInference(sceneImageRef.current, goal);
+      if (steps && steps.length > 0) {
+        return steps;
+      }
+    } catch (error) {
+      logger.error('[App] Planning inference failed:', error);
+    }
+    return DEFAULT_ASSEMBLY_TASK;
+  }, [runPlanningInference]);
+
+  const triggerPlanningMode = useCallback(async (userGoal: string) => {
+    if (!isModelReady || isPlanning) return;
+
+    await generateTaskPlan(userGoal, sceneImageRef.current!, generatePlanFromGoal);
+  }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal]);
 
   const handleTranscriptReady = useCallback((transcript: string) => {
-    setVoiceCommand(transcript);
-  }, []);
+    voiceCommandRef.current = transcript;
+
+    if (isModelReady && !taskState.isActive) {
+      const isCleaningGoal = /clean|organize|trash|garbage|mess|fix|help/i.test(transcript);
+      if (isCleaningGoal) {
+        triggerPlanningMode(transcript);
+        voiceCommandRef.current = null;
+        return;
+      }
+    }
+
+    voiceCommandRef.current = null;
+  }, [isModelReady, taskState.isActive, triggerPlanningMode]);
 
   const {
     isListening,
@@ -93,41 +126,6 @@ function ARContent() {
     setDetectedObjects(objects);
   }, []);
 
-  const generatePlanFromGoal = useCallback(async (goal: string): Promise<TaskStep[]> => {
-    if (!sceneImageRef.current) {
-      logger.warn('[App] No scene image available for planning');
-      return DEFAULT_ASSEMBLY_TASK;
-    }
-
-    try {
-      const steps = await runPlanningInference(sceneImageRef.current, goal);
-      if (steps && steps.length > 0) {
-        return steps;
-      }
-    } catch (error) {
-      logger.error('[App] Planning inference failed:', error);
-    }
-    return DEFAULT_ASSEMBLY_TASK;
-  }, [runPlanningInference]);
-
-  const triggerPlanningMode = useCallback(async (userGoal: string) => {
-    if (!isModelReady || isPlanning) return;
-
-    await generateTaskPlan(userGoal, sceneImageRef.current!, generatePlanFromGoal);
-  }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal]);
-
-  useEffect(() => {
-    if (voiceCommand && isModelReady) {
-      const isCleaningGoal = /clean|organize|trash|garbage|mess|fix|help/i.test(voiceCommand);
-
-      if (isCleaningGoal && !taskState.isActive) {
-        triggerPlanningMode(voiceCommand);
-      } else {
-        setTimeout(() => setVoiceCommand(null), 0);
-      }
-    }
-  }, [voiceCommand, isModelReady, taskState.isActive, triggerPlanningMode]);
-
   useEffect(() => {
     if (llmError) {
       logger.error('[App] WebLLM Error:', llmError);
@@ -154,9 +152,9 @@ function ARContent() {
         <div className="fixed top-4 left-4 right-4 z-50 bg-amber-900/90 backdrop-blur-md text-white rounded-lg p-4">
           <p className="text-sm font-semibold mb-2">System Requirements</p>
           <ul className="text-xs space-y-1">
-            <li>• Wi-Fi recommended (~2.3GB model download)</li>
-            <li>• High battery usage expected during inference</li>
-            <li>• 8GB+ RAM required for optimal performance</li>
+            <li>- Wi-Fi recommended (~2.3GB model download)</li>
+            <li>- High battery usage expected during inference</li>
+            <li>- 8GB+ RAM required for optimal performance</li>
           </ul>
           <button
             onClick={() => setShowWarnings(false)}
@@ -180,7 +178,7 @@ function ARContent() {
               runInference={runInference}
               detectedObjects={detectedObjects}
               onObjectsDetected={handleObjectsDetected}
-              voiceCommand={voiceCommand}
+              voiceCommandRef={voiceCommandRef}
               taskActive={taskState.isActive}
               currentStepTarget={taskState.steps[taskState.currentStepIndex]?.targetObject}
               checkTargetFound={checkTargetFound}

@@ -1,63 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
 import type { DetectedObject } from '../src/schemas/vision';
-
-function findExistingObjectKey(
-  map: Map<string, unknown>,
-  position: THREE.Vector3,
-  threshold: number,
-  name?: string
-): string | null {
-  for (const [key, obj] of map.entries()) {
-    const worldObj = obj as { smoothedPosition: THREE.Vector3; name: string };
-    const distance = worldObj.smoothedPosition.distanceTo(position);
-    if (distance < threshold) {
-      if (name && worldObj.name.toLowerCase() !== name.toLowerCase()) continue;
-      return key;
-    }
-  }
-  return null;
-}
-
-function categorizeObject(name: string, action?: string): string {
-  const lower = name.toLowerCase();
-  const actionLower = (action || '').toLowerCase();
-
-  if (actionLower.includes('throw') || actionLower.includes('discard') || actionLower.includes('trash')) {
-    return 'trash';
-  }
-  if (actionLower.includes('clean') || actionLower.includes('organize') || actionLower.includes('put away')) {
-    return 'clutter';
-  }
-  if (actionLower.includes('keep') || actionLower.includes('save')) {
-    return 'keep';
-  }
-
-  const toolKeywords = ['screwdriver', 'wrench', 'hammer', 'driver', 'pliers', 'saw', 'tool'];
-  const trashKeywords = ['trash', 'garbage', 'waste', 'paper', 'bottle', 'can', 'wrapper', 'discard'];
-  const clutterKeywords = ['mess', 'clothes', 'cloth', 'pile', 'scattered', 'untidy', 'organize'];
-
-  if (toolKeywords.some(k => lower.includes(k))) return 'tool';
-  if (trashKeywords.some(k => lower.includes(k))) return 'trash';
-  if (clutterKeywords.some(k => lower.includes(k))) return 'clutter';
-
-  return 'unknown';
-}
-
-function generateObjectId(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '-');
-}
-
-interface WorldObject {
-  id: string;
-  name: string;
-  position: THREE.Vector3;
-  category: string;
-  confidence: number;
-  lastSeen: number;
-  detectionCount: number;
-  smoothedPosition: THREE.Vector3;
-}
+import { categorizeObject, generateObjectId } from '../src/utils/objectProcessing';
+import { findExistingObjectKey, type WorldObject } from '../src/hooks/useWorldMap';
 
 describe('useWorldMap logic', () => {
   describe('findExistingObjectKey', () => {
@@ -184,13 +129,13 @@ describe('useWorldMap logic', () => {
 
   describe('generateObjectId', () => {
     it('should normalize and lowercase object name', () => {
-      expect(generateObjectId('Plastic Bottle')).toBe('plastic-bottle');
-      expect(generateObjectId('PAPER WRAPPER')).toBe('paper-wrapper');
-      expect(generateObjectId('screw driver')).toBe('screw-driver');
+      expect(generateObjectId('Plastic Bottle', new THREE.Vector3())).toBe('plastic-bottle');
+      expect(generateObjectId('PAPER WRAPPER', new THREE.Vector3())).toBe('paper-wrapper');
+      expect(generateObjectId('screw driver', new THREE.Vector3())).toBe('screw-driver');
     });
 
     it('should handle multiple spaces', () => {
-      expect(generateObjectId('plastic   bottle')).toBe('plastic-bottle');
+      expect(generateObjectId('plastic   bottle', new THREE.Vector3())).toBe('plastic-bottle');
     });
   });
 

@@ -2,7 +2,6 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { VizaErrorCode } from '@/types/worker';
-import { createVizaError } from '@/types/worker';
 import { logger } from '@/config';
 
 export interface UseWebXROptions {
@@ -35,15 +34,24 @@ export function useWebXR({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const sessionRef = useRef<XRSession | null>(null);
   const cancelledRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!navigator.xr) {
-      setIsSupported(false);
       return;
     }
 
     navigator.xr.isSessionSupported(sessionMode).then((supported) => {
-      setIsSupported(supported);
+      if (isMountedRef.current) {
+        setIsSupported(supported);
+      }
     });
   }, [sessionMode]);
 

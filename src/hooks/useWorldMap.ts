@@ -6,7 +6,7 @@ import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { CONFIG, logger } from '@/config';
 import { createOneEuroFilter } from '@/utils/spatial';
-import { categorizeObject, generateObjectId, getCategoryColor, type ObjectCategory } from '@/utils/objectProcessing';
+import { categorizeObject, generateObjectId, type ObjectCategory } from '@/utils/objectProcessing';
 
 export interface WorldObject {
   id: string;
@@ -79,7 +79,6 @@ export function useWorldMap(): UseWorldMapReturn {
   const worldMapRef = useRef<Map<string, WorldObject>>(loadWorldMapFromStorage());
   const dampeningRef = useRef(DEFAULT_DAMPENING);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterCacheRef = useRef<Map<string, (value: THREE.Vector3, timestamp: number) => THREE.Vector3>>(new Map());
   const [, setVersion] = useState(0);
 
   useEffect(() => {
@@ -187,7 +186,7 @@ export function useWorldMap(): UseWorldMapReturn {
   };
 }
 
-function findExistingObjectKey(map: Map<string, WorldObject>, position: THREE.Vector3, threshold: number, name?: string): string | null {
+export function findExistingObjectKey(map: Map<string, WorldObject>, position: THREE.Vector3, threshold: number, name?: string): string | null {
   for (const [key, obj] of map.entries()) {
     const distance = obj.smoothedPosition.distanceTo(position);
     if (distance < threshold) {

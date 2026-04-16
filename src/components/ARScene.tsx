@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState, useImperativeHandle } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
@@ -8,7 +8,7 @@ import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
 import { useCamera } from '@/hooks/useCamera';
 import { useWebLLM } from '@/contexts/WebLLMContext';
 import type { DetectedObject } from '@/schemas/vision';
-import { CONFIG, logger } from '@/config';
+import { CONFIG } from '@/config';
 import * as THREE from 'three';
 
 interface ARSceneProps {
@@ -20,11 +20,15 @@ interface ARSceneProps {
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
   detectedObjects: DetectedObject[];
   onObjectsDetected: (objects: DetectedObject[]) => void;
-  voiceCommand?: string | null;
+  voiceCommandRef?: React.RefObject<string | null>;
   taskActive?: boolean;
   currentStepTarget?: string;
   checkTargetFound?: (objects: DetectedObject[]) => void;
   speak?: (text: string) => void;
+}
+
+export interface ARSceneHandle {
+  runVoiceCommand: (command: string) => void;
 }
 
 export function ARScene({
@@ -33,7 +37,7 @@ export function ARScene({
   runInference,
   detectedObjects,
   onObjectsDetected,
-  voiceCommand,
+  voiceCommandRef,
   taskActive,
   currentStepTarget,
   checkTargetFound,
@@ -72,12 +76,6 @@ export function ARScene({
     [onObjectsDetected, checkTargetFound, speak]
   );
 
-  useEffect(() => {
-    if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
-      lastVoiceCommandRef.current = voiceCommand;
-    }
-  }, [voiceCommand, isModelReady]);
-
   const { captureFrame } = useFrameCapture();
   const { setVideoSource, run, cancelPending } = useInferenceLoop({
     runInference,
@@ -95,12 +93,27 @@ export function ARScene({
   }, [videoElement, setVideoSource]);
 
   useEffect(() => {
-    if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
-      lastVoiceCommandRef.current = voiceCommand;
+    if (voiceCommandRef?.current && voiceCommandRef.current !== lastVoiceCommandRef.current && isModelReady) {
+      lastVoiceCommandRef.current = voiceCommandRef.current;
       cancelPending();
-      run(voiceCommand);
+      run(voiceCommandRef.current);
     }
-  }, [voiceCommand, isModelReady, run, cancelPending]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isModelReady, run, cancelPending]);
+
+  const runVoiceCommand = useCallback((command: string) => {
+    if (isModelReady && command) {
+      lastVoiceCommandRef.current = command;
+      cancelPending();
+      run(command);
+    }
+  }, [isModelReady, run, cancelPending]);
+
+  useImperativeHandle(
+    useRef<ARSceneHandle | null>(null),
+    () => ({ runVoiceCommand }),
+    [runVoiceCommand]
+  );
 
   if (!isARActive) return null;
 
