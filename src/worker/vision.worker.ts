@@ -1,6 +1,6 @@
 import * as webllm from '@mlc-ai/web-llm';
 import { z } from 'zod';
-import type { WorkerOutgoingMessage, WorkerIncomingMessage } from '@/types/worker';
+import type { WorkerOutgoingMessage, WorkerIncomingMessage, VizaErrorCode } from '@/types/worker';
 import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt } from '@/config';
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
 
@@ -18,7 +18,7 @@ const messageHandlers: Record<string, MessageHandler> = {
   chat: async (msg) => {
     const chatMsg = msg as Extract<WorkerOutgoingMessage, { type: 'chat' }>;
     if (!chatMsg.image) {
-      postMessage({ type: 'error', message: 'Missing image for chat', messageId: chatMsg.messageId });
+      postMessage({ type: 'error', message: 'Missing image for chat', messageId: chatMsg.messageId, errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode });
       return;
     }
     await runTask(chatMsg.image, chatMsg.prompt, chatMsg.messageId, TASK_CONFIGS['chat']);
@@ -27,7 +27,7 @@ const messageHandlers: Record<string, MessageHandler> = {
   planning: async (msg) => {
     const planMsg = msg as Extract<WorkerOutgoingMessage, { type: 'planning' }>;
     if (!planMsg.image) {
-      postMessage({ type: 'error', message: 'Missing image for planning', messageId: planMsg.messageId });
+      postMessage({ type: 'error', message: 'Missing image for planning', messageId: planMsg.messageId, errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode });
       return;
     }
     await runTask(planMsg.image, planMsg.goal, planMsg.messageId, TASK_CONFIGS['planning']);
@@ -36,7 +36,7 @@ const messageHandlers: Record<string, MessageHandler> = {
   category: async (msg) => {
     const catMsg = msg as Extract<WorkerOutgoingMessage, { type: 'category' }>;
     if (!catMsg.image) {
-      postMessage({ type: 'error', message: 'Missing image for category', messageId: catMsg.messageId });
+      postMessage({ type: 'error', message: 'Missing image for category', messageId: catMsg.messageId, errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode });
       return;
     }
     await runTask(catMsg.image, catMsg.goal, catMsg.messageId, TASK_CONFIGS['category']);

@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { logger } from '@/config';
 
-export const DetectedObjectSchema = z.object({
+const LlmDetectedObjectSchema = z.object({
+  item: z.string().min(1),
+  coordinates: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  action_step: z.string().optional(),
+  category: z.string().optional(),
+});
+
+const RawDetectedObjectSchema = z.object({
   name: z.string().min(1),
   bbox_2d: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   action: z.string().default(''),
@@ -9,11 +16,30 @@ export const DetectedObjectSchema = z.object({
   confidence: z.number().optional(),
 });
 
-export const VisionResponseSchema = z.object({
-  objects: z.array(DetectedObjectSchema),
+export const DetectedObjectSchema = RawDetectedObjectSchema;
+
+const RawVisionResponseSchema = z.object({
+  objects: z.array(RawDetectedObjectSchema),
   completed: z.boolean().default(false),
   rawText: z.string().optional(),
 });
+
+export const VisionResponseSchema = RawVisionResponseSchema;
+
+export const VisionResponseSchemaFromLlm = z.object({
+  objects: z.array(LlmDetectedObjectSchema),
+  completed: z.boolean().default(false),
+  rawText: z.string().optional(),
+}).transform((response) => ({
+  objects: response.objects.map((obj) => ({
+    name: obj.item,
+    bbox_2d: obj.coordinates,
+    action: obj.action_step || '',
+    category: obj.category || 'unknown',
+  })),
+  completed: response.completed,
+  rawText: response.rawText,
+}));
 
 export const TaskStepSchema = z.object({
   id: z.string(),
@@ -38,6 +64,15 @@ export function parseVisionResponse(data: unknown): VisionResponse | null {
     return result.data;
   }
   logger.warn('[VisionSchema] Invalid response:', result.error.flatten());
+  return null;
+}
+
+export function parseLlmVisionResponse(data: unknown): VisionResponse | null {
+  const result = VisionResponseSchemaFromLlm.safeParse(data);
+  if (result.success) {
+    return result.data;
+  }
+  logger.warn('[VisionSchema] Invalid LLM response:', result.error.flatten());
   return null;
 }
 

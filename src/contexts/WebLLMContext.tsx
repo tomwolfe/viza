@@ -85,7 +85,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     workerRef.current = worker;
 
     worker.onmessage = (event) => {
-      const { type, ...data } = event.data as { type: string; messageId?: string; response?: unknown; completed?: boolean; message?: string; progress?: number };
+      const { type, errorCode, ...data } = event.data as { type: string; messageId?: string; response?: unknown; completed?: boolean; message?: string; progress?: number; errorCode?: string };
 
       switch (type) {
         case 'worker_ready':
@@ -152,7 +152,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         case 'error':
           logger.error('[WebLLM] Error:', data.message);
           setError(data.message ?? 'Unknown worker error');
-          setErrorCode('WORKER_INIT_FAILED');
+          const code = errorCode as VizaErrorCode | undefined;
+          setErrorCode(code ?? 'WORKER_INIT_FAILED');
           setIsModelLoading(false);
           setIsInferring(false);
           if (data.messageId) {

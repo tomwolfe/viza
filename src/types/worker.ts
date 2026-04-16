@@ -29,7 +29,7 @@ export type WorkerIncomingMessage =
   | { type: 'inference_start' }
   | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown }
   | { type: 'planning_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
-  | { type: 'error'; message: string; messageId?: string; error?: string }
+  | { type: 'error'; message: string; messageId?: string; error?: string; errorCode: VizaErrorCode }
   | { type: 'warning'; message: string; rawResponse?: string }
   | { type: 'pong' }
   | { type: 'reloaded' }

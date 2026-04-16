@@ -22,7 +22,7 @@ export type ObjectCategory = 'tool' | 'trash' | 'clutter' | 'keep' | 'unknown';
 export interface UseWorldMapReturn {
   worldMap: Map<string, WorldObject>;
   addOrUpdateObject: (obj: DetectedObject, position: THREE.Vector3) => void;
-  getObjectAtPosition: (position: THREE.Vector3, threshold: number) => WorldObject | null;
+  getObjectAtPosition: (position: THREE.Vector3, threshold: number, name?: string) => WorldObject | null;
   getAllObjects: () => WorldObject[];
   clearWorldMap: () => void;
   setDampeningFactor: (factor: number) => void;
@@ -57,7 +57,8 @@ function categorizeObject(name: string, action?: string): ObjectCategory {
 }
 
 function generateObjectId(name: string, position: THREE.Vector3): string {
-  return `${name.toLowerCase().replace(/\s+/g, '-')}_${Math.round(position.x * 10)}_${Math.round(position.y * 10)}_${Math.round(position.z * 10)}`;
+  const normalized = `${name.toLowerCase().replace(/\s+/g, '-')}`;
+  return normalized;
 }
 
 function loadWorldMapFromStorage(): Map<string, WorldObject> {
@@ -115,7 +116,7 @@ export function useWorldMap(): UseWorldMapReturn {
     const map = worldMapRef.current;
     const category = categorizeObject(obj.name, obj.action);
 
-    const existingKey = findExistingObjectKey(map, position, CONFIG.SPATIAL.DISTANCE_THRESHOLD);
+    const existingKey = findExistingObjectKey(map, position, CONFIG.SPATIAL.DISTANCE_THRESHOLD, obj.name);
 
     if (existingKey) {
       const existing = map.get(existingKey)!;
@@ -148,9 +149,10 @@ export function useWorldMap(): UseWorldMapReturn {
     scheduleSave();
   }, [scheduleSave]);
 
-  const getObjectAtPosition = useCallback((position: THREE.Vector3, threshold: number): WorldObject | null => {
+  const getObjectAtPosition = useCallback((position: THREE.Vector3, threshold: number, name?: string): WorldObject | null => {
     const map = worldMapRef.current;
-    return findExistingObjectKey(map, position, threshold) ? map.get(findExistingObjectKey(map, position, threshold)!) ?? null : null;
+    const key = findExistingObjectKey(map, position, threshold, name);
+    return key ? map.get(key) ?? null : null;
   }, []);
 
   const getAllObjects = useCallback((): WorldObject[] => {
@@ -176,10 +178,11 @@ export function useWorldMap(): UseWorldMapReturn {
   };
 }
 
-function findExistingObjectKey(map: Map<string, WorldObject>, position: THREE.Vector3, threshold: number): string | null {
+function findExistingObjectKey(map: Map<string, WorldObject>, position: THREE.Vector3, threshold: number, name?: string): string | null {
   for (const [key, obj] of map.entries()) {
     const distance = obj.smoothedPosition.distanceTo(position);
     if (distance < threshold) {
+      if (name && obj.name.toLowerCase() !== name.toLowerCase()) continue;
       return key;
     }
   }
