@@ -1,6 +1,6 @@
 'use client';
 
-import type { VizaErrorCode } from '@/types/worker';
+import type { VizaErrorCode, WorkerIncomingMessage } from '@/types/worker';
 
 export type WorkerMessageType =
   | 'init'
@@ -76,7 +76,7 @@ export class WorkerClient {
     this.worker = new Worker(workerUrl, { type: 'module' });
 
     this.worker.onmessage = (event) => {
-      this.handleMessage(event.data as Record<string, unknown>);
+      this.handleMessage(event.data as WorkerIncomingMessage);
     };
 
     this.worker.onerror = (errorEvent) => {
@@ -142,8 +142,8 @@ export class WorkerClient {
     return this.isModelReadyState;
   }
 
-  private handleMessage(data: Record<string, unknown>): void {
-    const { type, errorCode, ...rest } = data;
+  private handleMessage(data: WorkerIncomingMessage): void {
+    const { type } = data;
 
     switch (type) {
       case 'worker_ready':
@@ -185,9 +185,9 @@ export class WorkerClient {
 
       case 'error':
         this.options.onError(
-          (data.message as string) ?? 'Unknown worker error',
-          (errorCode as VizaErrorCode) ?? 'WORKER_INIT_FAILED',
-          data.messageId as string | undefined
+          (data as { message?: string }).message ?? 'Unknown worker error',
+          (data as { errorCode?: VizaErrorCode }).errorCode ?? 'WORKER_INIT_FAILED',
+          (data as { messageId?: string }).messageId
         );
         break;
 

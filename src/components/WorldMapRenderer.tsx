@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
-import { useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
 import { useWorldMap, type WorldObject, getCategoryColor } from '@/hooks/useWorldMap';
+import { SharedVideoPlane } from './SharedVideoPlane';
 import type { DetectedObject } from '@/schemas/vision';
-import * as THREE from 'three';
 
 const xrStore = createXRStore();
 
@@ -56,7 +56,7 @@ export function WorldMapRenderer({
       <directionalLight position={[5, 5, 5]} intensity={0.5} />
 
       {videoElement ? (
-        <VideoPlane video={videoElement} />
+        <SharedVideoPlane video={videoElement} />
       ) : null}
 
       {detectedObjects.map((obj, index) => {
@@ -94,37 +94,3 @@ export function WorldMapRenderer({
   );
 }
 
-interface VideoPlaneProps {
-  video: HTMLVideoElement;
-}
-
-function VideoPlane({ video }: VideoPlaneProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const { viewport } = useThree();
-
-  const texture = useMemo(() => {
-    const newTexture = new THREE.VideoTexture(video);
-    newTexture.minFilter = THREE.LinearFilter;
-    newTexture.magFilter = THREE.LinearFilter;
-    newTexture.format = THREE.RGBAFormat;
-    newTexture.colorSpace = THREE.SRGBColorSpace;
-    return newTexture;
-  }, [video]);
-
-  const planeScale: [number, number, number] = useMemo(() => {
-    return [viewport.width, viewport.height, 1];
-  }, [viewport.width, viewport.height]);
-
-  useEffect(() => {
-    return () => {
-      texture.dispose();
-    };
-  }, [texture]);
-
-  return (
-    <mesh ref={meshRef} position={[0, 0, -5]} scale={planeScale}>
-      <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
