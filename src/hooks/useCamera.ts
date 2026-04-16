@@ -74,7 +74,6 @@ export function useCamera({
   const [error, setError] = useState<CameraError | null>(null);
   const [isXRMode, setIsXRMode] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const attemptCountRef = useRef(0);
 
   const userMedia = useUserMedia({ facingMode, width, height });
   const webXR = useWebXR();
@@ -82,7 +81,6 @@ export function useCamera({
   const resetError = useCallback(() => {
     setError(null);
     setRetryCount(0);
-    attemptCountRef.current = 0;
   }, []);
 
   const startXRSession = useCallback(async (): Promise<boolean> => {
@@ -110,7 +108,6 @@ export function useCamera({
     const maxRetries = 3;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      attemptCountRef.current = attempt + 1;
       setRetryCount(attempt + 1);
 
       const success = await userMedia.start();

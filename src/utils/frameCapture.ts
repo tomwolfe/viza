@@ -2,32 +2,6 @@ import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
 
-let sharedCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
-let sharedCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
-let useOffscreenCanvas = true;
-
-function getSharedCanvas(): OffscreenCanvas | HTMLCanvasElement {
-  if (!sharedCanvas) {
-    if (typeof OffscreenCanvas !== 'undefined') {
-      sharedCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-      sharedCtx = sharedCanvas.getContext('2d');
-      useOffscreenCanvas = true;
-    } else if (typeof document !== 'undefined') {
-      sharedCanvas = document.createElement('canvas');
-      sharedCanvas.width = TARGET_SIZE;
-      sharedCanvas.height = TARGET_SIZE;
-      sharedCtx = sharedCanvas.getContext('2d');
-      useOffscreenCanvas = false;
-    } else {
-      throw new Error('Neither OffscreenCanvas nor document.createElement is available');
-    }
-    if (!sharedCtx) {
-      throw new Error('Failed to get 2D context from canvas');
-    }
-  }
-  return sharedCanvas;
-}
-
 function isValidSource(source: CanvasImageSource): boolean {
   if (!source) return false;
   const width = 'videoWidth' in source ? (source as HTMLVideoElement).videoWidth : (source as { width: number }).width;
@@ -38,10 +12,25 @@ function isValidSource(source: CanvasImageSource): boolean {
 async function downsampleToBitmap(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  const canvas = getSharedCanvas();
-  const ctx = sharedCtx;
+  let canvas: OffscreenCanvas | HTMLCanvasElement;
+  let ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+  let useOffscreenCanvas = false;
+
+  if (typeof OffscreenCanvas !== 'undefined') {
+    canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+    ctx = canvas.getContext('2d');
+    useOffscreenCanvas = true;
+  } else if (typeof document !== 'undefined') {
+    canvas = document.createElement('canvas');
+    canvas.width = TARGET_SIZE;
+    canvas.height = TARGET_SIZE;
+    ctx = canvas.getContext('2d');
+  } else {
+    throw new Error('Neither OffscreenCanvas nor document.createElement is available');
+  }
+
   if (!ctx) {
-    throw new Error('Failed to get 2D context from OffscreenCanvas');
+    throw new Error('Failed to get 2D context from canvas');
   }
 
   const sourceWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.width;

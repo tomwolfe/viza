@@ -1,22 +1,23 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { extractJsonFromText, parseJsonResponse, ParseResult } from '../src/utils/responseParser';
 import { logger } from '@/config';
 
 // Mock logger to prevent actual logging during tests
-jest.mock('@/config', () => ({
+vi.mock('@/config', () => ({
   logger: {
-    debug: jest.fn(),
-    error: jest.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
 // Mock a simple schema parser for testing
 const mockSchema = {
-  parse: jest.fn(),
+  parse: vi.fn(),
 };
 
 describe('Response Parser Utilities', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // --- extractJsonFromText tests ---
@@ -73,11 +74,8 @@ describe('Response Parser Utilities', () => {
 
     it('should handle JSON extraction failure and call warning callback', () => {
       const rawText = 'Some text without JSON.';
-      const mockWarning = jest.fn();
+      const mockWarning = vi.fn();
       
-      // Mock extractJsonFromText to return null (simulating extraction failure)
-      jest.spyOn(require('../src/utils/responseParser'), 'extractJsonFromText').mockReturnValue(null);
-
       const result: ParseResult<any> = parseJsonResponse(rawText, mockSchema, mockWarning);
 
       expect(result.success).toBe(false);
@@ -93,7 +91,7 @@ describe('Response Parser Utilities', () => {
       });
 
       const rawText = '```json\n{"bad_key": 1}\n```';
-      const mockWarning = jest.fn();
+      const mockWarning = vi.fn();
 
       const result: ParseResult<any> = parseJsonResponse(rawText, mockSchema, mockWarning);
 

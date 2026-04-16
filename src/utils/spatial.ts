@@ -8,20 +8,6 @@ export interface BoundingBox2D {
   height: number;
 }
 
-export interface WorldPosition {
-  x: number;
-  y: number;
-  z: number;
-}
-
-interface ProjectToWorldOptions {
-  camera: THREE.Camera;
-  viewport: THREE.Vector3;
-  imageWidth: number;
-  imageHeight: number;
-  depth?: number;
-}
-
 export interface HitTestResult {
   distance: number;
   position: THREE.Vector3;
@@ -61,32 +47,6 @@ export function get3DPosition(
     cameraPosition.y + relY,
     cameraPosition.z + depth
   );
-}
-
-export function projectBoundingBoxToWorld(
-  bbox: BoundingBox2D,
-  options: ProjectToWorldOptions
-): WorldPosition {
-  const { camera, imageWidth, imageHeight, depth = CONFIG.SPATIAL.DEFAULT_DEPTH } = options;
-
-  const centerX = bbox.x + bbox.width / 2;
-  const centerY = bbox.y + bbox.height / 2;
-
-  const normalizedX = (centerX / imageWidth) * 2 - 1;
-  const normalizedY = (centerY / imageHeight) * 2 - 1;
-
-  const vector = new THREE.Vector3(normalizedX, normalizedY, 0.5);
-  vector.unproject(camera);
-
-  const direction = vector.sub(camera.position).normalize();
-  const distance = -depth / direction.z;
-  const position = camera.position.clone().add(direction.multiplyScalar(distance));
-
-  return {
-    x: position.x,
-    y: position.y,
-    z: position.z,
-  };
 }
 
 export function projectBoundingBoxSize(
@@ -138,30 +98,6 @@ export function isWithinThreshold(
   threshold: number
 ): boolean {
   return pos1.distanceTo(pos2) < threshold;
-}
-
-export function lerpPosition(
-  current: THREE.Vector3,
-  target: THREE.Vector3,
-  factor: number
-): THREE.Vector3 {
-  return current.clone().lerp(target, factor);
-}
-
-export function smoothPosition(
-  current: THREE.Vector3,
-  target: THREE.Vector3,
-  dampening: number,
-  maxSpeed?: number
-): THREE.Vector3 {
-  const delta = target.clone().sub(current);
-  const distance = delta.length();
-  
-  if (maxSpeed && distance > maxSpeed) {
-    delta.normalize().multiplyScalar(maxSpeed);
-  }
-  
-  return current.clone().add(delta.multiplyScalar(dampening));
 }
 
 interface OneEuroFilterState {

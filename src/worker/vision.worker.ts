@@ -205,8 +205,4 @@ self.onmessage = async (event: MessageEvent) => {
   }
 };
 
-setInterval(() => {
-  postMessage({ type: 'pong' });
-}, 30000);
-
 postMessage({ type: 'worker_ready' });

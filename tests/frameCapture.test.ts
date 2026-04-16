@@ -1,50 +1,42 @@
-import { captureFrame, captureVideoFrame, captureCanvasFrame, captureAndTransfer } from '../src/utils/frameCapture';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { captureFrame } from '../src/utils/frameCapture';
 import { CONFIG } from '@/config';
-import * as THREE from 'three';
-import { ImageBitmap } from 'image-bitmap';
 
-// Mock browser and Canvas APIs for testing purposes
-global.OffscreenCanvas = class MockOffscreenCanvas {
-  constructor(width, height) {
-    this.width = width;
-    this.height = height;
-  }
-  getContext(type) {
-    return { drawImage: jest.fn(), transferToImageBitmap: jest.fn() };
-  }
-};
-global.OffscreenCanvasRenderingContext2D = class MockContext {
-  drawImage = jest.fn();
-};
-global.document = {
-  createElement: jest.fn(() => ({
-    width: CONFIG.TARGET_SIZE,
-    height: CONFIG.TARGET_SIZE,
-    getContext: jest.fn(() => ({ drawImage: jest.fn() })),
-  })),
-};
-global.createImageBitmap = jest.fn(() => Promise.resolve(new ImageBitmap()));
-
-// Mock the shared state management to ensure isolation
-let sharedCanvas = null;
-let sharedCtx = null;
-
-jest.mock('../src/utils/frameCapture', () => ({
-  // Mock the functions to isolate the logic we want to test
-  captureFrame: jest.fn(),
-  captureVideoFrame: jest.fn(),
-  captureCanvasFrame: jest.fn(),
-  captureAndTransfer: jest.fn(),
-}));
-
-// Assuming captureFrame is the main logic to test
-const { captureFrame } = require('../src/utils/frameCapture');
+// Mock ImageBitmap
+class MockImageBitmap {
+  width = CONFIG.TARGET_SIZE;
+  height = CONFIG.TARGET_SIZE;
+  close = vi.fn();
+}
 
 describe('Frame Capture Utilities', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Reset shared state if necessary for isolated tests
-    // (In a real scenario, we would mock the module itself to control state)
+    vi.clearAllMocks();
+    
+    // Mock OffscreenCanvas
+    if (typeof OffscreenCanvas === 'undefined') {
+      (global as any).OffscreenCanvas = class MockOffscreenCanvas {
+        width: number;
+        height: number;
+        constructor(width: number, height: number) {
+          this.width = width;
+          this.height = height;
+        }
+        getContext() {
+          return {
+            drawImage: vi.fn(),
+          };
+        }
+        transferToImageBitmap() {
+          return new MockImageBitmap();
+        }
+      };
+    }
+
+    // Mock createImageBitmap
+    if (typeof createImageBitmap === 'undefined') {
+      (global as any).createImageBitmap = vi.fn().mockResolvedValue(new MockImageBitmap());
+    }
   });
 
   it('should return null if source is invalid', async () => {
@@ -53,21 +45,29 @@ describe('Frame Capture Utilities', () => {
   });
 
   it('should successfully downsample from a video element', async () => {
-    const mockBitmap = new ImageBitmap();
-    // Mock the successful execution path
-    captureFrame.mockResolvedValue(mockBitmap);
-    
-    // @ts-ignore
-    const bitmap = await captureFrame(new HTMLVideoElement());
-    expect(bitmap).toBe(mockBitmap);
+    const mockVideo = {
+      videoWidth: 1920,
+      videoHeight: 1080,
+    } as unknown as HTMLVideoElement;
+
+    const bitmap = await captureFrame(mockVideo);
+    expect(bitmap).toBeInstanceOf(MockImageBitmap);
   });
 
-  it('should handle context errors gracefully', async () => {
-    // Simulate failure during downsampling
-    captureFrame.mockRejectedValue(new Error('Context failed'));
+  it('should handle missing canvas context gracefully', async () => {
+    // Force getContext to return null
+    const originalGetContext = OffscreenCanvas.prototype.getContext;
+    OffscreenCanvas.prototype.getContext = vi.fn().mockReturnValue(null);
 
-    // @ts-ignore
-    const bitmap = await captureFrame(new HTMLVideoElement());
+    const mockVideo = {
+      videoWidth: 100,
+      videoHeight: 100,
+    } as unknown as HTMLVideoElement;
+
+    const bitmap = await captureFrame(mockVideo);
     expect(bitmap).toBeNull();
+
+    // Restore
+    OffscreenCanvas.prototype.getContext = originalGetContext;
   });
 });

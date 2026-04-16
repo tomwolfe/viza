@@ -1,8 +1,9 @@
+import { describe, it, expect, vi } from 'vitest';
 import { categorizeObject, generateObjectId, getCategoryColor, getCategoryLabel, ObjectCategory } from '../src/utils/objectProcessing';
 import { CONFIG } from '@/config';
 
 // Mock CONFIG to ensure test isolation
-jest.mock('@/config', () => ({
+vi.mock('@/config', () => ({
   CONFIG: {
     CATEGORIES: {
       TOOL: { keywords: ['hammer', 'wrench', 'drill'] },
