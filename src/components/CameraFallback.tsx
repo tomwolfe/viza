@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { captureVideoFrame } from '@/utils/frameCapture';
+import { MediaProcessor } from '@/utils/frameCapture';
 import { useCamera } from '@/hooks/useCamera';
 
 interface CameraFallbackProps {
@@ -76,12 +76,12 @@ function VideoPlane({ video }: VideoPlaneProps) {
 }
 
 export function useFrameCapture() {
-  const captureFrame = async (video: HTMLVideoElement | null): Promise<ImageBitmap | null> => {
+  const captureFrame = (video: HTMLVideoElement | null): ImageBitmap | null => {
     if (!video || !video.videoWidth || !video.videoHeight) {
       return null;
     }
 
-    return captureVideoFrame(video);
+    return MediaProcessor.captureVideoFrame(video);
   };
 
   return { captureFrame };

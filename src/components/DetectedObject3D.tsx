@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
@@ -18,7 +19,7 @@ interface DetectedObject3DProps {
   position?: THREE.Vector3;
 }
 
-export function DetectedObject3D({ obj, index, isTarget, targetName, useCategoryColor, categoryColor, position }: DetectedObject3DProps) {
+export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isTarget, targetName, useCategoryColor, categoryColor, position }: DetectedObject3DProps) {
   const { worldPosition, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
 
   const isCurrentTarget = isTarget && targetName && obj.name.toLowerCase().includes(targetName.toLowerCase());
@@ -46,4 +47,4 @@ export function DetectedObject3D({ obj, index, isTarget, targetName, useCategory
       />
     </group>
   );
-}
+});

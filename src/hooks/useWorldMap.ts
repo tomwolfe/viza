@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { CONFIG, logger } from '@/config';
+import { createOneEuroFilter } from '@/utils/spatial';
 
 export interface WorldObject {
   id: string;
@@ -15,6 +16,7 @@ export interface WorldObject {
   lastSeen: number;
   detectionCount: number;
   smoothedPosition: THREE.Vector3;
+  filter?: (value: THREE.Vector3, timestamp: number) => THREE.Vector3;
 }
 
 export type ObjectCategory = 'tool' | 'trash' | 'clutter' | 'keep' | 'unknown';
@@ -77,6 +79,7 @@ function loadWorldMapFromStorage(): Map<string, WorldObject> {
             value.smoothedPosition?.y ?? value.position.y,
             value.smoothedPosition?.z ?? value.position.z
           ),
+          filter: filterFactory(),
         });
       });
     }
@@ -91,10 +94,19 @@ function saveWorldMapToStorage(map: Map<string, WorldObject>): void {
   safeSet(data, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
 }
 
+const { ONE_EURO } = CONFIG.SPATIAL;
+const filterFactory = () => createOneEuroFilter(
+  new THREE.Vector3(),
+  ONE_EURO.MIN_CUTOFF,
+  ONE_EURO.BETA,
+  ONE_EURO.DCUTOFF
+);
+
 export function useWorldMap(): UseWorldMapReturn {
   const worldMapRef = useRef<Map<string, WorldObject>>(loadWorldMapFromStorage());
   const dampeningRef = useRef(DEFAULT_DAMPENING);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filterCacheRef = useRef<Map<string, (value: THREE.Vector3, timestamp: number) => THREE.Vector3>>(new Map());
 
   useEffect(() => {
     const map = worldMapRef.current;
@@ -117,14 +129,24 @@ export function useWorldMap(): UseWorldMapReturn {
     const category = categorizeObject(obj.name, obj.action);
 
     const existingKey = findExistingObjectKey(map, position, CONFIG.SPATIAL.DISTANCE_THRESHOLD, obj.name);
+    const timestamp = performance.now();
 
     if (existingKey) {
       const existing = map.get(existingKey)!;
-      const smoothed = existing.smoothedPosition.clone().lerp(position, dampeningRef.current);
+      
+      let filter = existing.filter;
+      if (!filter) {
+        filter = filterFactory();
+        filter(position.clone(), timestamp);
+      }
+      
+      const filteredPosition = filter(position.clone(), timestamp);
+      
       const updated: WorldObject = {
         ...existing,
         position: position.clone(),
-        smoothedPosition: smoothed,
+        smoothedPosition: filteredPosition,
+        filter,
         category: category !== 'unknown' ? category : existing.category,
         confidence: obj.confidence ?? existing.confidence,
         lastSeen: Date.now(),
@@ -133,6 +155,9 @@ export function useWorldMap(): UseWorldMapReturn {
       map.set(existingKey, updated);
     } else {
       const key = generateObjectId(obj.name, position);
+      const filter = filterFactory();
+      filter(position.clone(), timestamp);
+      
       const newObj: WorldObject = {
         id: key,
         name: obj.name,
@@ -142,6 +167,7 @@ export function useWorldMap(): UseWorldMapReturn {
         confidence: obj.confidence ?? 1,
         lastSeen: Date.now(),
         detectionCount: 1,
+        filter,
       };
       map.set(key, newObj);
     }

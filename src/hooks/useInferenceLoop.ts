@@ -40,7 +40,7 @@ interface UseInferenceLoopOptions {
     image: ImageBitmap,
     prompt: string
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
-  captureFrame: (video: HTMLVideoElement | null) => Promise<ImageBitmap | null>;
+  captureFrame: (video: HTMLVideoElement | null) => ImageBitmap | null;
   onObjectsDetected: (objects: DetectedObject[]) => void;
   intervalMs?: number;
   isActive?: boolean;
@@ -86,7 +86,7 @@ export function useInferenceLoop({
 
       let frame: ImageBitmap | null = null;
       try {
-        frame = await captureFrame(frameRef.current);
+        frame = captureFrame(frameRef.current);
         if (!frame) {
           statusRef.current = 'idle';
           dispatch({ type: 'RESET' });

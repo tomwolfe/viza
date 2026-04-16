@@ -5,19 +5,9 @@ import type { VisionResponse, TaskStep } from '@/schemas/vision';
 import { checkWebGPU, CONFIG, SYSTEM_PROMPT, logger } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
-
-const HEARTBEAT_INTERVAL_MS = 30000;
-const HEARTBEAT_TIMEOUT_MS = 60000;
+import { WorkerClient } from '@/utils/workerClient';
 
 type InferenceResult = VisionResponse | null | TaskStep[];
-
-interface PendingRequest {
-  type: InferenceType;
-  resolve: (value: InferenceResult) => void;
-  timeoutId: ReturnType<typeof setTimeout>;
-  image?: ImageBitmap;
-  sequenceNumber: number;
-}
 
 type InferenceType = 'chat' | 'planning' | 'category';
 
@@ -54,15 +44,11 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
   const [lastCompleted, setLastCompleted] = useState(false);
 
-  const workerRef = useRef<Worker | null>(null);
+  const workerClientRef = useRef<WorkerClient | null>(null);
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
-  const pendingRef = useRef<Map<string, PendingRequest>>(new Map());
-  const isInitializedRef = useRef(false);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const lastPongRef = useRef<number>(0);
-  const reconnectAttemptRef = useRef<number>(0);
-  const sequenceNumberRef = useRef<number>(0);
+  const isInitializedRef = useRef(false);
+  const pendingResolvesRef = useRef<Map<string, (value: InferenceResult) => void>>(new Map());
 
   useEffect(() => {
     checkWebGPU().then((result) => {
@@ -78,141 +64,99 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    if (!workerRef.current) {
-      workerRef.current = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
-        type: 'module',
-      });
-    }
-    const worker = workerRef.current;
-    workerRef.current = worker;
-
-    worker.onmessage = (event) => {
-      const { type, errorCode, ...data } = event.data as { type: string; messageId?: string; response?: unknown; completed?: boolean; message?: string; progress?: number; errorCode?: string };
-
-      switch (type) {
-        case 'worker_ready':
-          break;
-
-        case 'init_progress':
-          setModelProgress(data.progress ?? 0);
+    const client = new WorkerClient({
+      onReady: () => {
+        logger.info('[WebLLM] Worker ready');
+      },
+      onProgress: (progress) => {
+        setModelProgress(progress);
+        if (progress > 0 && progress < 100) {
           setIsModelLoading(true);
-          break;
-
-        case 'init_complete':
-          setIsModelLoading(false);
-          setIsModelReady(true);
-          setModelProgress(100);
-          break;
-
-        case 'inference_complete':
-          setIsInferring(false);
-          setLastCompleted(data.completed || false);
-          if (data.messageId) {
-            const pending = pendingRef.current.get(data.messageId);
-            if (pending && pending.sequenceNumber === sequenceNumberRef.current) {
-              clearTimeout(pending.timeoutId);
-              pendingRef.current.delete(data.messageId);
-              if (pending.type === 'planning') {
-                const validated = parsePlanningResponse(data.response);
-                if (validated && validated.taskSteps) {
-                  pending.resolve(validated.taskSteps);
-                } else {
-                  pending.resolve([]);
-                  setError('Invalid planning response from worker');
-                }
-              } else {
-                const validated = parseVisionResponse(data.response);
-                if (validated) {
-                  pending.resolve(validated);
-                } else {
-                  pending.resolve(null);
-                  setError('Invalid response schema from worker');
-                }
-              }
-            }
-          }
-          break;
-
-        case 'planning_complete':
-          setIsInferring(false);
-          if (data.messageId) {
-            const pending = pendingRef.current.get(data.messageId);
-            if (pending && pending.sequenceNumber === sequenceNumberRef.current) {
-              clearTimeout(pending.timeoutId);
-              pendingRef.current.delete(data.messageId);
-              const validated = parsePlanningResponse(data.response);
-              if (validated && validated.taskSteps) {
-                pending.resolve(validated.taskSteps);
-              } else {
-                pending.resolve([]);
-                setError('Invalid planning response from worker');
-              }
-            }
-          }
-          break;
-
-        case 'error':
-          logger.error('[WebLLM] Error:', data.message);
-          setError(data.message ?? 'Unknown worker error');
-          const code = errorCode as VizaErrorCode | undefined;
-          setErrorCode(code ?? 'WORKER_INIT_FAILED');
-          setIsModelLoading(false);
-          setIsInferring(false);
-          if (data.messageId) {
-            const pending = pendingRef.current.get(data.messageId);
-            if (pending) {
-              clearTimeout(pending.timeoutId);
-              pendingRef.current.delete(data.messageId);
-              if (pending.type === 'planning') {
-                pending.resolve([]);
-              } else {
-                pending.resolve(null);
-              }
-            }
-          }
-          break;
-
-        case 'pong':
-          lastPongRef.current = Date.now();
-          break;
-
-        case 'warning':
-          break;
-
-        default:
-          break;
-      }
-    };
-
-    worker.onerror = (errorEvent) => {
-      logger.error('[WebLLM] Worker error:', errorEvent);
-      setError(`Worker error: ${errorEvent.message}`);
-      setErrorCode('WORKER_CRASHED');
-      setIsModelLoading(false);
-      setIsInferring(false);
-
-      pendingRef.current.forEach((pending, messageId) => {
-        clearTimeout(pending.timeoutId);
-        if (pending.type === 'planning') {
-          pending.resolve([]);
-        } else {
-          pending.resolve(null);
         }
-      });
-      pendingRef.current.clear();
-    };
+      },
+      onComplete: (messageId, response, completed) => {
+        setIsInferring(false);
+        setLastCompleted(completed ?? false);
+        
+        const resolve = pendingResolvesRef.current.get(messageId);
+        if (resolve) {
+          pendingResolvesRef.current.delete(messageId);
+          const validated = parseVisionResponse(response);
+          resolve(validated);
+        }
+      },
+      onPlanningComplete: (messageId, response) => {
+        setIsInferring(false);
+        
+        const resolve = pendingResolvesRef.current.get(messageId);
+        if (resolve) {
+          pendingResolvesRef.current.delete(messageId);
+          const validated = parsePlanningResponse(response);
+          resolve(validated?.taskSteps ?? []);
+        }
+      },
+      onError: (message, code, messageId) => {
+        logger.error('[WebLLM] Error:', message);
+        setError(message);
+        setErrorCode(code);
+        setIsModelLoading(false);
+        setIsInferring(false);
+
+        if (messageId) {
+          const resolve = pendingResolvesRef.current.get(messageId);
+          if (resolve) {
+            pendingResolvesRef.current.delete(messageId);
+            resolve(null);
+          }
+        }
+      },
+      onPong: () => {},
+      onUnresponsive: () => {
+        logger.warn('[WebLLM] Worker unresponsive');
+        setError('AI Engine Lost - Restarting...');
+        setIsModelReady(false);
+      },
+      inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
+      planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
+    });
+
+    client.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
+    workerClientRef.current = client;
 
     return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-      isInitializedRef.current = false;
+      client.stopHeartbeat();
+      client.terminate();
     };
   }, []);
 
+  const initModelInternal = useCallback(async () => {
+    if (!workerClientRef.current) return;
+    
+    const client = workerClientRef.current;
+    client.setModelReady(false);
+    setIsModelReady(false);
+    setModelProgress(0);
+    setIsModelLoading(true);
+    setError(null);
+
+    try {
+      await client.init(modelIdRef.current, SYSTEM_PROMPT);
+      setIsModelLoading(false);
+      setIsModelReady(true);
+      setModelProgress(100);
+      client.startHeartbeat(() => {
+        setError(null);
+        initModelInternal();
+      });
+    } catch (err) {
+      setError((err as Error).message);
+      setErrorCode('WORKER_INIT_FAILED');
+      setIsModelLoading(false);
+    }
+  }, []);
+
   const initModel = useCallback(async () => {
-    if (!workerRef.current) {
+    if (!workerClientRef.current) {
       setError('Worker not initialized');
       return;
     }
@@ -222,24 +166,17 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       return;
     }
 
-    setIsModelLoading(true);
-    setModelProgress(0);
-    setError(null);
+    await initModelInternal();
+  }, [isDeviceCompatible, initModelInternal]);
 
-    workerRef.current.postMessage({
-      type: 'init',
-      model: modelIdRef.current,
-      systemPrompt: SYSTEM_PROMPT,
-    });
-  }, [isDeviceCompatible]);
-
-  const _dispatchInference = useCallback(
+  const dispatchInference = useCallback(
     async (
       image: ImageBitmap,
       prompt: string,
       inferenceType: InferenceType
     ): Promise<InferenceResult> => {
-      if (!workerRef.current || !isModelReady) {
+      const client = workerClientRef.current;
+      if (!client || !client.isModelReady()) {
         setError('Model not ready. Call initModel first.');
         return inferenceType === 'planning' ? [] : null;
       }
@@ -253,120 +190,67 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       setError(null);
 
       const messageId = crypto.randomUUID();
-      const sequenceNumber = ++sequenceNumberRef.current;
-      const timeoutMs = inferenceType === 'planning' ? CONFIG.PLANNING_TIMEOUT_MS : CONFIG.INFERENCE_TIMEOUT_MS;
-      const defaultValue: InferenceResult = inferenceType === 'planning' ? [] : null;
 
       return new Promise<InferenceResult>((resolve) => {
-        const timeoutId = setTimeout(() => {
-          if (pendingRef.current.has(messageId)) {
-            pendingRef.current.delete(messageId);
-            setError(`${inferenceType === 'planning' ? 'Planning' : inferenceType === 'category' ? 'Category' : 'Inference'} timeout after ${timeoutMs / 1000}s`);
-            setErrorCode('INFERENCE_TIMEOUT');
+        pendingResolvesRef.current.set(messageId, resolve);
+
+        if (inferenceType === 'planning') {
+          client.planning(image, prompt, messageId).catch((err) => {
+            setError(err.message);
+            setErrorCode('INFERENCE_ERROR');
             setIsInferring(false);
-            resolve(defaultValue);
-          }
-        }, timeoutMs);
-
-        pendingRef.current.set(messageId, { type: inferenceType, resolve, timeoutId, sequenceNumber });
-
-        const payload = {
-          type: inferenceType,
-          messageId,
-          image,
-          prompt,
-          goal: prompt,
-        };
-
-        workerRef.current!.postMessage(payload, [image]);
+            resolve([]);
+          });
+        } else if (inferenceType === 'category') {
+          client.category(image, prompt, messageId).catch((err) => {
+            setError(err.message);
+            setErrorCode('INFERENCE_ERROR');
+            setIsInferring(false);
+            resolve(null);
+          });
+        } else {
+          client.chat(image, prompt, messageId).catch((err) => {
+            setError(err.message);
+            setErrorCode('INFERENCE_ERROR');
+            setIsInferring(false);
+            resolve(null);
+          });
+        }
       });
     },
-    [isModelReady]
+    []
   );
 
   const runInference = useCallback(
-    async (
-      image: ImageBitmap,
-      prompt: string
-    ): Promise<VisionResponse | null> => {
-      const result = await _dispatchInference(image, prompt, 'chat');
+    async (image: ImageBitmap, prompt: string): Promise<VisionResponse | null> => {
+      const result = await dispatchInference(image, prompt, 'chat');
       return result as VisionResponse | null;
     },
-    [_dispatchInference]
+    [dispatchInference]
   );
 
   const runPlanningInference = useCallback(
     async (image: ImageBitmap, goal: string): Promise<TaskStep[]> => {
-      const result = await _dispatchInference(image, goal, 'planning');
+      const result = await dispatchInference(image, goal, 'planning');
       return result as TaskStep[];
     },
-    [_dispatchInference]
+    [dispatchInference]
   );
 
   const runCategoryInference = useCallback(
     async (image: ImageBitmap, goal: string): Promise<VisionResponse | null> => {
-      const result = await _dispatchInference(image, goal, 'category');
+      const result = await dispatchInference(image, goal, 'category');
       return result as VisionResponse | null;
     },
-    [_dispatchInference]
+    [dispatchInference]
   );
 
-  useEffect(() => {
-    const worker = workerRef.current;
-    if (!worker) return;
-
-    const startHeartbeat = () => {
-      heartbeatRef.current = setInterval(() => {
-        const timeSinceLastPong = Date.now() - lastPongRef.current;
-        
-        if (timeSinceLastPong > HEARTBEAT_TIMEOUT_MS) {
-          logger.warn('[WebLLM] Worker unresponsive, attempting reconnect...');
-          setError('AI Engine Lost - Restarting...');
-          setIsModelReady(false);
-          reconnectAttemptRef.current += 1;
-          
-          if (reconnectAttemptRef.current <= 3) {
-            worker.terminate();
-            isInitializedRef.current = false;
-            
-            const newWorker = new Worker(new URL('../worker/vision.worker.ts', import.meta.url), {
-              type: 'module',
-            });
-            workerRef.current = newWorker;
-            
-            setTimeout(() => {
-              setError(null);
-              initModel();
-            }, 1000);
-          } else {
-            setError('AI Engine recovery failed after 3 attempts');
-            setErrorCode('WORKER_INIT_FAILED');
-          }
-          return;
-        }
-        
-        worker.postMessage({ type: 'ping' });
-      }, HEARTBEAT_INTERVAL_MS);
-    };
-
-    startHeartbeat();
-
-    return () => {
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current);
-      }
-    };
-  }, [initModel]);
-
   const dispose = useCallback(() => {
-    pendingRef.current.forEach(({ timeoutId }) => clearTimeout(timeoutId));
-    pendingRef.current.clear();
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-    }
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
+    pendingResolvesRef.current.clear();
+    if (workerClientRef.current) {
+      workerClientRef.current.stopHeartbeat();
+      workerClientRef.current.terminate();
+      workerClientRef.current = null;
     }
     isInitializedRef.current = false;
     setIsModelReady(false);

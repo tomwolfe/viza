@@ -27,12 +27,17 @@ export interface WorkerClientOptions {
   onError?: (message: string, code: VizaErrorCode, messageId?: string) => void;
   onWarning?: (message: string) => void;
   onPong?: () => void;
+  onUnresponsive?: () => void;
   inferenceTimeoutMs?: number;
   planningTimeoutMs?: number;
+  heartbeatIntervalMs?: number;
+  heartbeatTimeoutMs?: number;
 }
 
 const DEFAULT_INFERENCE_TIMEOUT = 15000;
 const DEFAULT_PLANNING_TIMEOUT = 30000;
+const DEFAULT_HEARTBEAT_INTERVAL = 30000;
+const DEFAULT_HEARTBEAT_TIMEOUT = 60000;
 
 export class WorkerClient {
   private worker: Worker | null = null;
@@ -41,6 +46,12 @@ export class WorkerClient {
   private isInitialized = false;
   private options: Required<WorkerClientOptions>;
   private messageHandlers: Map<string, (data: Record<string, unknown>) => void> = new Map();
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private lastPongTime = 0;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
+  private onReconnect: (() => void) | null = null;
+  private isModelReadyState = false;
 
   constructor(options: WorkerClientOptions = {}) {
     this.options = {
@@ -51,8 +62,11 @@ export class WorkerClient {
       onError: options.onError ?? (() => {}),
       onWarning: options.onWarning ?? (() => {}),
       onPong: options.onPong ?? (() => {}),
+      onUnresponsive: options.onUnresponsive ?? (() => {}),
       inferenceTimeoutMs: options.inferenceTimeoutMs ?? DEFAULT_INFERENCE_TIMEOUT,
       planningTimeoutMs: options.planningTimeoutMs ?? DEFAULT_PLANNING_TIMEOUT,
+      heartbeatIntervalMs: options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL,
+      heartbeatTimeoutMs: options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT,
     };
   }
 
@@ -74,6 +88,58 @@ export class WorkerClient {
     };
 
     this.isInitialized = this.isInitialized || true;
+
+    this.lastPongTime = Date.now();
+  }
+
+  startHeartbeat(onReconnect: () => void): void {
+    this.onReconnect = onReconnect;
+    this.lastPongTime = Date.now();
+    this.reconnectAttempts = 0;
+
+    this.heartbeatInterval = setInterval(() => {
+      const timeSinceLastPong = Date.now() - this.lastPongTime;
+      
+      if (timeSinceLastPong > this.options.heartbeatTimeoutMs) {
+        this.handleUnresponsive();
+        return;
+      }
+      
+      this.ping();
+    }, this.options.heartbeatIntervalMs);
+  }
+
+  stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  private handleUnresponsive(): void {
+    this.options.onUnresponsive();
+    
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.options.onError('AI Engine recovery failed after 3 attempts', 'WORKER_INIT_FAILED');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    this.terminate();
+    this.isInitialized = false;
+    
+    setTimeout(() => {
+      this.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
+      this.onReconnect?.();
+    }, 1000);
+  }
+
+  setModelReady(ready: boolean): void {
+    this.isModelReadyState = ready;
+  }
+
+  isModelReady(): boolean {
+    return this.isModelReadyState;
   }
 
   private handleMessage(data: Record<string, unknown>): void {
@@ -89,6 +155,7 @@ export class WorkerClient {
         break;
 
       case 'init_complete':
+        this.isModelReadyState = true;
         this.options.onProgress(100);
         break;
 
@@ -129,6 +196,7 @@ export class WorkerClient {
         break;
 
       case 'pong':
+        this.lastPongTime = Date.now();
         this.options.onPong();
         break;
 

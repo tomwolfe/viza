@@ -45,6 +45,18 @@ function mapMediaToError(err: Error): CameraError {
       message: 'No camera found. Please connect a camera and try again.',
     };
   }
+  if (domErr.name === 'OverconstrainedError') {
+    return {
+      code: 'CAMERA_XR_UNAVAILABLE',
+      message: 'Camera constraints cannot be satisfied. Try selecting a different camera.',
+    };
+  }
+  if (domErr.name === 'NotReadableError') {
+    return {
+      code: 'CAMERA_XR_UNAVAILABLE',
+      message: 'Camera is in use by another application. Please close other apps using the camera.',
+    };
+  }
   return {
     code: 'CAMERA_XR_UNAVAILABLE',
     message: err.message || 'Unknown camera error',

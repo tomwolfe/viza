@@ -1,7 +1,7 @@
 'use client';
 
+import { memo, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
-import { useMemo, useEffect } from 'react';
 
 const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 
@@ -12,7 +12,7 @@ interface BoundingBoxProps {
   opacity?: number;
 }
 
-export function BoundingBox({ width, height, color, opacity = 0.15 }: BoundingBoxProps) {
+export const BoundingBox = memo(function BoundingBox({ width, height, color, opacity = 0.15 }: BoundingBoxProps) {
   const boxWidth = Math.max(width, 0.1);
   const boxHeight = Math.max(height, 0.1);
   const boxScale: [number, number, number] = [boxWidth, boxHeight, 1];
@@ -60,4 +60,4 @@ export function BoundingBox({ width, height, color, opacity = 0.15 }: BoundingBo
       </lineSegments>
     </group>
   );
-}
+});
