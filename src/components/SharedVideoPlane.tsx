@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useMemo } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface SharedVideoPlaneProps {
@@ -18,6 +18,7 @@ export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
     newTexture.magFilter = THREE.LinearFilter;
     newTexture.format = THREE.RGBAFormat;
     newTexture.colorSpace = THREE.SRGBColorSpace;
+    newTexture.needsUpdate = true;
     return newTexture;
   }, [video]);
 
@@ -30,10 +31,6 @@ export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
       texture.dispose();
     };
   }, [texture]);
-
-  useFrame(() => {
-    texture.updateMatrix();
-  });
 
   return (
     <mesh ref={meshRef} position={[0, 0, -5]} scale={planeScale}>

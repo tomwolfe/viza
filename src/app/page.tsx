@@ -9,7 +9,6 @@ import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useT
 import type { DetectedObject } from '@/schemas/vision';
 import { logger } from '@/config';
 import { ARScene } from '@/components/ARScene';
-import { PlaceholderScene } from '@/components/PlaceholderScene';
 import AROverlay from '@/components/AROverlay';
 import ARControls from '@/components/ARControls';
 
@@ -186,7 +185,7 @@ function ARContent() {
               speak={speak}
             />
           ) : (
-            <PlaceholderScene />
+            <color attach="background" args={['#1a1a1a']} />
           )}
         </Canvas>
       </ErrorBoundary>

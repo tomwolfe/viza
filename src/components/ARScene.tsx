@@ -6,6 +6,7 @@ import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from './CameraFallback';
 import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
 import { useCamera } from '@/hooks/useCamera';
+import { useWebLLM } from '@/contexts/WebLLMContext';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG, logger } from '@/config';
 import * as THREE from 'three';
@@ -45,6 +46,7 @@ export function ARScene({
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
   const { videoElement } = useCamera({ isActive: isARActive && isModelReady });
+  const { isInferring } = useWebLLM();
 
   useEffect(() => {
     setWorldObjects(getAllObjects());
@@ -77,10 +79,11 @@ export function ARScene({
   }, [voiceCommand, isModelReady]);
 
   const { captureFrame } = useFrameCapture();
-  const { setVideoSource, setActive, run, cancelPending } = useInferenceLoop({
+  const { setVideoSource, run, cancelPending } = useInferenceLoop({
     runInference,
     captureFrame,
     onObjectsDetected: handleObjectsDetected,
+    isInferring,
     intervalMs: CONFIG.INFERENCE_INTERVAL,
     isActive: isARActive && isModelReady,
   });
@@ -95,13 +98,9 @@ export function ARScene({
     if (voiceCommand && voiceCommand !== lastVoiceCommandRef.current && isModelReady) {
       lastVoiceCommandRef.current = voiceCommand;
       cancelPending();
-      run(voiceCommand, true);
+      run(voiceCommand);
     }
   }, [voiceCommand, isModelReady, run, cancelPending]);
-
-  useEffect(() => {
-    setActive(isARActive && isModelReady);
-  }, [isARActive, isModelReady, setActive]);
 
   if (!isARActive) return null;
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useInferenceLoop, type InferenceStatus } from '@/hooks/useInferenceLoop';
+import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import type { DetectedObject } from '@/schemas/vision';
 
 vi.useFakeTimers();
@@ -32,7 +32,7 @@ describe('useInferenceLoop', () => {
     vi.useRealTimers();
   });
 
-  it('should initialize with idle status', async () => {
+  it('should not start inference when already inferring', async () => {
     const runInference = vi.fn().mockResolvedValue({
       objects: mockDetectedObjects,
       rawText: 'test response',
@@ -46,14 +46,19 @@ describe('useInferenceLoop', () => {
         runInference,
         captureFrame,
         onObjectsDetected,
+        isInferring: true,
         intervalMs: 4000,
       })
     );
 
-    expect(result.current.status).toBe('idle');
+    act(() => {
+      result.current.run('test prompt');
+    });
+
+    expect(runInference).not.toHaveBeenCalled();
   });
 
-  it('should transition through status states during inference', async () => {
+  it('should process frame when not inferring', async () => {
     const captureFrame = vi.fn().mockImplementation(() => {
       return createMockImageBitmap();
     });
@@ -69,62 +74,64 @@ describe('useInferenceLoop', () => {
       useInferenceLoop({
         runInference,
         captureFrame,
+        isInferring: false,
         onObjectsDetected,
         intervalMs: 4000,
       })
     );
 
-    const executePromise = result.current.run('test prompt');
+    result.current.run('test prompt');
 
     await act(async () => {
-      vi.advanceTimersByTime(10);
+      vi.advanceTimersByTime(60);
     });
 
-    expect(result.current.status).toBe('capturing');
-
-    await act(async () => {
-      vi.advanceTimersByTime(50);
-    });
-
-    await executePromise;
-
-    expect(result.current.status).toBe('idle');
+    expect(runInference).toHaveBeenCalled();
   });
 
-  it('should abort previous inference when voice triggered', async () => {
-    const captureFrame = vi.fn().mockResolvedValue(createMockImageBitmap());
-
-    let callCount = 0;
-    const runInference = vi.fn().mockImplementation(async () => {
-      callCount++;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return { objects: callCount === 1 ? mockDetectedObjects : [] };
-    });
-
+  it('should not set up interval when not active', async () => {
+    const runInference = vi.fn();
+    const captureFrame = vi.fn();
     const onObjectsDetected = vi.fn();
 
-    const { result } = renderHook(() =>
+    renderHook(() =>
       useInferenceLoop({
         runInference,
         captureFrame,
         onObjectsDetected,
+        isInferring: false,
+        isActive: false,
         intervalMs: 4000,
       })
     );
 
-    const firstPromise = result.current.run('first prompt');
-
-    await act(async () => {
-      vi.advanceTimersByTime(10);
+    act(() => {
+      vi.advanceTimersByTime(5000);
     });
 
-    expect(result.current.status).toBe('capturing');
+    expect(runInference).not.toHaveBeenCalled();
+  });
 
-    const secondPromise = result.current.run('second prompt', true);
+  it('should set up interval when active', async () => {
+    const runInference = vi.fn().mockResolvedValue({ objects: mockDetectedObjects });
+    const captureFrame = vi.fn().mockReturnValue(createMockImageBitmap());
+    const onObjectsDetected = vi.fn();
 
-    await firstPromise;
-    await secondPromise;
+    renderHook(() =>
+      useInferenceLoop({
+        runInference,
+        captureFrame,
+        onObjectsDetected,
+        isInferring: false,
+        isActive: true,
+        intervalMs: 4000,
+      })
+    );
 
-    expect(result.current.status).toBe('idle');
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(runInference).toHaveBeenCalled();
   });
 });

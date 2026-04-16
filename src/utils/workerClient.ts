@@ -16,7 +16,6 @@ export interface PendingRequest<T> {
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   type: 'chat' | 'planning' | 'category';
-  sequenceNumber: number;
 }
 
 export interface WorkerClientOptions {
@@ -42,7 +41,6 @@ const DEFAULT_HEARTBEAT_TIMEOUT = 60000;
 export class WorkerClient {
   private worker: Worker | null = null;
   private pendingRequests: Map<string, PendingRequest<unknown>> = new Map();
-  private sequenceNumber = 0;
   private isInitialized = false;
   private options: Required<WorkerClientOptions>;
   private messageHandlers: Map<string, (data: Record<string, unknown>) => void> = new Map();
@@ -240,7 +238,6 @@ export class WorkerClient {
     }
 
     const messageId = this.createRequestId();
-    const seqNum = ++this.sequenceNumber;
     const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : 'chat';
 
     return new Promise<T>((resolve, reject) => {
@@ -251,7 +248,6 @@ export class WorkerClient {
         reject,
         timeoutId,
         type: inferenceType,
-        sequenceNumber: seqNum,
       });
 
       this.worker!.postMessage(

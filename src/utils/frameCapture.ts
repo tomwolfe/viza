@@ -95,11 +95,7 @@ export class MediaProcessor {
   ): Promise<void> {
     const bitmap = this.captureFrame(source);
     if (bitmap) {
-      try {
-        onTransfer(bitmap);
-      } finally {
-        bitmap.close();
-      }
+      onTransfer(bitmap);
     }
   }
 }

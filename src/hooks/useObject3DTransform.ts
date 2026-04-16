@@ -54,8 +54,8 @@ export function useObject3DTransform({ obj, index, position }: UseObject3DTransf
     [x, y, width, height, cameraPerspective, worldDepth, targetSize]
   );
 
-  const boxWidth = Math.max(size.width, 0.1);
-  const boxHeight = Math.max(size.height, 0.1);
+  const boxWidth = Math.max(size.width, SPATIAL.MIN_BOX_SIZE);
+  const boxHeight = Math.max(size.height, SPATIAL.MIN_BOX_SIZE);
 
   return {
     worldPosition,
