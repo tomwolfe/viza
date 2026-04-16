@@ -177,9 +177,9 @@ export function createOneEuroFilter(
 ): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
   const lastValue = initialValue.clone();
   const filteredResult = new THREE.Vector3();
-  const dx = new THREE.Vector3();
-  const dy = new THREE.Vector3();
-  const dz = new THREE.Vector3();
+  let dx = new THREE.Vector3();
+  let dy = new THREE.Vector3();
+  let dz = new THREE.Vector3();
 
   const state: OneEuroFilterState = {
     lastValue,
