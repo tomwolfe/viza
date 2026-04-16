@@ -46,7 +46,6 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const [lastCompleted, setLastCompleted] = useState(false);
 
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
-  const pendingResolvesRef = useRef<Map<string, (value: InferenceResult) => void>>(new Map());
   const workerClientRef = useRef<WorkerClient | null>(null);
   const isInitializedRef = useRef(false);
   const isModelReadyRef = useRef(false);
@@ -73,41 +72,12 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           setIsModelLoading(true);
         }
       },
-      onComplete: (messageId, response, completed) => {
-        setIsInferring(false);
-        setLastCompleted(completed ?? false);
-
-        const resolve = pendingResolvesRef.current.get(messageId);
-        if (resolve) {
-          pendingResolvesRef.current.delete(messageId);
-          const validated = parseVisionResponse(response);
-          resolve(validated);
-        }
-      },
-      onPlanningComplete: (messageId, response) => {
-        setIsInferring(false);
-
-        const resolve = pendingResolvesRef.current.get(messageId);
-        if (resolve) {
-          pendingResolvesRef.current.delete(messageId);
-          const validated = parsePlanningResponse(response);
-          resolve(validated?.taskSteps ?? []);
-        }
-      },
-      onError: (message, code, messageId) => {
+      onError: (message, code) => {
         logger.error('[WebLLM] Error:', message);
         setError(message);
         setErrorCode(code);
         setIsModelLoading(false);
         setIsInferring(false);
-
-        if (messageId) {
-          const resolve = pendingResolvesRef.current.get(messageId);
-          if (resolve) {
-            pendingResolvesRef.current.delete(messageId);
-            resolve(null);
-          }
-        }
       },
       onWarning: (message) => {
         logger.warn('[WebLLM] Warning:', message);
@@ -177,7 +147,9 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         return inferenceType === 'planning' ? [] : null;
       }
 
-      if (signal?.aborted) {
+      const client = workerClientRef.current;
+      if (!client) {
+        setError('Worker not initialized');
         return inferenceType === 'planning' ? [] : null;
       }
 
@@ -185,47 +157,36 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       setError(null);
 
       const messageId = crypto.randomUUID();
-      const client = workerClientRef.current;
 
-      return new Promise<InferenceResult>((resolve) => {
-        pendingResolvesRef.current.set(messageId, resolve);
-
-        const abortHandler = () => {
-          pendingResolvesRef.current.delete(messageId);
-          setIsInferring(false);
-          resolve(inferenceType === 'planning' ? [] : null);
-        };
-
-        if (signal) {
-          signal.addEventListener('abort', abortHandler, { once: true });
-        }
-
-        if (!client) {
-          setError('Worker not initialized');
-          setIsInferring(false);
-          pendingResolvesRef.current.delete(messageId);
-          resolve(inferenceType === 'planning' ? [] : null);
-          return;
-        }
-
+      try {
         const infPromise = inferenceType === 'planning'
           ? client.planning(image, prompt, messageId)
           : inferenceType === 'category'
           ? client.category(image, prompt, messageId)
           : client.chat(image, prompt, messageId);
 
-        infPromise.catch((err) => {
+        const response = await infPromise;
+
+        if (inferenceType === 'planning') {
+          const validated = parsePlanningResponse(response);
+          return validated?.taskSteps ?? [];
+        } else {
+          const validated = parseVisionResponse(response);
+          if (validated) {
+            setLastCompleted(validated.completed);
+          }
+          return validated;
+        }
+      } catch (err: any) {
+        if (err.message !== 'Request aborted') {
+          logger.error(`[WebLLM] ${inferenceType} error:`, err);
           setError(err.message);
           setErrorCode('INFERENCE_ERROR');
-          setIsInferring(false);
-          pendingResolvesRef.current.delete(messageId);
-          resolve(inferenceType === 'planning' ? [] : null);
-        }).finally(() => {
-          if (signal) {
-            signal.removeEventListener('abort', abortHandler);
-          }
-        });
-      });
+        }
+        return inferenceType === 'planning' ? [] : null;
+      } finally {
+        setIsInferring(false);
+      }
     },
     []
   );
@@ -261,7 +222,6 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       client.terminate();
       workerClientRef.current = null;
     }
-    pendingResolvesRef.current.clear();
     isInitializedRef.current = false;
     isModelReadyRef.current = false;
     setIsModelReady(false);

@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useUserMedia, type UseUserMediaResult } from './useUserMedia';
-import { useWebXR, type UseWebXRResult } from './useWebXR';
+import { useState, useCallback, useEffect } from 'react';
+import { useUserMedia } from './useUserMedia';
 import type { VizaErrorCode } from '@/types/worker';
 import { logger } from '@/config';
 
@@ -25,9 +24,6 @@ export interface UseCameraResult {
   stream: MediaStream | null;
   status: CameraStatus;
   error: CameraError | null;
-  isXRMode: boolean;
-  xrSession: XRSession | null;
-  startXRSession: () => Promise<boolean>;
   retryCount: number;
   resetError: () => void;
 }
@@ -46,18 +42,6 @@ function mapMediaToError(err: Error): CameraError {
       message: 'No camera found. Please connect a camera and try again.',
     };
   }
-  if (domErr.name === 'OverconstrainedError') {
-    return {
-      code: 'CAMERA_XR_UNAVAILABLE',
-      message: 'Camera constraints cannot be satisfied. Try selecting a different camera.',
-    };
-  }
-  if (domErr.name === 'NotReadableError') {
-    return {
-      code: 'CAMERA_XR_UNAVAILABLE',
-      message: 'Camera is in use by another application. Please close other apps using the camera.',
-    };
-  }
   return {
     code: 'CAMERA_XR_UNAVAILABLE',
     message: err.message || 'Unknown camera error',
@@ -72,37 +56,17 @@ export function useCamera({
 }: UseCameraOptions): UseCameraResult {
   const [status, setStatus] = useState<CameraStatus>('idle');
   const [error, setError] = useState<CameraError | null>(null);
-  const [isXRMode, setIsXRMode] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   const userMedia = useUserMedia({ facingMode, width, height });
-  const webXR = useWebXR();
 
   const resetError = useCallback(() => {
     setError(null);
     setRetryCount(0);
   }, []);
 
-  const startXRSession = useCallback(async (): Promise<boolean> => {
-    const success = await webXR.startSession();
-    if (success) {
-      setIsXRMode(true);
-      setStatus('active');
-    }
-    return success;
-  }, [webXR]);
-
   const startCamera = useCallback(async () => {
     setStatus('requesting');
-
-    if (webXR.isSupported) {
-      const xrSuccess = await webXR.startSession();
-      if (xrSuccess) {
-        setIsXRMode(true);
-        setStatus('active');
-        return;
-      }
-    }
 
     let lastError: Error | null = null;
     const maxRetries = 3;
@@ -117,11 +81,13 @@ export function useCamera({
       }
 
       lastError = userMedia.error;
-      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      if (attempt < maxRetries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
     }
 
     if (lastError) {
-      logger.error('[useCamera] Camera initialization failed:', lastError.message, lastError.stack);
+      logger.error('[useCamera] Camera initialization failed:', lastError.message);
       setError(mapMediaToError(lastError));
     } else {
       logger.error('[useCamera] Camera initialization failed after retries');
@@ -131,14 +97,12 @@ export function useCamera({
       });
     }
     setStatus('error');
-  }, [webXR, userMedia]);
+  }, [userMedia]);
 
   const stopCamera = useCallback(() => {
     userMedia.stop();
-    webXR.endSession();
     setStatus('idle');
-    setIsXRMode(false);
-  }, [userMedia, webXR]);
+  }, [userMedia]);
 
   useEffect(() => {
     if (isActive && status === 'idle') {
@@ -153,9 +117,6 @@ export function useCamera({
     stream: userMedia.stream,
     status,
     error,
-    isXRMode,
-    xrSession: webXR.session,
-    startXRSession,
     retryCount,
     resetError,
   };

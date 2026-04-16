@@ -165,6 +165,7 @@ export class WorkerClient {
           clearTimeout(pending.timeoutId);
           this.pendingRequests.delete(messageId);
           this.options.onComplete(messageId, data.response, data.completed as boolean | undefined);
+          pending.resolve(data.response);
         }
         break;
       }
@@ -177,6 +178,7 @@ export class WorkerClient {
           clearTimeout(pending.timeoutId);
           this.pendingRequests.delete(messageId);
           this.options.onPlanningComplete(messageId, data.response);
+          pending.resolve(data.response);
         }
         break;
       }

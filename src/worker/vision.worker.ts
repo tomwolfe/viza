@@ -5,55 +5,72 @@ import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt }
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
 import { TASK_CONFIGS, VisionResponseSchema, PlanningResponseSchema, type InferenceResult, type PlanningResult, type TaskRunnerConfig } from './workerConfigs';
 
-type MessageHandler = (msg: { type: string; [key: string]: unknown }) => Promise<void> | void;
+self.onmessage = async (event: MessageEvent) => {
+  const msg = event.data as WorkerOutgoingMessage;
 
-const messageHandlers: Record<string, MessageHandler> = {
-  init: async (msg) => {
-    const initMsg = msg as Extract<WorkerOutgoingMessage, { type: 'init' }>;
-    if (initMsg.systemPrompt) {
-      systemPrompt = initMsg.systemPrompt;
-    }
-    await initializeModel(initMsg.model || CONFIG.DEFAULT_MODEL);
-  },
+  switch (msg.type) {
+    case 'init':
+      if (msg.systemPrompt) {
+        systemPrompt = msg.systemPrompt;
+      }
+      await initializeModel(msg.model || CONFIG.DEFAULT_MODEL);
+      break;
 
-  chat: async (msg) => {
-    const chatMsg = msg as Extract<WorkerOutgoingMessage, { type: 'chat' }>;
-    if (!chatMsg.image) {
-      postMessage({ type: 'error', message: 'Missing image for chat', messageId: chatMsg.messageId, errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode });
-      return;
-    }
-    await runTask(chatMsg.image, chatMsg.prompt, chatMsg.messageId, TASK_CONFIGS['chat']);
-  },
+    case 'chat':
+      if (!msg.image) {
+        postMessage({
+          type: 'error',
+          message: 'Missing image for chat',
+          messageId: msg.messageId,
+          errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
+        });
+        return;
+      }
+      await runTask(msg.image, msg.prompt, msg.messageId, TASK_CONFIGS['chat']);
+      break;
 
-  planning: async (msg) => {
-    const planMsg = msg as Extract<WorkerOutgoingMessage, { type: 'planning' }>;
-    if (!planMsg.image) {
-      postMessage({ type: 'error', message: 'Missing image for planning', messageId: planMsg.messageId, errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode });
-      return;
-    }
-    await runTask(planMsg.image, planMsg.goal, planMsg.messageId, TASK_CONFIGS['planning']);
-  },
+    case 'planning':
+      if (!msg.image) {
+        postMessage({
+          type: 'error',
+          message: 'Missing image for planning',
+          messageId: msg.messageId,
+          errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
+        });
+        return;
+      }
+      await runTask(msg.image, msg.goal, msg.messageId, TASK_CONFIGS['planning']);
+      break;
 
-  category: async (msg) => {
-    const catMsg = msg as Extract<WorkerOutgoingMessage, { type: 'category' }>;
-    if (!catMsg.image) {
-      postMessage({ type: 'error', message: 'Missing image for category', messageId: catMsg.messageId, errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode });
-      return;
-    }
-    await runTask(catMsg.image, catMsg.goal, catMsg.messageId, TASK_CONFIGS['category']);
-  },
+    case 'category':
+      if (!msg.image) {
+        postMessage({
+          type: 'error',
+          message: 'Missing image for category',
+          messageId: msg.messageId,
+          errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
+        });
+        return;
+      }
+      await runTask(msg.image, msg.goal, msg.messageId, TASK_CONFIGS['category']);
+      break;
 
-  reload: async () => {
-    await reloadEngine();
-  },
+    case 'reload':
+      await reloadEngine();
+      break;
 
-  app_reset: () => {
-    postMessage({ type: 'reset_ack' });
-  },
+    case 'app_reset':
+      postMessage({ type: 'reset_ack' });
+      break;
 
-  ping: () => {
-    postMessage({ type: 'pong' });
-  },
+    case 'ping':
+      postMessage({ type: 'pong' });
+      break;
+
+    default:
+      postMessage({ type: 'unknown_message', received: (msg as any).type });
+      break;
+  }
 };
 
 let engine: webllm.MLCEngine | null = null;
@@ -193,16 +210,5 @@ async function reloadEngine(): Promise<void> {
   currentModel = null;
   postMessage({ type: 'reloaded' });
 }
-
-self.onmessage = async (event: MessageEvent) => {
-  const msg = event.data as { type: string; [key: string]: unknown };
-  const handler = messageHandlers[msg.type];
-
-  if (handler) {
-    await handler(msg);
-  } else {
-    postMessage({ type: 'unknown_message', received: msg.type });
-  }
-};
 
 postMessage({ type: 'worker_ready' });

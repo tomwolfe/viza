@@ -25,6 +25,7 @@ interface ARSceneProps {
   currentStepTarget?: string;
   checkTargetFound?: (objects: DetectedObject[]) => void;
   speak?: (text: string) => void;
+  isXRMode?: boolean;
 }
 
 export interface ARSceneHandle {
@@ -42,6 +43,7 @@ export function ARScene({
   currentStepTarget,
   checkTargetFound,
   speak,
+  isXRMode = false,
 }: ARSceneProps) {
   const lastVoiceCommandRef = useRef<string | null>(null);
   const { getAllObjects } = useWorldMap();
@@ -49,7 +51,7 @@ export function ARScene({
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
-  const { videoElement } = useCamera({ isActive: isARActive && isModelReady });
+  const { videoElement } = useCamera({ isActive: isARActive && isModelReady && !isXRMode });
   const { isInferring } = useWebLLM();
 
   useEffect(() => {
