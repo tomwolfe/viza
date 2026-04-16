@@ -2,14 +2,16 @@
 
 import { useMemo } from 'react';
 import { Float } from '@react-three/drei';
+import { CONFIG } from '@/config';
 
 interface TargetHighlighterProps {
   height: number;
 }
 
 export function TargetHighlighter({ height }: TargetHighlighterProps) {
-  const coneArgs = useMemo(() => [0.15, 0.4, 8] as const, []);
-  const position = [0, height / 2 + 0.3, 0] as const;
+  const { SPATIAL } = CONFIG;
+  const coneArgs = useMemo(() => [SPATIAL.HIGHLIGHTER_CONE_WIDTH, SPATIAL.HIGHLIGHTER_CONE_HEIGHT, 8] as const, []);
+  const position = [0, height / 2 + SPATIAL.HIGHLIGHTER_OFFSET, 0] as const;
   const rotation = [Math.PI, 0, 0] as const;
 
   return (

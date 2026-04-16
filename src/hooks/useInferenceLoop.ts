@@ -119,13 +119,6 @@ export function useInferenceLoop({
         } catch (error) {
           logger.error('[useInferenceLoop] Inference error:', error);
           dispatch({ type: 'ERROR', error: (error as Error).message });
-          if (frame) {
-            try {
-              frame.close();
-            } catch {
-              // Frame may already be closed
-            }
-          }
           if (pendingInferenceRef.current) {
             pendingInferenceRef.current.reject(error);
             pendingInferenceRef.current = null;

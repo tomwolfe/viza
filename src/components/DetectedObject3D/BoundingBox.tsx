@@ -1,8 +1,7 @@
 'use client';
 
 import * as THREE from 'three';
-import { useMemo } from 'react';
-import { CONFIG } from '@/config';
+import { useMemo, useEffect } from 'react';
 
 const PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 
@@ -39,6 +38,14 @@ export function BoundingBox({ width, height, color, opacity = 0.15 }: BoundingBo
     () => new THREE.EdgesGeometry(PLANE_GEOMETRY),
     []
   );
+
+  useEffect(() => {
+    return () => {
+      material.dispose();
+      lineMaterial.dispose();
+      edgesGeometry.dispose();
+    };
+  }, [material, lineMaterial, edgesGeometry]);
 
   return (
     <group>
