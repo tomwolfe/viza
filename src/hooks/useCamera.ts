@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUserMedia, type UseUserMediaResult } from './useUserMedia';
 import { useWebXR, type UseWebXRResult } from './useWebXR';
 import type { VizaErrorCode } from '@/types/worker';
+import { logger } from '@/config';
 
 export type CameraStatus = 'idle' | 'requesting' | 'active' | 'error';
 
@@ -123,8 +124,10 @@ export function useCamera({
     }
 
     if (lastError) {
+      logger.error('[useCamera] Camera initialization failed:', lastError.message, lastError.stack);
       setError(mapMediaToError(lastError));
     } else {
+      logger.error('[useCamera] Camera initialization failed after retries');
       setError({
         code: 'CAMERA_XR_UNAVAILABLE',
         message: 'Failed to initialize camera after multiple attempts.',

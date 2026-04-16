@@ -25,7 +25,7 @@ export function useInferenceLoop({
   isActive = false,
 }: UseInferenceLoopOptions) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRunningRef = useRef(false);
 
   const processFrame = useCallback(
@@ -85,7 +85,7 @@ export function useInferenceLoop({
 
   const cancelPending = useCallback(() => {
     if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
       intervalRef.current = null;
     }
     isRunningRef.current = false;
@@ -94,23 +94,27 @@ export function useInferenceLoop({
   useEffect(() => {
     if (!isActive || isInferring) {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current);
         intervalRef.current = null;
       }
       return;
     }
 
-    if (!intervalRef.current) {
-      intervalRef.current = setInterval(() => {
-        if (!isRunningRef.current) {
-          processFrame('Identify objects in this scene.');
-        }
-      }, intervalMs);
-    }
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const loop = async () => {
+      if (!isRunningRef.current) {
+        await processFrame('Identify objects in this scene.');
+      }
+      timeoutId = setTimeout(loop, intervalMs);
+    };
+
+    timeoutId = setTimeout(loop, intervalMs);
+    intervalRef.current = timeoutId;
 
     return () => {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current);
         intervalRef.current = null;
       }
       isRunningRef.current = false;

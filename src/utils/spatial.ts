@@ -175,40 +175,46 @@ export function createOneEuroFilter(
   beta: number = 0.7,
   dCutoff: number = 1.0
 ): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
+  const lastValue = initialValue.clone();
+  const filteredResult = new THREE.Vector3();
+  const dx = new THREE.Vector3();
+  const dy = new THREE.Vector3();
+  const dz = new THREE.Vector3();
+
   const state: OneEuroFilterState = {
-    lastValue: initialValue.clone(),
+    lastValue,
     lastTime: 0,
   };
 
   return (value: THREE.Vector3, timestamp: number) => {
     if (state.lastTime === 0) {
-      state.lastValue = value.clone();
+      lastValue.set(value.x, value.y, value.z);
       state.lastTime = timestamp;
-      return value.clone();
+      return filteredResult.set(value.x, value.y, value.z);
     }
 
     const dt = (timestamp - state.lastTime) / 1000;
     if (dt <= 0) {
-      return state.lastValue.clone();
+      return filteredResult.set(lastValue.x, lastValue.y, lastValue.z);
     }
 
-    const dx = (value.x - state.lastValue.x) / dt;
-    const dy = (value.y - state.lastValue.y) / dt;
-    const dz = (value.z - state.lastValue.z) / dt;
+    dx.set((value.x - lastValue.x) / dt, 0, 0);
+    dy.set(0, (value.y - lastValue.y) / dt, 0);
+    dz.set(0, 0, (value.z - lastValue.z) / dt);
 
-    const rate = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const rate = Math.sqrt(dx.x * dx.x + dy.y * dy.y + dz.z * dz.z);
     const cutoff = minCutoff + beta * Math.max(0, rate - dCutoff);
     const alpha = Math.min(1, (cutoff * dt) / (1 + cutoff * dt));
 
-    const filtered = new THREE.Vector3(
-      state.lastValue.x + alpha * (value.x - state.lastValue.x),
-      state.lastValue.y + alpha * (value.y - state.lastValue.y),
-      state.lastValue.z + alpha * (value.z - state.lastValue.z)
+    filteredResult.set(
+      lastValue.x + alpha * (value.x - lastValue.x),
+      lastValue.y + alpha * (value.y - lastValue.y),
+      lastValue.z + alpha * (value.z - lastValue.z)
     );
 
-    state.lastValue = filtered;
+    lastValue.set(filteredResult.x, filteredResult.y, filteredResult.z);
     state.lastTime = timestamp;
 
-    return filtered;
+    return filteredResult;
   };
 }

@@ -5,7 +5,8 @@ import type { VisionResponse, TaskStep } from '@/schemas/vision';
 import { SYSTEM_PROMPT, logger, CONFIG } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
-import { useWorkerManager } from '@/hooks/useWorkerManager';
+import { WorkerClient, createWorkerClient, type WorkerMessageType } from '@/utils/workerClient';
+import { checkWebGPU } from '@/config';
 
 type InferenceResult = VisionResponse | null | TaskStep[];
 
@@ -46,92 +47,123 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
   const pendingResolvesRef = useRef<Map<string, (value: InferenceResult) => void>>(new Map());
+  const workerClientRef = useRef<WorkerClient | null>(null);
+  const isInitializedRef = useRef(false);
+  const isModelReadyRef = useRef(false);
 
-  const workerManager = useWorkerManager({
-    onReady: () => {
-      logger.info('[WebLLM] Worker ready');
-    },
-    onProgress: (progress) => {
-      setModelProgress(progress);
-      if (progress > 0 && progress < 100) {
-        setIsModelLoading(true);
-      }
-    },
-    onComplete: (messageId, response, completed) => {
-      setIsInferring(false);
-      setLastCompleted(completed ?? false);
+  const initWorker = useCallback(async () => {
+    if (isInitializedRef.current) return;
 
-      const resolve = pendingResolvesRef.current.get(messageId);
-      if (resolve) {
-        pendingResolvesRef.current.delete(messageId);
-        const validated = parseVisionResponse(response);
-        resolve(validated);
-      }
-    },
-    onPlanningComplete: (messageId, response) => {
-      setIsInferring(false);
+    const gpuCheck = await checkWebGPU();
+    if (!gpuCheck.supported || gpuCheck.memoryGB < 8) {
+      setIsDeviceCompatible(false);
+      setError(`WebGPU not supported or insufficient memory (requires ${gpuCheck.recommendedGB}GB+).`);
+      setErrorCode('WEBGPU_NOT_SUPPORTED');
+      return;
+    }
+    setIsDeviceCompatible(true);
 
-      const resolve = pendingResolvesRef.current.get(messageId);
-      if (resolve) {
-        pendingResolvesRef.current.delete(messageId);
-        const validated = parsePlanningResponse(response);
-        resolve(validated?.taskSteps ?? []);
-      }
-    },
-    onError: (message, code, messageId) => {
-      logger.error('[WebLLM] Error:', message);
-      setError(message);
-      setErrorCode(code);
-      setIsModelLoading(false);
-      setIsInferring(false);
+    const client = createWorkerClient({
+      onReady: () => {
+        logger.info('[WebLLM] Worker ready');
+      },
+      onProgress: (progress) => {
+        setModelProgress(progress);
+        if (progress > 0 && progress < 100) {
+          setIsModelLoading(true);
+        }
+      },
+      onComplete: (messageId, response, completed) => {
+        setIsInferring(false);
+        setLastCompleted(completed ?? false);
 
-      if (messageId) {
         const resolve = pendingResolvesRef.current.get(messageId);
         if (resolve) {
           pendingResolvesRef.current.delete(messageId);
-          resolve(null);
+          const validated = parseVisionResponse(response);
+          resolve(validated);
         }
-      }
-    },
-    onPong: () => {},
-    onUnresponsive: () => {
-      logger.warn('[WebLLM] Worker unresponsive');
-      setError('AI Engine Lost - Restarting...');
-      setIsModelReady(false);
-    },
-  });
+      },
+      onPlanningComplete: (messageId, response) => {
+        setIsInferring(false);
 
-  useEffect(() => {
-    setIsDeviceCompatible(workerManager.isDeviceCompatible);
-  }, [workerManager.isDeviceCompatible]);
+        const resolve = pendingResolvesRef.current.get(messageId);
+        if (resolve) {
+          pendingResolvesRef.current.delete(messageId);
+          const validated = parsePlanningResponse(response);
+          resolve(validated?.taskSteps ?? []);
+        }
+      },
+      onError: (message, code, messageId) => {
+        logger.error('[WebLLM] Error:', message);
+        setError(message);
+        setErrorCode(code);
+        setIsModelLoading(false);
+        setIsInferring(false);
+
+        if (messageId) {
+          const resolve = pendingResolvesRef.current.get(messageId);
+          if (resolve) {
+            pendingResolvesRef.current.delete(messageId);
+            resolve(null);
+          }
+        }
+      },
+      onWarning: (message) => {
+        logger.warn('[WebLLM] Warning:', message);
+      },
+      onPong: () => {},
+      onUnresponsive: () => {
+        logger.warn('[WebLLM] Worker unresponsive');
+        setError('AI Engine Lost - Restarting...');
+        setIsModelReady(false);
+        isModelReadyRef.current = false;
+      },
+      inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
+      planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
+    });
+
+    client.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
+    workerClientRef.current = client;
+    isInitializedRef.current = true;
+  }, []);
 
   const initModel = useCallback(async () => {
-    if (!workerManager.isInitialized) {
-      await workerManager.initWorker();
+    if (!isInitializedRef.current) {
+      await initWorker();
     }
 
-    if (!workerManager.isDeviceCompatible) {
+    if (!isDeviceCompatible) {
       setError('Device not compatible with WebGPU');
       return;
     }
 
-    const client = workerManager;
+    const client = workerClientRef.current;
+    if (!client) {
+      setError('Worker not initialized');
+      return;
+    }
+
     setIsModelReady(false);
     setModelProgress(0);
     setIsModelLoading(true);
     setError(null);
 
     try {
-      await client.initModel(modelIdRef.current, SYSTEM_PROMPT);
+      await client.init(modelIdRef.current, SYSTEM_PROMPT);
+      isModelReadyRef.current = true;
       setIsModelLoading(false);
       setIsModelReady(true);
       setModelProgress(100);
+      client.startHeartbeat(() => {
+        logger.info('[WebLLM] Heartbeat reconnected');
+      });
     } catch (err) {
       setError((err as Error).message);
       setErrorCode('WORKER_INIT_FAILED');
       setIsModelLoading(false);
     }
-  }, [workerManager]);
+  }, [initWorker, isDeviceCompatible]);
 
   const dispatchInference = useCallback(
     async (
@@ -140,7 +172,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       inferenceType: InferenceType,
       signal?: AbortSignal
     ): Promise<InferenceResult> => {
-      if (!workerManager.isModelReady) {
+      if (!isModelReadyRef.current) {
         setError('Model not ready. Call initModel first.');
         return inferenceType === 'planning' ? [] : null;
       }
@@ -153,6 +185,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       setError(null);
 
       const messageId = crypto.randomUUID();
+      const client = workerClientRef.current;
 
       return new Promise<InferenceResult>((resolve) => {
         pendingResolvesRef.current.set(messageId, resolve);
@@ -167,13 +200,21 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           signal.addEventListener('abort', abortHandler, { once: true });
         }
 
-        const workerMethod = inferenceType === 'planning'
-          ? workerManager.planning
-          : inferenceType === 'category'
-          ? workerManager.category
-          : workerManager.chat;
+        if (!client) {
+          setError('Worker not initialized');
+          setIsInferring(false);
+          pendingResolvesRef.current.delete(messageId);
+          resolve(inferenceType === 'planning' ? [] : null);
+          return;
+        }
 
-        workerMethod(image, prompt, messageId).catch((err) => {
+        const infPromise = inferenceType === 'planning'
+          ? client.planning(image, prompt, messageId)
+          : inferenceType === 'category'
+          ? client.category(image, prompt, messageId)
+          : client.chat(image, prompt, messageId);
+
+        infPromise.catch((err) => {
           setError(err.message);
           setErrorCode('INFERENCE_ERROR');
           setIsInferring(false);
@@ -186,7 +227,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         });
       });
     },
-    [workerManager]
+    []
   );
 
   const runInference = useCallback(
@@ -214,14 +255,27 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   );
 
   const dispose = useCallback(() => {
+    const client = workerClientRef.current;
+    if (client) {
+      client.stopHeartbeat();
+      client.terminate();
+      workerClientRef.current = null;
+    }
     pendingResolvesRef.current.clear();
-    workerManager.dispose();
+    isInitializedRef.current = false;
+    isModelReadyRef.current = false;
     setIsModelReady(false);
     setIsModelLoading(false);
     setIsInferring(false);
     setError(null);
     setErrorCode(null);
-  }, [workerManager]);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      dispose();
+    };
+  }, [dispose]);
 
   return (
     <WebLLMContext.Provider

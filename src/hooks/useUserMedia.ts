@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { VizaErrorCode } from '@/types/worker';
+import { logger } from '@/config';
 
 export interface UseUserMediaOptions {
   facingMode?: 'user' | 'environment';
@@ -91,6 +92,7 @@ export function useUserMedia({
     } catch (err) {
       if (!cancelledRef.current) {
         const error = err instanceof Error ? err : new Error(String(err));
+        logger.error('[useUserMedia] Camera access error:', error.message, error.stack);
         setError(error);
         setErrorCode(mapMediaError(error));
       }

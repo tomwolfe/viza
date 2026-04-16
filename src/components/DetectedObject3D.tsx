@@ -1,10 +1,12 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 import { useObject3DTransform } from '@/hooks/useObject3DTransform';
+import { get3DPosition } from '@/utils/spatial';
 import { BoundingBox } from './DetectedObject3D/BoundingBox';
 import { ObjectLabel } from './DetectedObject3D/ObjectLabel';
 import { TargetHighlighter } from './DetectedObject3D/TargetHighlighter';
@@ -20,15 +22,36 @@ interface DetectedObject3DProps {
 }
 
 export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isTarget, targetName, useCategoryColor, categoryColor, position }: DetectedObject3DProps) {
-  const { worldPosition, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
+  const groupRef = useRef<THREE.Group>(null);
+  const { x, y, width, height, worldDepth, targetSize, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
 
   const isCurrentTarget = isTarget && targetName && obj.name.toLowerCase().includes(targetName.toLowerCase());
   const displayColor = useCategoryColor && categoryColor
     ? categoryColor
     : (isCurrentTarget ? '#ff6b00' : CONFIG.SPATIAL.BOX_COLOR);
 
+  useFrame((state) => {
+    if (!groupRef.current) return;
+
+    const camera = state.camera as THREE.PerspectiveCamera;
+    const viewport = state.viewport;
+
+    const pos = get3DPosition(
+      x,
+      y,
+      width,
+      height,
+      camera,
+      { width: viewport.width, height: viewport.height },
+      targetSize,
+      position ? 0 : worldDepth
+    );
+
+    groupRef.current.position.set(pos.x, pos.y, pos.z);
+  });
+
   return (
-    <group position={[worldPosition.x, worldPosition.y, worldPosition.z]}>
+    <group ref={groupRef}>
       <BoundingBox
         width={boxWidth}
         height={boxHeight}
