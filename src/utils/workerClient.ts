@@ -40,6 +40,7 @@ const DEFAULT_HEARTBEAT_TIMEOUT = 60000;
 
 export class WorkerClient {
   private worker: Worker | null = null;
+  private workerUrl: string | null = null;
   private pendingRequests: Map<string, PendingRequest<unknown>> = new Map();
   private isInitialized = false;
   private options: Required<WorkerClientOptions>;
@@ -71,6 +72,7 @@ export class WorkerClient {
   initialize(workerUrl: string): void {
     if (this.isInitialized) return;
 
+    this.workerUrl = workerUrl;
     this.worker = new Worker(workerUrl, { type: 'module' });
 
     this.worker.onmessage = (event) => {
@@ -122,13 +124,20 @@ export class WorkerClient {
       return;
     }
 
+    if (!this.workerUrl) {
+      this.options.onError('Worker URL lost during reconnection', 'WORKER_INIT_FAILED');
+      return;
+    }
+
     this.reconnectAttempts++;
     this.terminate();
     this.isInitialized = false;
     
     setTimeout(() => {
-      this.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
-      this.onReconnect?.();
+      if (this.workerUrl) {
+        this.initialize(this.workerUrl);
+        this.onReconnect?.();
+      }
     }, 1000);
   }
 

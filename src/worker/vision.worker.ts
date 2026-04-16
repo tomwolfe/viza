@@ -5,6 +5,19 @@ import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt }
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
 import { TASK_CONFIGS, VisionResponseSchema, PlanningResponseSchema, type InferenceResult, type PlanningResult, type TaskRunnerConfig } from './workerConfigs';
 
+function validateImage(msg: WorkerOutgoingMessage): boolean {
+  if (!msg.image) {
+    postMessage({
+      type: 'error',
+      message: `Missing image for ${msg.type}`,
+      messageId: (msg as any).messageId,
+      errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
+    });
+    return false;
+  }
+  return true;
+}
+
 self.onmessage = async (event: MessageEvent) => {
   const msg = event.data as WorkerOutgoingMessage;
 
@@ -17,42 +30,21 @@ self.onmessage = async (event: MessageEvent) => {
       break;
 
     case 'chat':
-      if (!msg.image) {
-        postMessage({
-          type: 'error',
-          message: 'Missing image for chat',
-          messageId: msg.messageId,
-          errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
-        });
-        return;
+      if (validateImage(msg)) {
+        await runTask(msg.image!, msg.prompt, msg.messageId, TASK_CONFIGS['chat']);
       }
-      await runTask(msg.image, msg.prompt, msg.messageId, TASK_CONFIGS['chat']);
       break;
 
     case 'planning':
-      if (!msg.image) {
-        postMessage({
-          type: 'error',
-          message: 'Missing image for planning',
-          messageId: msg.messageId,
-          errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
-        });
-        return;
+      if (validateImage(msg)) {
+        await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['planning']);
       }
-      await runTask(msg.image, msg.goal, msg.messageId, TASK_CONFIGS['planning']);
       break;
 
     case 'category':
-      if (!msg.image) {
-        postMessage({
-          type: 'error',
-          message: 'Missing image for category',
-          messageId: msg.messageId,
-          errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
-        });
-        return;
+      if (validateImage(msg)) {
+        await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['category']);
       }
-      await runTask(msg.image, msg.goal, msg.messageId, TASK_CONFIGS['category']);
       break;
 
     case 'reload':

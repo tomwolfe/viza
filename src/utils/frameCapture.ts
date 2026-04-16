@@ -2,6 +2,44 @@ import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
 
+let cachedCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
+let cachedCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
+
+export function resetFrameCaptureCache(): void {
+  cachedCanvas = null;
+  cachedCtx = null;
+}
+
+function getCanvasAndContext(): { 
+  canvas: OffscreenCanvas | HTMLCanvasElement; 
+  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+  useOffscreen: boolean;
+} {
+  if (cachedCanvas && cachedCtx) {
+    return { 
+      canvas: cachedCanvas, 
+      ctx: cachedCtx, 
+      useOffscreen: typeof OffscreenCanvas !== 'undefined' && cachedCanvas instanceof OffscreenCanvas 
+    };
+  }
+
+  let useOffscreen = false;
+  if (typeof OffscreenCanvas !== 'undefined') {
+    cachedCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+    cachedCtx = cachedCanvas.getContext('2d');
+    useOffscreen = true;
+  } else if (typeof document !== 'undefined') {
+    cachedCanvas = document.createElement('canvas');
+    cachedCanvas.width = TARGET_SIZE;
+    cachedCanvas.height = TARGET_SIZE;
+    cachedCtx = cachedCanvas.getContext('2d');
+  } else {
+    throw new Error('Neither OffscreenCanvas nor document.createElement is available');
+  }
+
+  return { canvas: cachedCanvas, ctx: cachedCtx, useOffscreen };
+}
+
 function isValidSource(source: CanvasImageSource): boolean {
   if (!source) return false;
   const width = 'videoWidth' in source ? (source as HTMLVideoElement).videoWidth : (source as { width: number }).width;
@@ -12,22 +50,7 @@ function isValidSource(source: CanvasImageSource): boolean {
 async function downsampleToBitmap(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  let canvas: OffscreenCanvas | HTMLCanvasElement;
-  let ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
-  let useOffscreenCanvas = false;
-
-  if (typeof OffscreenCanvas !== 'undefined') {
-    canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-    ctx = canvas.getContext('2d');
-    useOffscreenCanvas = true;
-  } else if (typeof document !== 'undefined') {
-    canvas = document.createElement('canvas');
-    canvas.width = TARGET_SIZE;
-    canvas.height = TARGET_SIZE;
-    ctx = canvas.getContext('2d');
-  } else {
-    throw new Error('Neither OffscreenCanvas nor document.createElement is available');
-  }
+  const { canvas, ctx, useOffscreen } = getCanvasAndContext();
 
   if (!ctx) {
     throw new Error('Failed to get 2D context from canvas');
@@ -60,7 +83,7 @@ async function downsampleToBitmap(
     0, 0, TARGET_SIZE, TARGET_SIZE
   );
 
-  if (useOffscreenCanvas) {
+  if (useOffscreen) {
     return (canvas as OffscreenCanvas).transferToImageBitmap();
   }
   return createImageBitmap(canvas as HTMLCanvasElement);

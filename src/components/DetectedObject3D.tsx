@@ -36,7 +36,7 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
     const camera = state.camera as THREE.PerspectiveCamera;
     const viewport = state.viewport;
 
-    const pos = get3DPosition(
+    get3DPosition(
       x,
       y,
       width,
@@ -44,10 +44,11 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
       camera,
       { width: viewport.width, height: viewport.height },
       targetSize,
-      position ? 0 : worldDepth
+      position ? 0 : worldDepth,
+      undefined,
+      undefined,
+      groupRef.current.position
     );
-
-    groupRef.current.position.set(pos.x, pos.y, pos.z);
   });
 
   return (

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { captureFrame } from '../src/utils/frameCapture';
+import { captureFrame, resetFrameCaptureCache } from '../src/utils/frameCapture';
 import { CONFIG } from '@/config';
 
 // Mock ImageBitmap
@@ -12,6 +12,7 @@ class MockImageBitmap {
 describe('Frame Capture Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetFrameCaptureCache();
     
     // Mock OffscreenCanvas
     if (typeof OffscreenCanvas === 'undefined') {

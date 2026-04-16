@@ -3,38 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/config';
 import type { VizaErrorCode } from '@/types/worker';
-
-interface SpeechRecognitionEvent extends Event {
-  readonly resultIndex: number;
-  readonly results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  readonly error: string;
-  readonly message: string;
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-  onspeechend: (() => void) | null;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognitionInstance;
-    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
-  }
-}
+import type { 
+  SpeechRecognitionEvent, 
+  SpeechRecognitionErrorEvent, 
+  SpeechRecognitionInstance 
+} from '@/types/speech';
 
 type VoiceStatus = 'idle' | 'listening' | 'starting';
 

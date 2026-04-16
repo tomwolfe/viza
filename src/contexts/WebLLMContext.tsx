@@ -177,10 +177,11 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           }
           return validated;
         }
-      } catch (err: any) {
-        if (err.message !== 'Request aborted') {
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage !== 'Request aborted') {
           logger.error(`[WebLLM] ${inferenceType} error:`, err);
-          setError(err.message);
+          setError(errorMessage);
           setErrorCode('INFERENCE_ERROR');
         }
         return inferenceType === 'planning' ? [] : null;

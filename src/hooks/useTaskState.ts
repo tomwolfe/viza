@@ -97,6 +97,14 @@ export function useTaskState(): UseTaskStateReturn {
     saveToStorage(taskState);
   }, [taskState]);
 
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const abortPlanning = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();

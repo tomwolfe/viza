@@ -17,6 +17,26 @@ interface ARControlsProps {
   error?: string | null;
 }
 
+const getSpecificAdvice = (code?: VizaErrorCode | null, err?: string | null): string | null => {
+  if (!code && !err) return null;
+  switch (code) {
+    case 'WEBGPU_NOT_SUPPORTED':
+      return 'Please use a WebGPU-capable browser (Chrome 113+, Edge 113+) on a compatible device.';
+    case 'CAMERA_NOT_ALLOWED':
+    case 'MICROPHONE_NOT_ALLOWED':
+      return 'Please allow camera/microphone access in your browser settings.';
+    case 'CAMERA_NOT_FOUND':
+    case 'MICROPHONE_NOT_FOUND':
+      return 'Please connect a camera/microphone to your device.';
+    case 'WORKER_INIT_FAILED':
+      return 'Failed to initialize AI worker. Please refresh and try again.';
+    case 'INFERENCE_TIMEOUT':
+      return 'AI processing timed out. Please try again.';
+    default:
+      return err ? `Error: ${err}` : null;
+  }
+};
+
 export default function ARControls({
   onStartAR,
   onVoiceInput,
@@ -30,26 +50,6 @@ export default function ARControls({
   error,
 }: ARControlsProps) {
   const statusId = useId();
-
-  const getSpecificAdvice = (code?: VizaErrorCode | null, err?: string | null): string | null => {
-    if (!code && !err) return null;
-    switch (code) {
-      case 'WEBGPU_NOT_SUPPORTED':
-        return 'Please use a WebGPU-capable browser (Chrome 113+, Edge 113+) on a compatible device.';
-      case 'CAMERA_NOT_ALLOWED':
-      case 'MICROPHONE_NOT_ALLOWED':
-        return 'Please allow camera/microphone access in your browser settings.';
-      case 'CAMERA_NOT_FOUND':
-      case 'MICROPHONE_NOT_FOUND':
-        return 'Please connect a camera/microphone to your device.';
-      case 'WORKER_INIT_FAILED':
-        return 'Failed to initialize AI worker. Please refresh and try again.';
-      case 'INFERENCE_TIMEOUT':
-        return 'AI processing timed out. Please try again.';
-      default:
-        return err ? `Error: ${err}` : null;
-    }
-  };
 
   const specificAdvice = getSpecificAdvice(errorCode, error);
 
