@@ -8,6 +8,7 @@ export type WorkerMessageType =
   | 'planning'
   | 'category'
   | 'reload'
+  | 'soft_reload'
   | 'ping'
   | 'app_reset';
 
@@ -15,6 +16,7 @@ export interface PendingRequest<T> {
   resolve: (value: T) => void;
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
+  bitmapHandle: ImageBitmap | null;
   type: 'chat' | 'planning' | 'category';
 }
 
@@ -31,6 +33,7 @@ export interface WorkerClientOptions {
   planningTimeoutMs?: number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
+  onSoftReload?: () => void;
 }
 
 const DEFAULT_INFERENCE_TIMEOUT = 15000;
@@ -51,6 +54,7 @@ export class WorkerClient {
   private maxReconnectAttempts = 3;
   private onReconnect: (() => void) | null = null;
   private isModelReadyState = false;
+  private softReloadEnabled = false;
 
   constructor(options: WorkerClientOptions = {}) {
     this.options = {
@@ -66,6 +70,7 @@ export class WorkerClient {
       planningTimeoutMs: options.planningTimeoutMs ?? DEFAULT_PLANNING_TIMEOUT,
       heartbeatIntervalMs: options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL,
       heartbeatTimeoutMs: options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT,
+      onSoftReload: options.onSoftReload ?? (() => {}),
     };
   }
 
@@ -130,6 +135,7 @@ export class WorkerClient {
     }
 
     this.reconnectAttempts++;
+    this.rejectAllPending('Worker unresponsive');
     this.terminate();
     this.isInitialized = false;
     
@@ -192,13 +198,26 @@ export class WorkerClient {
         break;
       }
 
-      case 'error':
+      case 'error': {
+        const messageId = (data as { messageId?: string }).messageId;
+        if (messageId) {
+          const pending = this.pendingRequests.get(messageId);
+          if (pending) {
+            clearTimeout(pending.timeoutId);
+            this.pendingRequests.delete(messageId);
+            if (pending.bitmapHandle) {
+              try { pending.bitmapHandle.close(); } catch {}
+              pending.bitmapHandle = null;
+            }
+          }
+        }
         this.options.onError(
           (data as { message?: string }).message ?? 'Unknown worker error',
           (data as { errorCode?: VizaErrorCode }).errorCode ?? 'WORKER_INIT_FAILED',
-          (data as { messageId?: string }).messageId
+          messageId
         );
         break;
+      }
 
       case 'warning':
         this.options.onWarning((data.message as string) ?? 'Unknown warning');
@@ -236,6 +255,10 @@ export class WorkerClient {
   private rejectAllPending(reason: string): void {
     this.pendingRequests.forEach((pending) => {
       clearTimeout(pending.timeoutId);
+      if (pending.bitmapHandle) {
+        try { pending.bitmapHandle.close(); } catch {}
+        pending.bitmapHandle = null;
+      }
       pending.reject(new Error(reason));
     });
     this.pendingRequests.clear();
@@ -261,16 +284,23 @@ export class WorkerClient {
     return new Promise<T>((resolve, reject) => {
       const timeoutId = this.createTimeout(inferenceType, messageId);
 
+      const bitmapHandle = (transfer?.[0] as ImageBitmap | null) ?? null;
+      
       this.pendingRequests.set(messageId, {
         resolve: resolve as (value: unknown) => void,
         reject,
         timeoutId,
+        bitmapHandle,
         type: inferenceType,
       });
 
       const abortHandler = () => {
         clearTimeout(timeoutId);
         this.pendingRequests.delete(messageId);
+        if (bitmapHandle) {
+          try { bitmapHandle.close(); } catch {}
+          bitmapHandle = null;
+        }
         reject(new Error('Request aborted'));
       };
 
@@ -284,15 +314,20 @@ export class WorkerClient {
           transfer
         );
       } catch (err) {
-        clearTimeout(timeoutId);
-        this.pendingRequests.delete(messageId);
         const error = err as Error;
-        if (error.message?.includes('transfer') || error.name === 'DataCloneError') {
+        const transferError = error.message?.includes('transfer') || error.name === 'DataCloneError';
+        const resourceHandle = (payload as any)?.image ?? bitmapHandle;
+        if (transferError) {
           this.options.onError(
             'ImageBitmap transfer failed - resource may already be closed',
             'INFERENCE_ERROR',
             messageId
           );
+          clearTimeout(timeoutId);
+          this.pendingRequests.delete(messageId);
+          if (resourceHandle) {
+            try { resourceHandle.close(); } catch {}
+          }
           reject(new Error('ImageBitmap transfer failed - resource may already be closed'));
         } else {
           reject(error);
@@ -323,6 +358,17 @@ export class WorkerClient {
 
   reset(): void {
     this.worker?.postMessage({ type: 'app_reset' });
+  }
+
+  softReload(model?: string, systemPrompt?: string): void {
+    if (!this.worker) return;
+    this.worker?.postMessage({
+      type: 'soft_reload',
+      model: model || 'model',
+      systemPrompt: systemPrompt || '',
+    });
+    this.softReloadEnabled = true;
+    this.options.onSoftReload();
   }
 
   terminate(): void {

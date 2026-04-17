@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
+import { safeGet, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
+import { usePersistentState } from './usePersistentState';
+import { safeRemove } from '@/utils/safeStorage';
 
 export interface TaskStep {
   id: string;
@@ -38,14 +40,6 @@ export interface UseTaskStateReturn {
 
 const STORAGE_KEY = 'viza_task_state';
 
-function loadFromStorage(): Partial<TaskState> | null {
-  return safeGet<Partial<TaskState>>({ key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
-}
-
-function saveToStorage(state: TaskState): void {
-  safeSet(state, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
-}
-
 export const DEFAULT_ASSEMBLY_TASK: TaskStep[] = [
   {
     id: 'step-1',
@@ -65,7 +59,7 @@ export const DEFAULT_ASSEMBLY_TASK: TaskStep[] = [
 ];
 
 function getInitialState(): TaskState {
-  const stored = loadFromStorage();
+  const stored = safeGet<Partial<TaskState>>({ key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
   if (stored && stored.taskId && stored.steps && stored.steps.length > 0) {
     return {
       taskId: stored.taskId,
@@ -92,9 +86,10 @@ export function useTaskState(): UseTaskStateReturn {
   const speakRef = useRef<((text: string) => void) | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    saveToStorage(taskState);
-  }, [taskState]);
+  const persistentState = usePersistentState<TaskState>(STORAGE_KEY, {
+    schemaVersion: SCHEMA_VERSION,
+    defaultValue: getInitialState(),
+  });
 
   useEffect(() => {
     return () => {
@@ -116,19 +111,21 @@ export function useTaskState(): UseTaskStateReturn {
   }, []);
 
   const startTask = useCallback((taskName: string, steps: TaskStep[]) => {
-    setTaskState({
+    const newState = {
       taskId: `task-${Date.now()}`,
       taskName,
       currentStepIndex: 0,
       steps,
       isActive: true,
       completed: false,
-    });
+    };
+    setTaskState(newState);
+    persistentState.setValue(newState);
 
     if (steps.length > 0 && speakRef.current) {
       speakRef.current(steps[0].instruction);
     }
-  }, []);
+  }, [persistentState]);
 
   const generateTaskPlan = useCallback(async (
     userGoal: string,
@@ -167,24 +164,21 @@ export function useTaskState(): UseTaskStateReturn {
   }, [getCurrentStep]);
 
   const nextStep = useCallback(() => {
-    setTaskState((prev) => {
-      if (prev.currentStepIndex >= prev.steps.length - 1) {
-        return { ...prev, completed: true, isActive: false };
-      }
+    const newState = { ...taskState };
 
-      const newIndex = prev.currentStepIndex + 1;
-      const nextInstruction = prev.steps[newIndex]?.instruction || '';
-
+    if (taskState.currentStepIndex >= taskState.steps.length - 1) {
+      setTaskState({ ...newState, completed: true, isActive: false });
+      persistentState.setValue({ ...newState, completed: true, isActive: false });
+    } else {
+      const nextInstruction = taskState.steps[taskState.currentStepIndex + 1]?.instruction || '';
       if (speakRef.current && nextInstruction) {
         speakRef.current(nextInstruction);
       }
-
-      return {
-        ...prev,
-        currentStepIndex: newIndex,
-      };
-    });
-  }, []);
+      newState.currentStepIndex = taskState.currentStepIndex + 1;
+      setTaskState(newState);
+      persistentState.setValue(newState);
+    }
+  }, [persistentState, taskState]);
 
   const previousStep = useCallback(() => {
     setTaskState((prev) => {
@@ -219,8 +213,8 @@ export function useTaskState(): UseTaskStateReturn {
       isActive: false,
       completed: false,
     });
-    safeRemove({ key: STORAGE_KEY });
-  }, []);
+    persistentState.removeValue();
+  }, [persistentState]);
 
   const checkTargetFound = useCallback((detectedObjects: DetectedObject[]) => {
     if (!taskState.isActive || detectedObjects.length === 0) return;

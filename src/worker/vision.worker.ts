@@ -77,6 +77,10 @@ self.onmessage = async (event: MessageEvent) => {
       await reloadEngine();
       break;
 
+    case 'soft_reload':
+      await softReloadEngine(msg.model, msg.systemPrompt);
+      break;
+
     case 'app_reset':
       postMessage({ type: 'reset_ack' });
       break;
@@ -217,6 +221,51 @@ async function reloadEngine(): Promise<void> {
   isInitialized = false;
   currentModel = null;
   postMessage({ type: 'reloaded' });
+}
+
+async function softReloadEngine(modelId?: string, newSystemPrompt?: string): Promise<void> {
+  if (!engine) {
+    logger.warn('[Worker] Cannot soft reload - no engine available');
+    return;
+  }
+
+  try {
+    postMessage({ type: 'inference_start' });
+
+    const oldEngine = engine;
+    const oldModel = currentModel;
+
+    engine = null;
+    isInitialized = false;
+
+    await initializeModel(oldModel || modelId);
+
+    if (newSystemPrompt && engine) {
+      systemPrompt = newSystemPrompt;
+    }
+
+    postMessage({
+      type: 'init_complete',
+      model: oldModel || modelId,
+      progress: 100,
+      status: 'soft_reload',
+    });
+  } catch (error) {
+    const err = error as Error;
+    logger.error('[Worker] Soft reload failed:', err);
+    sendError('', `Soft reload failed: ${err.message}`, 'WORKER_INIT_FAILED');
+
+    if (engine) {
+      try {
+        await engine.unload();
+      } catch (e) {
+        logger.warn('[Worker] Engine unload after failed soft reload:', e);
+      }
+    }
+    engine = null;
+    isInitialized = false;
+    currentModel = null;
+  }
 }
 
 postMessage({ type: 'worker_ready' });

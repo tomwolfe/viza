@@ -20,6 +20,7 @@ interface PendingFrame {
   bitmap: ImageBitmap;
   timestamp: number;
   processed: boolean;
+  transferred: boolean;
 }
 
 interface TelemetryData {
@@ -27,6 +28,12 @@ interface TelemetryData {
   inferenceTime: number;
   processingTime: number;
   skipCount: number;
+}
+
+interface InferenceBuffer {
+  samples: number[];
+  avgInferenceTime: number;
+  adjustedInterval: number;
 }
 
 export function useInferenceLoop({
@@ -47,6 +54,18 @@ export function useInferenceLoop({
   const skipCountRef = useRef(0);
   const telemetryFrameCountRef = useRef(0);
   const lastTelemetryRef = useRef<TelemetryData>({ captureTime: 0, inferenceTime: 0, processingTime: 0, skipCount: 0 });
+
+  const inferenceBufferRef = useRef<InferenceBuffer>({
+    samples: [],
+    avgInferenceTime: 0,
+    adjustedInterval: intervalMs,
+  });
+
+  const MAX_BUFFER_SIZE = 5;
+  const ADJUSTMENT_THRESHOLD = 0.7;
+  const ADJUSTMENT_STEP_MS = 1000;
+  const MIN_INTERVAL = 500;
+  const MAX_INTERVAL = 10000;
 
   const shouldSkipFrame = useCallback(() => {
     if (lastInferenceDurationRef.current > intervalMs) {
@@ -98,6 +117,7 @@ export function useInferenceLoop({
           bitmap: frame,
           timestamp: performance.now(),
           processed: false,
+          transferred: false,
         };
 
         inferenceStartTime = performance.now();
@@ -108,6 +128,7 @@ export function useInferenceLoop({
         }
 
         pendingFrameRef.current.processed = true;
+        pendingFrameRef.current.transferred = true;
         
         lastInferenceDurationRef.current = performance.now() - loopStartTime;
         
@@ -133,17 +154,38 @@ export function useInferenceLoop({
             });
           }
         }
+
+        const inferenceDuration = performance.now() - loopStartTime;
+        inferenceBufferRef.current.samples.push(inferenceDuration);
+
+        if (inferenceBufferRef.current.samples.length > MAX_BUFFER_SIZE) {
+          inferenceBufferRef.current.samples.shift();
+        }
+
+        if (inferenceBufferRef.current.samples.length >= MAX_BUFFER_SIZE) {
+          const sum = inferenceBufferRef.current.samples.reduce((a, b) => a + b, 0);
+          const avgInferenceTime = sum / inferenceBufferRef.current.samples.length;
+          inferenceBufferRef.current.avgInferenceTime = avgInferenceTime;
+
+          if (avgInferenceTime > intervalMs * ADJUSTMENT_THRESHOLD) {
+            const newInterval = Math.min(MAX_INTERVAL, inferenceBufferRef.current.adjustedInterval + ADJUSTMENT_STEP_MS);
+            inferenceBufferRef.current.adjustedInterval = newInterval;
+            logger.debug('[useInferenceLoop] Adjusting interval to', newInterval, 'ms due to high inference time');
+          }
+        }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
         acknowledgedRef.current = true;
       } finally {
-        if (frame) {
+        const bitmap = frame ?? pendingFrameRef.current?.bitmap;
+        if (bitmap && !pendingFrameRef.current?.transferred) {
           try {
-            frame.close();
+            bitmap.close();
           } catch {
             logger.debug('[useInferenceLoop] Frame already closed');
           }
         }
+        pendingFrameRef.current = null;
         isRunningRef.current = false;
         
         if (CONFIG.ENABLE_TELEMETRY) {
@@ -181,12 +223,12 @@ export function useInferenceLoop({
     }
     isRunningRef.current = false;
     acknowledgedRef.current = true;
-    if (pendingFrameRef.current && !pendingFrameRef.current.processed) {
+    if (pendingFrameRef.current && !pendingFrameRef.current.transferred) {
       try {
         pendingFrameRef.current.bitmap.close();
       } catch {}
-      pendingFrameRef.current = null;
     }
+    pendingFrameRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -204,7 +246,10 @@ export function useInferenceLoop({
       if (!isRunningRef.current) {
         await processFrame('Identify objects in this scene.');
       }
-      timeoutId = setTimeout(loop, intervalMs);
+      const effectiveInterval = inferenceBufferRef.current.adjustedInterval > 0
+        ? inferenceBufferRef.current.adjustedInterval
+        : intervalMs;
+      timeoutId = setTimeout(loop, effectiveInterval);
     };
 
     timeoutId = setTimeout(loop, intervalMs);
