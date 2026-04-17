@@ -153,7 +153,9 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       return;
     }
 
-    window.speechSynthesis.cancel();
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     setIsSpeaking(false);
     setStatus('starting');
     isIntendingToListenRef.current = true;

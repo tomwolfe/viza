@@ -19,7 +19,7 @@ export interface WebLLMContextValue {
   isDeviceCompatible: boolean;
   initModel: () => Promise<void>;
   runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
-  runPlanningInference: (image: ImageBitmap, goal: string) => Promise<TaskStep[]>;
+  runPlanningInference: (image: ImageBitmap, goal: string, signal?: AbortSignal) => Promise<TaskStep[]>;
   runCategoryInference: (image: ImageBitmap, goal: string) => Promise<VisionResponse | null>;
   dispose: () => void;
   error: string | null;
@@ -58,7 +58,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     async (
       image: ImageBitmap,
       prompt: string,
-      inferenceType: InferenceType
+      inferenceType: InferenceType,
+      signal?: AbortSignal
     ): Promise<InferenceResult> => {
       if (!isModelReadyRef.current) {
         setError('Model not ready. Call initModel first.');
@@ -78,10 +79,10 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
 
       try {
         const infPromise = inferenceType === 'planning'
-          ? client.planning(image, prompt, messageId)
+          ? client.planning(image, prompt, messageId, signal)
           : inferenceType === 'category'
-          ? client.category(image, prompt, messageId)
-          : client.chat(image, prompt, messageId);
+          ? client.category(image, prompt, messageId, signal)
+          : client.chat(image, prompt, messageId, signal);
 
         const response = await infPromise;
 
@@ -119,8 +120,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   );
 
   const runPlanningInference = useCallback(
-    async (image: ImageBitmap, goal: string): Promise<TaskStep[]> => {
-      const result = await dispatchInference(image, goal, 'planning');
+    async (image: ImageBitmap, goal: string, signal?: AbortSignal): Promise<TaskStep[]> => {
+      const result = await dispatchInference(image, goal, 'planning', signal);
       return result as TaskStep[];
     },
     [dispatchInference]

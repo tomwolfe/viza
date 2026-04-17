@@ -44,6 +44,7 @@ export function useAROrchestrator() {
 
   const handleVoiceInput = useCallback(() => {
     if (taskOrchestrator.isListening) {
+      taskOrchestrator.stopListening?.();
     } else {
       taskOrchestrator.startListening?.();
     }
@@ -70,10 +71,8 @@ export function useAROrchestrator() {
 
   return {
     isARActive,
-    setIsARActive: () => {},
     error: unifiedError,
     errorCode: unifiedErrorCode,
-    setError: () => {},
     isModelLoading,
     modelProgress,
     isModelReady,

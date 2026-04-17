@@ -186,7 +186,10 @@ function loadFromStorage(): WorldObject[] {
 }
 
 export function saveWorldMapToStorage(objects: WorldObject[]): void {
-  const data = objects.map((obj) => [obj.id, obj] as [string, WorldObject]);
+  const data = objects.map((obj) => {
+    const { filter, ...serializableObj } = obj;
+    return [serializableObj.id, serializableObj] as [string, WorldObject];
+  });
 
   try {
     safeSet(data, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });

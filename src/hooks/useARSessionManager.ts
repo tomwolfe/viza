@@ -73,6 +73,3 @@ export function useARSessionManager(): UseARSessionManagerResult {
     stopAR,
   };
 }
-
-export function setInitModelCallback(cb: () => void): void {
-}

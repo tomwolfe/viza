@@ -295,16 +295,16 @@ export class WorkerClient {
     return this.sendMessage('init', { model, systemPrompt });
   }
 
-  chat(image: ImageBitmap, prompt: string, messageId: string): Promise<unknown> {
-    return this.sendMessage('chat', { image, prompt, messageId }, [image]);
+  chat(image: ImageBitmap, prompt: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('chat', { image, prompt, messageId }, [image], signal);
   }
 
-  planning(image: ImageBitmap, goal: string, messageId: string): Promise<unknown> {
-    return this.sendMessage('planning', { image, goal, messageId }, [image]);
+  planning(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('planning', { image, goal, messageId }, [image], signal);
   }
 
-  category(image: ImageBitmap, goal: string, messageId: string): Promise<unknown> {
-    return this.sendMessage('category', { image, goal, messageId }, [image]);
+  category(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('category', { image, goal, messageId }, [image], signal);
   }
 
   ping(): void {

@@ -24,7 +24,7 @@ export interface TaskState {
 export interface UseTaskStateReturn {
   taskState: TaskState;
   startTask: (taskName: string, steps: TaskStep[]) => void;
-  generateTaskPlan: (userGoal: string, sceneImage: ImageBitmap, generatePlanFn: (goal: string, image: ImageBitmap) => Promise<TaskStep[]>) => Promise<void>;
+  generateTaskPlan: (userGoal: string, sceneImage: ImageBitmap, generatePlanFn: (goal: string, image: ImageBitmap, signal?: AbortSignal) => Promise<TaskStep[]>) => Promise<void>;
   nextStep: () => void;
   previousStep: () => void;
   completeCurrentStep: () => void;

@@ -99,7 +99,7 @@ export function ARContent() {
         isDeviceIncompatible={!isDeviceCompatible}
         unifiedErrorCode={unifiedErrorCode}
         unifiedError={unifiedError}
-        errorCode={errorCode as any}
+        errorCode={errorCode}
         error={error}
       />
 

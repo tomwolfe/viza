@@ -50,7 +50,7 @@ export function useTaskOrchestrator(
     checkTargetFound,
   } = taskStateResult;
 
-  const generatePlanFromGoal = useCallback(async (goal: string): Promise<TaskStep[]> => {
+  const generatePlanFromGoal = useCallback(async (goal: string, _image: ImageBitmap, signal?: AbortSignal): Promise<TaskStep[]> => {
     const sceneImage = sceneImageRef.current;
     if (!sceneImage) {
       logger.warn('[TaskOrchestrator] No scene image available for planning');
@@ -58,7 +58,7 @@ export function useTaskOrchestrator(
     }
 
     try {
-      const steps = await runPlanningInference(sceneImage, goal);
+      const steps = await runPlanningInference(sceneImage, goal, signal);
       if (steps && steps.length > 0) {
         return steps;
       }
@@ -133,8 +133,4 @@ export function useTaskOrchestrator(
     voiceErrorCode,
     completeCurrentStep: taskStateResult.completeCurrentStep,
   };
-}
-
-export function initializeTaskOrchestrator(): void {
-  logger.log('[TaskOrchestrator] Initialized');
 }
