@@ -107,9 +107,6 @@ export function calculateDistance(
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-export const calculateDistance2D = calculateDistance;
-export const calculateDistance3D = calculateDistance;
-
 export function isWithinThreshold(
   pos1: THREE.Vector3,
   pos2: THREE.Vector3,

@@ -31,6 +31,7 @@ export function ARContent() {
     voiceError,
     llmError,
     detectedObjects,
+    worldMap,
     handleStartAR,
     handleVoiceInput,
     handleObjectsDetected,
@@ -74,6 +75,7 @@ export function ARContent() {
               isModelReady={isModelReady}
               runInference={runInference}
               detectedObjects={detectedObjects}
+              worldObjects={worldMap}
               onObjectsDetected={handleObjectsDetected}
               voiceCommandRef={voiceCommandRef}
               taskActive={taskState.isActive}

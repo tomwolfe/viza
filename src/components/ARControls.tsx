@@ -55,6 +55,51 @@ export default function ARControls({
 
   const specificAdvice = getSpecificAdvice(errorCode, error);
 
+  const renderStatusContent = () => {
+    if (isDeviceIncompatible) {
+      return (
+        <div className="flex items-center gap-2 text-red-400">
+          <AlertTriangle className="w-5 h-5" aria-hidden="true" />
+          <span>Device Incompatible</span>
+        </div>
+      );
+    }
+
+    if (error && errorCode) {
+      return (
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-2 text-red-400">
+            <AlertTriangle className="w-5 h-5" aria-hidden="true" />
+            <span>Error</span>
+          </div>
+          {specificAdvice && (
+            <span className="text-xs text-red-300">{specificAdvice}</span>
+          )}
+        </div>
+      );
+    }
+
+    if (isModelLoading) {
+      return (
+        <div className="flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+          <span>Loading AI Model (~2.3GB)... {modelProgress}%</span>
+        </div>
+      );
+    }
+
+    if (isARActive) {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" aria-hidden="true" />
+          <span>AR Active</span>
+        </div>
+      );
+    }
+
+    return <span>Ready to Start</span>;
+  };
+
   const getStatusText = () => {
     if (isDeviceIncompatible) return 'Device not compatible. WebGPU required.';
     if (isModelLoading) return `Loading AI model. ${modelProgress}% complete.`;
@@ -72,34 +117,7 @@ export default function ARControls({
           aria-live="polite"
           aria-atomic="true"
         >
-          {isDeviceIncompatible ? (
-            <div className="flex items-center gap-2 text-red-400">
-              <AlertTriangle className="w-5 h-5" aria-hidden="true" />
-              <span>Device Incompatible</span>
-            </div>
-          ) : error && errorCode ? (
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-2 text-red-400">
-                <AlertTriangle className="w-5 h-5" aria-hidden="true" />
-                <span>Error</span>
-              </div>
-              {specificAdvice && (
-                <span className="text-xs text-red-300">{specificAdvice}</span>
-              )}
-            </div>
-          ) : isModelLoading ? (
-            <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-              <span>Loading AI Model (~2.3GB)... {modelProgress}%</span>
-            </div>
-          ) : isARActive ? (
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" aria-hidden="true" />
-              <span>AR Active</span>
-            </div>
-          ) : (
-            <span>Ready to Start</span>
-          )}
+          {renderStatusContent()}
         </div>
 
         <div className="flex gap-4 pointer-events-auto">

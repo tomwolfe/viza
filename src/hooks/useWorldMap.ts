@@ -186,7 +186,10 @@ function loadFromStorage(): WorldObject[] {
 }
 
 export function saveWorldMapToStorage(objects: WorldObject[]): void {
-  const data = objects.map((obj) => {
+  const sorted = [...objects].sort((a, b) => b.lastSeen - a.lastSeen);
+  const capped = sorted.slice(0, CONFIG.SPATIAL.MAX_WORLD_OBJECTS);
+
+  const data = capped.map((obj) => {
     const { filter, ...serializableObj } = obj;
     return [serializableObj.id, serializableObj] as [string, WorldObject];
   });

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
-import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
+import type { WorldObject } from '@/hooks/useWorldMap';
 import { getCategoryColor } from '@/utils/objectProcessing';
 import { SharedVideoPlane } from './SharedVideoPlane';
 import type { DetectedObject } from '@/schemas/vision';
@@ -13,7 +13,7 @@ const xrStore = createXRStore();
 
 interface WorldMapRendererProps {
   detectedObjects: DetectedObject[];
-  worldObjects?: WorldObject[];
+  worldObjects: WorldObject[];
   taskActive: boolean;
   currentStepTarget?: string | null;
   videoElement?: HTMLVideoElement | null;
@@ -30,12 +30,6 @@ export function WorldMapRenderer({
   cameraRef,
   viewportRef,
 }: WorldMapRendererProps) {
-  const { getAllObjects } = useWorldMap();
-  const [worldObjectsState, setWorldObjectsState] = useState<WorldObject[]>([]);
-
-  useEffect(() => {
-    setWorldObjectsState(getAllObjects());
-  }, [getAllObjects, worldObjects]);
 
   useEffect(() => {
     if (videoElement) {
@@ -48,6 +42,8 @@ export function WorldMapRenderer({
       checkReady();
     }
   }, [videoElement]);
+
+  const resolvedWorldObjects = worldObjects ?? [];
 
   return (
     <XR store={xrStore}>
@@ -70,7 +66,7 @@ export function WorldMapRenderer({
         );
       })}
 
-      {worldObjectsState.map((obj) => {
+      {resolvedWorldObjects.map((obj) => {
         const categoryColor = getCategoryColor(obj.category);
         return (
           <DetectedObject3D

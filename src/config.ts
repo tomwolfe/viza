@@ -1,4 +1,4 @@
-import { buildVisionPrompt, buildPlanningPrompt, buildCategoryPrompt, buildSystemPrompt, PromptFactory } from '@/services/promptManager';
+import { PromptFactory } from '@/services/promptManager';
 
 export const CONFIG = {
   DEFAULT_MODEL: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
@@ -62,10 +62,6 @@ Return ONLY a valid JSON object with the structure:
 Do not include any other text. Only return the JSON object.`;
 
 export { PromptFactory };
-export { buildSystemPrompt };
-export const getVisionPrompt = buildVisionPrompt;
-export const getPlanningPrompt = buildPlanningPrompt;
-export const getCategoryPrompt = buildCategoryPrompt;
 
 export interface WebGPUCheckResult {
   supported: boolean;

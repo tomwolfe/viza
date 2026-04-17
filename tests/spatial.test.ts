@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import {
-  calculateDistance2D,
-  calculateDistance3D,
+  calculateDistance,
   isWithinThreshold,
 } from '../src/utils/spatial';
 
@@ -15,12 +14,12 @@ const createMockVector3 = (x: number, y: number, z: number, distanceToReturn?: n
 };
 
 describe('spatial.ts', () => {
-  describe('calculateDistance2D', () => {
+  describe('calculateDistance', () => {
     it('should calculate Euclidean distance between two 2D points', () => {
       const pos1 = { x: 0, y: 0 };
       const pos2 = { x: 3, y: 4 };
 
-      const result = calculateDistance2D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(5);
     });
@@ -29,7 +28,7 @@ describe('spatial.ts', () => {
       const pos1 = { x: 5, y: 5 };
       const pos2 = { x: 5, y: 5 };
 
-      const result = calculateDistance2D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(0);
     });
@@ -38,7 +37,7 @@ describe('spatial.ts', () => {
       const pos1 = { x: -3, y: -4 };
       const pos2 = { x: 0, y: 0 };
 
-      const result = calculateDistance2D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(5);
     });
@@ -47,7 +46,7 @@ describe('spatial.ts', () => {
       const pos1 = { x: 0, y: 0 };
       const pos2 = { x: 10, y: 0 };
 
-      const result = calculateDistance2D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(10);
     });
@@ -56,36 +55,34 @@ describe('spatial.ts', () => {
       const pos1 = { x: 0, y: 0 };
       const pos2 = { x: 0, y: 10 };
 
-      const result = calculateDistance2D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(10);
     });
-  });
 
-  describe('calculateDistance3D', () => {
     it('should calculate Euclidean distance between two 3D points', () => {
       const pos1 = { x: 0, y: 0, z: 0 };
       const pos2 = { x: 1, y: 2, z: 2 };
 
-      const result = calculateDistance3D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBeCloseTo(3);
     });
 
-    it('should return 0 for same position', () => {
+    it('should return 0 for same 3D position', () => {
       const pos1 = { x: 1, y: 1, z: 1 };
       const pos2 = { x: 1, y: 1, z: 1 };
 
-      const result = calculateDistance3D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(0);
     });
 
-    it('should handle origin', () => {
+    it('should handle origin in 3D', () => {
       const pos1 = { x: 0, y: 0, z: 0 };
       const pos2 = { x: 3, y: 4, z: 0 };
 
-      const result = calculateDistance3D(pos1, pos2);
+      const result = calculateDistance(pos1, pos2);
 
       expect(result).toBe(5);
     });

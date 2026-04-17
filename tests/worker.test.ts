@@ -3,10 +3,10 @@ import { z } from 'zod';
 import * as webllm from '@mlc-ai/web-llm';
 import { logger } from '../src/config';
 import {
-  getVisionPrompt,
-  getPlanningPrompt,
-  getCategoryPrompt,
-} from '../src/config';
+  buildVisionPrompt,
+  buildPlanningPrompt,
+  buildCategoryPrompt,
+} from '../src/services/promptManager';
 
 vi.mock('@mlc-ai/web-llm', () => ({
   CreateMLCEngine: vi.fn().mockResolvedValue({
@@ -20,9 +20,9 @@ vi.mock('@mlc-ai/web-llm', () => ({
 }));
 
 describe('worker.ts prompt generation', () => {
-  describe('getVisionPrompt', () => {
+  describe('buildVisionPrompt', () => {
     it('should return a valid JSON prompt for vision task', () => {
-      const prompt = getVisionPrompt();
+      const prompt = buildVisionPrompt();
 
       expect(prompt).toContain('"objects"');
       expect(prompt).toContain('"item"');
@@ -33,9 +33,9 @@ describe('worker.ts prompt generation', () => {
     });
   });
 
-  describe('getPlanningPrompt', () => {
+  describe('buildPlanningPrompt', () => {
     it('should return a valid JSON prompt for cleaning goal', () => {
-      const prompt = getPlanningPrompt('clean the room');
+      const prompt = buildPlanningPrompt('clean the room');
 
       expect(prompt).toContain('"taskSteps"');
       expect(prompt).toContain('"instruction"');
@@ -44,16 +44,16 @@ describe('worker.ts prompt generation', () => {
     });
 
     it('should return a valid JSON prompt for trash goal', () => {
-      const prompt = getPlanningPrompt('throw away trash');
+      const prompt = buildPlanningPrompt('throw away trash');
 
       expect(prompt).toContain('"taskSteps"');
       expect(prompt).toContain('cleanup');
     });
   });
 
-  describe('getCategoryPrompt', () => {
+  describe('buildCategoryPrompt', () => {
     it('should return a valid JSON prompt for trash category', () => {
-      const prompt = getCategoryPrompt('throw away trash');
+      const prompt = buildCategoryPrompt('throw away trash');
 
       expect(prompt).toContain('"objects"');
       expect(prompt).toContain('TRASH');
@@ -61,14 +61,14 @@ describe('worker.ts prompt generation', () => {
     });
 
     it('should return a valid JSON prompt for clutter category', () => {
-      const prompt = getCategoryPrompt('organize clutter');
+      const prompt = buildCategoryPrompt('organize clutter');
 
       expect(prompt).toContain('"objects"');
       expect(prompt).toContain('CLUTTER');
     });
 
     it('should return a mixed category prompt for generic goal', () => {
-      const prompt = getCategoryPrompt('help me');
+      const prompt = buildCategoryPrompt('help me');
 
       expect(prompt).toContain('"objects"');
       expect(prompt).toContain('trash');

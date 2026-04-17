@@ -1,13 +1,13 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
-import { useWorldMap, type WorldObject } from '@/hooks/useWorldMap';
 import { useUserMedia } from '@/hooks/useUserMedia';
 import { useWebLLM } from '@/contexts/WebLLMContext';
 import type { DetectedObject } from '@/schemas/vision';
+import type { WorldObject } from '@/hooks/useWorldMap';
 import { CONFIG } from '@/config';
 import * as THREE from 'three';
 
@@ -19,6 +19,7 @@ interface ARSceneProps {
     prompt: string
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
   detectedObjects: DetectedObject[];
+  worldObjects: WorldObject[];
   onObjectsDetected: (objects: DetectedObject[]) => void;
   voiceCommandRef?: React.RefObject<string | null>;
   taskActive?: boolean;
@@ -29,15 +30,12 @@ interface ARSceneProps {
   sceneImageRef?: React.MutableRefObject<ImageBitmap | null>;
 }
 
-export interface ARSceneHandle {
-  runVoiceCommand: (command: string) => void;
-}
-
 export function ARScene({
   isARActive,
   isModelReady,
   runInference,
   detectedObjects,
+  worldObjects,
   onObjectsDetected,
   voiceCommandRef,
   taskActive,
@@ -48,17 +46,11 @@ export function ARScene({
   sceneImageRef,
 }: ARSceneProps) {
   const lastVoiceCommandRef = useRef<string | null>(null);
-  const { getAllObjects } = useWorldMap();
-  const [worldObjects, setWorldObjects] = useState<WorldObject[]>([]);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
   const { videoElement } = useUserMedia({ isActive: isARActive && isModelReady && !isXRMode });
   const { isInferring } = useWebLLM();
-
-  useEffect(() => {
-    setWorldObjects(getAllObjects());
-  }, [getAllObjects]);
 
   const handleObjectsDetected = useCallback(
     (objects: DetectedObject[]) => {
@@ -121,14 +113,6 @@ export function ARScene({
       run(voiceCommandRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isModelReady, run, cancelPending]);
-
-  const runVoiceCommand = useCallback((command: string) => {
-    if (isModelReady && command) {
-      lastVoiceCommandRef.current = command;
-      cancelPending();
-      run(command);
-    }
   }, [isModelReady, run, cancelPending]);
 
   if (!isARActive) return null;

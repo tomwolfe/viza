@@ -4,11 +4,13 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useWebLLM } from '@/contexts/WebLLMContext';
 import { useARSessionManager } from './useARSessionManager';
 import { useTaskOrchestrator } from './useTaskOrchestrator';
+import { useWorldMap, type WorldObject } from './useWorldMap';
 import type { DetectedObject } from '@/schemas/vision';
 import { logger } from '@/config';
 
 export function useAROrchestrator() {
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
+  const { worldMap, addOrUpdateObject, clearWorldMap } = useWorldMap();
 
   const {
     isModelLoading,
@@ -61,6 +63,15 @@ export function useAROrchestrator() {
   }, [llmError]);
 
   useEffect(() => {
+    return () => {
+      if (sceneImageRef.current) {
+        sceneImageRef.current.close();
+        sceneImageRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (lastCompleted && taskOrchestrator.taskState.isActive && !taskOrchestrator.taskState.completed) {
       taskOrchestrator.completeCurrentStep?.();
     }
@@ -89,6 +100,9 @@ export function useAROrchestrator() {
     voiceError: taskOrchestrator.voiceError,
     llmError,
     detectedObjects,
+    worldMap,
+    addOrUpdateObject,
+    clearWorldMap,
     handleStartAR,
     handleVoiceInput,
     handleObjectsDetected,
