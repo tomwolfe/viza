@@ -17,7 +17,6 @@ export interface WorldObject {
   lastSeen: number;
   detectionCount: number;
   smoothedPosition: THREE.Vector3;
-  filter?: (value: THREE.Vector3, timestamp: number) => THREE.Vector3;
 }
 
 interface WorldMapState {
@@ -26,7 +25,7 @@ interface WorldMapState {
 }
 
 type WorldMapAction =
-  | { type: 'ADD_OR_UPDATE'; payload: { obj: DetectedObject; position: THREE.Vector3 } }
+  | { type: 'ADD_OR_UPDATE'; payload: { obj: DetectedObject; position: THREE.Vector3; smoothedPosition: THREE.Vector3; timestamp: number } }
   | { type: 'CLEAR' }
   | { type: 'SET_DAMPENING'; payload: number }
   | { type: 'LOAD'; payload: WorldObject[] };
@@ -35,15 +34,6 @@ const DEFAULT_DAMPENING = CONFIG.SPATIAL.DAMPENING_FACTOR;
 const STORAGE_KEY = 'viza_world_map';
 
 const { ONE_EURO } = CONFIG.SPATIAL;
-
-function filterFactory() {
-  return createOneEuroFilter(
-    new THREE.Vector3(),
-    ONE_EURO.MIN_CUTOFF,
-    ONE_EURO.BETA,
-    ONE_EURO.DCUTOFF
-  );
-}
 
 function findExistingObject(
   objects: WorldObject[],
@@ -80,9 +70,8 @@ export function findExistingObjectKey(
 function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMapState {
   switch (action.type) {
     case 'ADD_OR_UPDATE': {
-      const { obj, position } = action.payload;
+      const { obj, position, smoothedPosition, timestamp } = action.payload;
       const category = categorizeObject(obj.name, obj.action);
-      const timestamp = performance.now();
 
       const existing = findExistingObject(
         state.objects,
@@ -92,14 +81,6 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
       );
 
       if (existing) {
-        let filter = existing.filter;
-        if (!filter) {
-          filter = filterFactory();
-          filter(position.clone(), timestamp);
-        }
-
-        const filteredPosition = filter(position.clone(), timestamp);
-
         return {
           ...state,
           objects: state.objects.map((o) =>
@@ -107,11 +88,10 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
               ? {
                   ...o,
                   position: position.clone(),
-                  smoothedPosition: filteredPosition,
-                  filter,
+                  smoothedPosition: smoothedPosition.clone(),
                   category: category !== 'unknown' ? category : o.category,
                   confidence: obj.confidence ?? o.confidence,
-                  lastSeen: Date.now(),
+                  lastSeen: timestamp,
                   detectionCount: o.detectionCount + 1,
                 }
               : o
@@ -119,19 +99,16 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
         };
       } else {
         const key = generateObjectId(obj.name, position);
-        const filter = filterFactory();
-        filter(position.clone(), timestamp);
 
         const newObj: WorldObject = {
           id: key,
           name: obj.name,
           position: position.clone(),
-          smoothedPosition: position.clone(),
+          smoothedPosition: smoothedPosition.clone(),
           category,
           confidence: obj.confidence ?? 1,
-          lastSeen: Date.now(),
+          lastSeen: timestamp,
           detectionCount: 1,
-          filter,
         };
 
         const newObjects = [...state.objects, newObj];
@@ -176,7 +153,6 @@ function loadFromStorage(): WorldObject[] {
           value.smoothedPosition?.y ?? value.position.y,
           value.smoothedPosition?.z ?? value.position.z
         ),
-        filter: filterFactory(),
       }));
     }
   } catch (e) {
@@ -190,8 +166,7 @@ export function saveWorldMapToStorage(objects: WorldObject[]): void {
   const capped = sorted.slice(0, CONFIG.SPATIAL.MAX_WORLD_OBJECTS);
 
   const data = capped.map((obj) => {
-    const { filter, ...serializableObj } = obj;
-    return [serializableObj.id, serializableObj] as [string, WorldObject];
+    return [obj.id, obj] as [string, WorldObject];
   });
 
   try {
@@ -217,6 +192,7 @@ export function useWorldMap(): UseWorldMapReturn {
   });
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filtersRef = useRef<Map<string, (value: THREE.Vector3, timestamp: number) => THREE.Vector3>>(new Map());
 
   useEffect(() => {
     const objects = loadFromStorage();
@@ -243,7 +219,27 @@ export function useWorldMap(): UseWorldMapReturn {
   }, []);
 
   const addOrUpdateObject = useCallback((obj: DetectedObject, position: THREE.Vector3) => {
-    dispatch({ type: 'ADD_OR_UPDATE', payload: { obj, position } });
+    const timestamp = performance.now();
+    const key = generateObjectId(obj.name, position);
+
+    let filter = filtersRef.current.get(key);
+    if (!filter) {
+      filter = createOneEuroFilter(
+        new THREE.Vector3(),
+        ONE_EURO.MIN_CUTOFF,
+        ONE_EURO.BETA,
+        ONE_EURO.DCUTOFF
+      );
+      filtersRef.current.set(key, filter);
+    }
+
+    filter(position.clone(), timestamp);
+    const smoothedPosition = filter(position.clone(), timestamp);
+
+    dispatch({
+      type: 'ADD_OR_UPDATE',
+      payload: { obj, position, smoothedPosition, timestamp }
+    });
   }, []);
 
   const getObjectAtPosition = useCallback(

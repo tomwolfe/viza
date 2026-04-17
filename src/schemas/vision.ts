@@ -18,11 +18,13 @@ const RawDetectedObjectSchema = z.object({
 
 export const DetectedObjectSchema = RawDetectedObjectSchema;
 
-const LlmVisionResponseSchema = z.object({
+export const LlmVisionResponseSchema = z.object({
   objects: z.array(LlmDetectedObjectSchema),
   completed: z.boolean().default(false),
   rawText: z.string().optional(),
 });
+
+export const VisionResponseSchemaRaw = LlmVisionResponseSchema;
 
 export const VisionResponseSchema = LlmVisionResponseSchema
   .transform((response) => ({

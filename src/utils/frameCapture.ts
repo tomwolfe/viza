@@ -2,42 +2,69 @@ import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
 
-let cachedCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
-let cachedCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
+class FrameCaptureManager {
+  private canvas: OffscreenCanvas | HTMLCanvasElement | null = null;
+  private ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
+  private useOffscreen: boolean = false;
 
-export function resetFrameCaptureCache(): void {
-  cachedCanvas = null;
-  cachedCtx = null;
+  getCanvasAndContext(): {
+    canvas: OffscreenCanvas | HTMLCanvasElement;
+    ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+    useOffscreen: boolean;
+  } {
+    if (this.canvas && this.ctx) {
+      return {
+        canvas: this.canvas,
+        ctx: this.ctx,
+        useOffscreen: this.useOffscreen
+      };
+    }
+
+    if (typeof OffscreenCanvas !== 'undefined') {
+      this.canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+      this.ctx = this.canvas.getContext('2d');
+      this.useOffscreen = true;
+    } else if (typeof document !== 'undefined') {
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = TARGET_SIZE;
+      this.canvas.height = TARGET_SIZE;
+      this.ctx = this.canvas.getContext('2d');
+      this.useOffscreen = false;
+    } else {
+      throw new Error('Neither OffscreenCanvas nor document.createElement is available');
+    }
+
+    return { canvas: this.canvas, ctx: this.ctx, useOffscreen: this.useOffscreen };
+  }
+
+  dispose(): void {
+    if (this.canvas) {
+      if (this.useOffscreen) {
+        try {
+          (this.canvas as unknown as { close(): void }).close();
+        } catch {
+          // offscreen canvas close may fail in some browsers
+        }
+      } else if (this.canvas instanceof HTMLCanvasElement) {
+        const ctx = this.canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+      }
+      this.canvas = null;
+      this.ctx = null;
+    }
+  }
 }
 
-function getCanvasAndContext(): { 
-  canvas: OffscreenCanvas | HTMLCanvasElement; 
-  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
-  useOffscreen: boolean;
-} {
-  if (cachedCanvas && cachedCtx) {
-    return { 
-      canvas: cachedCanvas, 
-      ctx: cachedCtx, 
-      useOffscreen: typeof OffscreenCanvas !== 'undefined' && cachedCanvas instanceof OffscreenCanvas 
-    };
-  }
+const manager = new FrameCaptureManager();
 
-  let useOffscreen = false;
-  if (typeof OffscreenCanvas !== 'undefined') {
-    cachedCanvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-    cachedCtx = cachedCanvas.getContext('2d');
-    useOffscreen = true;
-  } else if (typeof document !== 'undefined') {
-    cachedCanvas = document.createElement('canvas');
-    cachedCanvas.width = TARGET_SIZE;
-    cachedCanvas.height = TARGET_SIZE;
-    cachedCtx = cachedCanvas.getContext('2d');
-  } else {
-    throw new Error('Neither OffscreenCanvas nor document.createElement is available');
-  }
+export function resetFrameCaptureCache(): void {
+  manager.dispose();
+}
 
-  return { canvas: cachedCanvas, ctx: cachedCtx, useOffscreen };
+export function disposeFrameCapture(): void {
+  manager.dispose();
 }
 
 function isValidSource(source: CanvasImageSource): boolean {
@@ -50,7 +77,7 @@ function isValidSource(source: CanvasImageSource): boolean {
 async function downsampleToBitmap(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  const { canvas, ctx, useOffscreen } = getCanvasAndContext();
+  const { canvas, ctx, useOffscreen } = manager.getCanvasAndContext();
 
   if (!ctx) {
     throw new Error('Failed to get 2D context from canvas');

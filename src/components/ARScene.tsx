@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
@@ -52,6 +52,14 @@ export function ARScene({
   const { videoElement } = useUserMedia({ isActive: isARActive && isModelReady && !isXRMode });
   const { isInferring } = useWebLLM();
 
+const actionStrings = useMemo(() => {
+    return (objects: DetectedObject[]) =>
+      objects
+        .filter(obj => obj.action)
+        .map(obj => `${obj.name}: ${obj.action}`)
+        .join('. ');
+  }, []);
+
   const handleObjectsDetected = useCallback(
     (objects: DetectedObject[]) => {
       onObjectsDetected(objects);
@@ -60,16 +68,13 @@ export function ARScene({
         checkTargetFound(objects);
       }
 
-      const actions = objects
-        .filter(obj => obj.action)
-        .map(obj => `${obj.name}: ${obj.action}`)
-        .join('. ');
-
+      const actions = actionStrings(objects);
+ 
       if (actions && speak) {
         speak(actions);
       }
     },
-    [onObjectsDetected, checkTargetFound, speak]
+    [onObjectsDetected, checkTargetFound, speak, actionStrings]
   );
 
   const { captureFrame } = useFrameCapture();

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage, VizaErrorCode } from '@/types/worker';
 import { CONFIG, logger } from '@/config';
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
-import { TASK_CONFIGS, VisionResponseSchema, PlanningResponseSchema, type InferenceResult, type PlanningResult, type TaskRunnerConfig, buildVisionPrompt, buildPlanningPrompt, buildCategoryPrompt } from './workerConfigs';
+import { TASK_CONFIGS, type TaskRunnerConfig } from '@/services/promptManager';
+import { VisionResponseSchema, PlanningResponseSchema } from '@/schemas/vision';
 
 function hasImage(msg: WorkerOutgoingMessage): msg is Extract<WorkerOutgoingMessage, { image: ImageBitmap }> {
   return 'image' in msg;

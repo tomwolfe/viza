@@ -1,27 +1,15 @@
 import { z } from 'zod';
 import type { WorkerIncomingMessage } from '@/types/worker';
+import {
+  VisionResponseSchemaRaw,
+  PlanningResponseSchema,
+  type VisionResponse,
+  type PlanningResponse,
+} from '@/schemas/vision';
 
-export const VisionResponseSchema = z.object({
-  objects: z.array(z.object({
-    item: z.string(),
-    coordinates: z.array(z.number()).length(4),
-    action_step: z.string().optional(),
-    category: z.string().optional(),
-  })),
-  completed: z.boolean().optional(),
-});
-
-export const PlanningResponseSchema = z.object({
-  taskSteps: z.array(z.object({
-    id: z.string(),
-    instruction: z.string(),
-    targetObject: z.string().optional(),
-    validationPrompt: z.string(),
-  })),
-});
-
-export type InferenceResult = z.infer<typeof VisionResponseSchema>;
-export type PlanningResult = z.infer<typeof PlanningResponseSchema>;
+export const VisionResponseSchema = VisionResponseSchemaRaw;
+export type InferenceResult = z.infer<typeof VisionResponseSchemaRaw>;
+export type PlanningResult = PlanningResponse;
 
 export interface TaskRunnerConfig {
   promptBuilder: (userInput: string) => string;

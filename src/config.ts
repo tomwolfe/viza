@@ -1,5 +1,3 @@
-import { PromptFactory } from '@/services/promptManager';
-
 export const CONFIG = {
   DEFAULT_MODEL: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
   MODEL_SIZE_GB: 2.3,
@@ -60,8 +58,6 @@ Return ONLY a valid JSON object with the structure:
   "completed": boolean
 }
 Do not include any other text. Only return the JSON object.`;
-
-export { PromptFactory };
 
 export interface WebGPUCheckResult {
   supported: boolean;
