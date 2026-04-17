@@ -14,8 +14,6 @@ export function ARContent() {
   const {
     isARActive,
     error,
-    unifiedErrorCode,
-    unifiedError,
     errorCode,
     isModelLoading,
     modelProgress,
@@ -41,6 +39,9 @@ export function ARContent() {
     sceneImageRef,
     isXRMode,
   } = useAROrchestrator();
+
+  const unifiedError = error;
+  const unifiedErrorCode = errorCode;
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-black">
@@ -106,7 +107,7 @@ export function ARContent() {
         transcript={transcript}
         isPlanning={isPlanning}
         taskState={taskState}
-        currentInstruction={currentInstruction}
+        currentInstruction={currentInstruction ?? ''}
         detectedObjects={detectedObjects}
         isSpeaking={isSpeaking}
         isInferring={isInferring}

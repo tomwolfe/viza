@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as THREE from 'three';
 import { categorizeObject, generateObjectId, getCategoryColor, getCategoryLabel, ObjectCategory } from '../src/utils/objectProcessing';
 import { CONFIG } from '@/config';
 
@@ -43,7 +44,7 @@ describe('Object Processing Utilities', () => {
   });
 
   it('should generate a consistent object ID based on name and position', () => {
-    const position = { x: 1, y: 2, z: 3 };
+    const position = new THREE.Vector3(1, 2, 3);
     expect(generateObjectId('My Hammer', position)).toBe('my-hammer');
   });
 

@@ -3,7 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { WebLLMProvider, useWebLLM } from '../src/contexts/WebLLMContext';
 import * as config from '../src/config';
 
-vi.spyOn(config, 'checkWebGPU').mockResolvedValue({ supported: true, memoryGB: 16, recommendedGB: 8 });
+vi.spyOn(config, 'checkWebGPU').mockResolvedValue({ supported: true, memoryGB: 16, recommendedGB: 8, isMobile: false, issues: [] });
 
 let triggerComplete: ((messageId: string, response: unknown) => void) | null = null;
 let triggerError: ((message: string, code: string) => void) | null = null;

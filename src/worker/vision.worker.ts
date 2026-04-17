@@ -1,9 +1,9 @@
 import * as webllm from '@mlc-ai/web-llm';
 import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage, VizaErrorCode } from '@/types/worker';
-import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt } from '@/config';
+import { CONFIG, logger } from '@/config';
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
-import { TASK_CONFIGS, VisionResponseSchema, PlanningResponseSchema, type InferenceResult, type PlanningResult, type TaskRunnerConfig } from './workerConfigs';
+import { TASK_CONFIGS, VisionResponseSchema, PlanningResponseSchema, type InferenceResult, type PlanningResult, type TaskRunnerConfig, buildVisionPrompt, buildPlanningPrompt, buildCategoryPrompt } from './workerConfigs';
 
 function hasImage(msg: WorkerOutgoingMessage): msg is Extract<WorkerOutgoingMessage, { image: ImageBitmap }> {
   return 'image' in msg;

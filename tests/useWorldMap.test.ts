@@ -15,10 +15,10 @@ vi.mock('../src/utils/safeStorage', () => ({
 describe('useWorldMap logic', () => {
   describe('saveWorldMapToStorage LRU capping', () => {
     it('should cap the number of stored objects to MAX_WORLD_OBJECTS', () => {
-      const map = new Map<string, WorldObject>();
+      const objects: WorldObject[] = [];
       // Create 105 objects with different lastSeen times
       for (let i = 0; i < 105; i++) {
-        map.set(`obj-${i}`, {
+        objects.push({
           id: `obj-${i}`,
           name: `object ${i}`,
           position: new THREE.Vector3(i, 0, 0),
@@ -30,7 +30,7 @@ describe('useWorldMap logic', () => {
         });
       }
 
-      saveWorldMapToStorage(map);
+      saveWorldMapToStorage(objects);
 
       expect(safeSet).toHaveBeenCalled();
       const savedData = (vi.mocked(safeSet).mock.calls[0][0] as [string, WorldObject][]);

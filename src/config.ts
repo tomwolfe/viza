@@ -1,7 +1,4 @@
-/**
- * Centralized configuration for Viza AR application.
- * Single source of truth for all tunable parameters.
- */
+import { buildVisionPrompt, buildPlanningPrompt, buildCategoryPrompt, buildSystemPrompt, PromptFactory } from '@/services/promptManager';
 
 export const CONFIG = {
   DEFAULT_MODEL: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
@@ -50,103 +47,6 @@ export const CONFIG = {
   },
 };
 
-export const SYSTEM_PROMPT_BASE = `You are a spatial assistant for assembly tasks. Analyze this image based on the user's audio request.
-Current Task Context: {taskContext}
-Current Step: {currentStep}
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-
-export function buildSystemPrompt(taskContext: string, currentStep: string): string {
-  return SYSTEM_PROMPT_BASE
-    .replace('{taskContext}', taskContext)
-    .replace('{currentStep}', currentStep);
-}
-
-export const PromptFactory = {
-  vision(): string {
-    return `Analyze this scene and identify objects of interest. Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-  },
-
-  planning(userGoal: string): string {
-    const isCleaningMode = /clean|organize|trash|garbage|mess/i.test(userGoal);
-    const categoryFocus = isCleaningMode
-      ? 'Identify all objects that match the goal category and create a prioritized cleanup plan.'
-      : 'Analyze this image and create a detailed task plan for completing this goal.';
-
-    return `You are a spatial planning assistant. The user wants to: "${userGoal}"
-
-${categoryFocus}
-
-Return ONLY a valid JSON object with this structure:
-{
-  "taskSteps": [
-    {
-      "id": "step-N",
-      "instruction": "Clear description of what to do",
-      "targetObject": "The specific object or category to target",
-      "validationPrompt": "How to verify this step is complete"
-    }
-  ]
-}
-
-Provide 5-10 specific steps in logical order. Do not include any other text.`;
-  },
-
-  category(userGoal: string): string {
-    const isTrash = /trash|garbage|discard|throw away|waste/i.test(userGoal);
-    const isClutter = /clean|organize|mess|tidy|put away/i.test(userGoal);
-
-    let categoryFocus = '';
-    if (isTrash) {
-      categoryFocus = 'Identify all TRASH items (wrappers, bottles, cans, paper waste, food containers, etc.) and return their bounding boxes.';
-    } else if (isClutter) {
-      categoryFocus = 'Identify all CLUTTER items (clothes, papers, scattered items, messy areas) and return their bounding boxes.';
-    } else {
-      categoryFocus = 'Identify all objects and their categories. Use "keep" for items to preserve, "trash" for waste, "clutter" for items to organize.';
-    }
-
-    return `You are a spatial assistant for cleaning tasks.
-User Goal: "${userGoal}"
-
-${categoryFocus}
-
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string - object name",
-      "coordinates": [x, y, width, height],
-      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
-      "category": "string - one of: trash, clutter, keep, tool, unknown"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-  },
-};
-
 export const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
 Return ONLY a valid JSON object with the structure:
 {
@@ -161,50 +61,91 @@ Return ONLY a valid JSON object with the structure:
 }
 Do not include any other text. Only return the JSON object.`;
 
-export function getVisionPrompt(): string {
-  return PromptFactory.vision();
+export { PromptFactory };
+export { buildSystemPrompt };
+export const getVisionPrompt = buildVisionPrompt;
+export const getPlanningPrompt = buildPlanningPrompt;
+export const getCategoryPrompt = buildCategoryPrompt;
+
+export interface WebGPUCheckResult {
+  supported: boolean;
+  memoryGB: number;
+  recommendedGB: number;
+  isMobile: boolean;
+  issues: string[];
 }
 
-export function getPlanningPrompt(userGoal: string): string {
-  return PromptFactory.planning(userGoal);
-}
+export async function checkWebGPU(): Promise<WebGPUCheckResult> {
+  const result: WebGPUCheckResult = {
+    supported: false,
+    memoryGB: 0,
+    recommendedGB: 8,
+    isMobile: false,
+    issues: [],
+  };
 
-export function getCategoryPrompt(userGoal: string): string {
-  return PromptFactory.category(userGoal);
-}
-
-export async function checkWebGPU() {
-  const result = { supported: false, memoryGB: 0, recommendedGB: 8 };
   if (typeof navigator === 'undefined' || !navigator.gpu) {
+    result.issues.push('WebGPU not available in browser');
     return result;
   }
 
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
+      result.issues.push('No GPU adapter found');
       return result;
     }
 
-    const device = await adapter.requestDevice();
-    const totalMemory = device.limits?.maxStorageBufferBindingSize || 0;
-    const memoryGB = Math.floor(totalMemory / (1024 * 1024 * 1024));
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    result.isMobile = isMobile;
 
-    if (memoryGB >= 8) {
-      return { supported: true, memoryGB, recommendedGB: 8 };
+    const device = await adapter.requestDevice();
+
+    const maxStorageBuffer = device.limits.maxStorageBufferBindingSize;
+    const maxUniformBuffer = device.limits.maxUniformBufferBindingSize;
+    const maxComputeWorkgroupStorage = device.limits.maxComputeWorkgroupStorageSize;
+
+    result.memoryGB = Math.floor(maxStorageBuffer / (1024 * 1024 * 1024));
+
+    if (isMobile) {
+      if (maxStorageBuffer < 256 * 1024 * 1024) {
+        result.issues.push('Mobile GPU has insufficient storage buffer size (min 256MB required)');
+      }
+      if (maxComputeWorkgroupStorage < 16 * 1024) {
+        result.issues.push('Mobile GPU has insufficient compute shader memory');
+      }
     }
 
-    return { supported: true, memoryGB, recommendedGB: 8 };
-  } catch {
-    return { supported: false, memoryGB: 0, recommendedGB: 8 };
+    if (maxStorageBuffer < 256 * 1024 * 1024) {
+      result.issues.push('Storage buffer binding size below minimum requirement');
+    }
+
+    if (maxUniformBuffer < 64 * 1024) {
+      result.issues.push('Uniform buffer size below recommendation');
+    }
+
+    if (result.issues.length === 0) {
+      result.supported = true;
+    }
+
+    return result;
+  } catch (error) {
+    result.issues.push(`WebGPU initialization failed: ${(error as Error).message}`);
+    return result;
   }
 }
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'trace';
 
 export const logger = {
   debug: (...args: unknown[]) => {
     if (CONFIG.ENABLE_TELEMETRY) {
       console.debug('[Viza:DEBUG]', ...args);
+    }
+  },
+  trace: (...args: unknown[]) => {
+    if (CONFIG.ENABLE_TELEMETRY) {
+      console.debug('[Viza:TRACE]', ...args);
     }
   },
   info: (...args: unknown[]) => {
