@@ -14,6 +14,9 @@ export function ARContent() {
   const {
     isARActive,
     error,
+    unifiedErrorCode,
+    unifiedError,
+    errorCode,
     isModelLoading,
     modelProgress,
     isModelReady,
@@ -93,6 +96,10 @@ export function ARContent() {
         modelProgress={modelProgress}
         isListening={isListening}
         isDeviceIncompatible={!isDeviceCompatible}
+        unifiedErrorCode={unifiedErrorCode}
+        unifiedError={unifiedError}
+        errorCode={errorCode as any}
+        error={error}
       />
 
       <AROverlay

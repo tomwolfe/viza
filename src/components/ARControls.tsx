@@ -6,13 +6,15 @@ import type { VizaErrorCode } from '@/types/worker';
 
 interface ARControlsProps {
   onStartAR: () => void;
-  onVoiceInput: () => void;
+ onVoiceInput: () => void;
   onResetCamera?: () => void;
   isARActive: boolean;
   isModelLoading: boolean;
   modelProgress: number;
   isListening: boolean;
   isDeviceIncompatible?: boolean;
+  unifiedErrorCode?: VizaErrorCode | null;
+  unifiedError?: string | null;
   errorCode?: VizaErrorCode | null;
   error?: string | null;
 }

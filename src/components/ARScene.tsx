@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState, useImperativeHandle } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
@@ -130,12 +130,6 @@ export function ARScene({
       run(command);
     }
   }, [isModelReady, run, cancelPending]);
-
-  useImperativeHandle(
-    useRef<ARSceneHandle | null>(null),
-    () => ({ runVoiceCommand }),
-    [runVoiceCommand]
-  );
 
   if (!isARActive) return null;
 

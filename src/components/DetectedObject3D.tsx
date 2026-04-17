@@ -36,19 +36,17 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
     const camera = state.camera as THREE.PerspectiveCamera;
     const viewport = state.viewport;
 
-    get3DPosition(
+    get3DPosition({
       x,
       y,
       width,
       height,
       camera,
-      { width: viewport.width, height: viewport.height },
+      viewport: { width: viewport.width, height: viewport.height },
       targetSize,
-      position ? 0 : worldDepth,
-      undefined,
-      undefined,
-      groupRef.current.position
-    );
+      depth: position ? 0 : worldDepth,
+      targetVector: groupRef.current.position,
+    });
   });
 
   return (

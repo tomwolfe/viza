@@ -34,7 +34,6 @@ export interface UseTaskStateReturn {
   setSpeak: (speakFn: (text: string) => void) => void;
   isPlanning: boolean;
   checkTargetFound: (detectedObjects: DetectedObject[]) => void;
-  handleVoiceCommand: (command: string, isModelReady: boolean) => void;
 }
 
 const STORAGE_KEY = 'viza_task_state';
@@ -240,17 +239,6 @@ export function useTaskState(): UseTaskStateReturn {
     }
   }, [taskState, nextStep]);
 
-  const handleVoiceCommand = useCallback((command: string, isModelReady: boolean) => {
-    if (!isModelReady || isPlanning) return;
-    
-    const isCleaningGoal = /clean|organize|trash|garbage|mess|fix|help/i.test(command);
-    
-    if (isCleaningGoal && !taskState.isActive) {
-      return command;
-    }
-    return null;
-  }, [isPlanning, taskState.isActive]);
-
   return {
     taskState,
     startTask,
@@ -264,6 +252,5 @@ export function useTaskState(): UseTaskStateReturn {
     setSpeak,
     isPlanning,
     checkTargetFound,
-    handleVoiceCommand,
   };
 }

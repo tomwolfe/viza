@@ -7,12 +7,7 @@ export function useVoiceIntent() {
     return /clean|organize|trash|garbage|mess|fix|help/i.test(transcript);
   }, []);
 
-  const isNavigationIntent = useCallback((transcript: string) => {
-    return /go to|where is|find/i.test(transcript);
-  }, []);
-
   return {
     isCleaningIntent,
-    isNavigationIntent,
   };
 }

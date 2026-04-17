@@ -27,6 +27,7 @@ export function useAROrchestrator() {
     runInference,
     runPlanningInference,
     error: llmError,
+    errorCode: llmErrorCode,
     lastCompleted,
   } = useWebLLM();
 
@@ -98,6 +99,7 @@ export function useAROrchestrator() {
     stopListening,
     speak,
     error: voiceError,
+    errorCode: voiceErrorCode,
   } = useVoice(handleTranscriptReady);
 
   useEffect(() => {
@@ -159,10 +161,21 @@ export function useAROrchestrator() {
 
   const currentInstruction = getCurrentInstruction();
 
+// Prioritize errors: Orchestrator > XR > LLM > Voice
+const unifiedError = error || webXR.errorMessage || llmError || voiceError;
+const unifiedErrorCode = error 
+  ? 'ORCHESTRATOR_ERROR' 
+  : webXR.error 
+  ? webXR.error 
+  : llmErrorCode 
+  ? llmErrorCode 
+  : voiceErrorCode;
+
   return {
     isARActive,
     setIsARActive,
-    error,
+    error: unifiedError,
+    errorCode: unifiedErrorCode,
     setError,
     isModelLoading,
     modelProgress,

@@ -5,12 +5,20 @@ import { CONFIG, logger, getVisionPrompt, getPlanningPrompt, getCategoryPrompt }
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
 import { TASK_CONFIGS, VisionResponseSchema, PlanningResponseSchema, type InferenceResult, type PlanningResult, type TaskRunnerConfig } from './workerConfigs';
 
+function hasImage(msg: WorkerOutgoingMessage): msg is Extract<WorkerOutgoingMessage, { image: ImageBitmap }> {
+  return 'image' in msg;
+}
+
 function validateImage(msg: WorkerOutgoingMessage): boolean {
-  if (!msg.image) {
+  if (!hasImage(msg)) {
+    return false;
+  }
+  const typedMsg = msg as Extract<WorkerOutgoingMessage, { image: ImageBitmap }>;
+  if (!typedMsg.image) {
     postMessage({
       type: 'error',
       message: `Missing image for ${msg.type}`,
-      messageId: (msg as any).messageId,
+      messageId: typedMsg.messageId,
       errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
     });
     return false;

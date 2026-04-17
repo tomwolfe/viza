@@ -14,19 +14,33 @@ export interface HitTestResult {
   orientation: THREE.Quaternion;
 }
 
-export function get3DPosition(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  camera: THREE.PerspectiveCamera,
-  viewport: { width: number; height: number },
-  targetSize: number,
-  depth: number,
-  hitTestResult?: HitTestResult,
-  cameraOffset?: THREE.Vector3,
-  targetVector?: THREE.Vector3
-): THREE.Vector3 {
+export interface Get3DPositionOptions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  camera: THREE.PerspectiveCamera;
+  viewport: { width: number; height: number };
+  targetSize: number;
+  depth: number;
+  hitTestResult?: HitTestResult;
+  cameraOffset?: THREE.Vector3;
+  targetVector?: THREE.Vector3;
+}
+
+export function get3DPosition({
+  x,
+  y,
+  width,
+  height,
+  camera,
+  viewport,
+  targetSize,
+  depth,
+  hitTestResult,
+  cameraOffset,
+  targetVector,
+}: Get3DPositionOptions): THREE.Vector3 {
   const result = targetVector || new THREE.Vector3();
 
   if (hitTestResult) {

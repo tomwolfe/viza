@@ -87,7 +87,7 @@ export class WorkerClient {
       this.rejectAllPending('Worker crashed');
     };
 
-    this.isInitialized = this.isInitialized || true;
+    this.isInitialized = true;
 
     this.lastPongTime = Date.now();
   }

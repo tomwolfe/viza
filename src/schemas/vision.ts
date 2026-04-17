@@ -62,10 +62,6 @@ export function parseVisionResponse(data: unknown): VisionResponse | null {
   return null;
 }
 
-export function parseLlmVisionResponse(data: unknown): VisionResponse | null {
-  return parseVisionResponse(data);
-}
-
 export function parsePlanningResponse(data: unknown): PlanningResponse | null {
   const result = PlanningResponseSchema.safeParse(data);
   if (result.success) {

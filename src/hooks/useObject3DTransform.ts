@@ -4,7 +4,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
-import { projectBoundingBoxSize, get3DPosition } from '@/utils/spatial';
+import { projectBoundingBoxSize } from '@/utils/spatial';
 import { CONFIG } from '@/config';
 
 interface UseObject3DTransformOptions {
