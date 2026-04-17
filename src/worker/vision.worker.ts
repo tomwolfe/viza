@@ -3,11 +3,33 @@ import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage, VizaErrorCode } from '@/types/worker';
 import { CONFIG, logger } from '@/config';
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
-import { TASK_CONFIGS, type TaskRunnerConfig } from '@/services/promptManager';
+import { TASK_CONFIGS, buildChatMessages, buildPlanningMessages, buildCategoryMessages, type TaskRunnerConfig } from '@/services/promptManager';
 import { VisionResponseSchema, PlanningResponseSchema } from '@/schemas/vision';
 
 function hasImage(msg: WorkerOutgoingMessage): msg is Extract<WorkerOutgoingMessage, { image: ImageBitmap }> {
   return 'image' in msg;
+}
+
+function sendError(messageId: string, message: string, code: VizaErrorCode, error?: Error): void {
+  postMessage({
+    type: 'error',
+    messageId,
+    message,
+    error: error?.toString(),
+    errorCode: code,
+  });
+}
+
+function mapErrorToCode(error: unknown): VizaErrorCode {
+  const err = error as Error;
+  const message = err.message?.toLowerCase() ?? '';
+  
+  if (message.includes('timeout')) return 'INFERENCE_TIMEOUT';
+  if (message.includes('memory') || message.includes('gpu')) return 'WEBGPU_NOT_SUPPORTED';
+  if (message.includes('model') || message.includes('engine')) return 'MODEL_NOT_READY';
+  if (message.includes('parse') || message.includes('json')) return 'INVALID_RESPONSE';
+  
+  return 'INFERENCE_ERROR';
 }
 
 function validateImage(msg: WorkerOutgoingMessage): boolean {
@@ -16,12 +38,7 @@ function validateImage(msg: WorkerOutgoingMessage): boolean {
   }
   const typedMsg = msg as Extract<WorkerOutgoingMessage, { image: ImageBitmap }>;
   if (!typedMsg.image) {
-    postMessage({
-      type: 'error',
-      message: `Missing image for ${msg.type}`,
-      messageId: typedMsg.messageId,
-      errorCode: 'WORKER_INIT_FAILED' as VizaErrorCode,
-    });
+    sendError(typedMsg.messageId, `Missing image for ${msg.type}`, 'WORKER_INIT_FAILED');
     return false;
   }
   return true;
@@ -69,7 +86,7 @@ self.onmessage = async (event: MessageEvent) => {
       break;
 
     default:
-      postMessage({ type: 'unknown_message', received: (msg as any).type });
+      sendError('', `Unknown message type: ${(msg as any).type}`, 'WORKER_INIT_FAILED');
       break;
   }
 };
@@ -86,29 +103,22 @@ async function runTask(
   config: TaskRunnerConfig
 ): Promise<void> {
   if (!engine || !isInitialized) {
-    postMessage({
-      type: 'error',
-      message: 'Engine not initialized. Call init first.',
-      messageId,
-    });
+    sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY');
     return;
   }
 
-  const userPrompt = config.promptBuilder(userInput);
+  let messages: webllm.ChatCompletionMessageParam[];
+  
+  if (config.responseType === 'planning_complete') {
+    messages = buildPlanningMessages(image, userInput, systemPrompt) as webllm.ChatCompletionMessageParam[];
+  } else if (config.responseType === 'inference_complete' && config.maxTokens === 1024) {
+    messages = buildCategoryMessages(image, userInput, systemPrompt) as webllm.ChatCompletionMessageParam[];
+  } else {
+    messages = buildChatMessages(image, userInput, systemPrompt) as webllm.ChatCompletionMessageParam[];
+  }
 
   try {
     postMessage({ type: 'inference_start' });
-
-    const messages: webllm.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: image } },
-          { type: 'text', text: userPrompt },
-        ],
-      },
-    ] as webllm.ChatCompletionMessageParam[];
 
     const response = await engine.chat.completions.create({
       messages,
@@ -142,12 +152,8 @@ async function runTask(
     } as WorkerIncomingMessage);
   } catch (error) {
     const err = error as Error;
-    postMessage({
-      type: 'error',
-      messageId,
-      message: `Inference failed: ${err.message}`,
-      error: err.toString(),
-    });
+    const code = mapErrorToCode(err);
+    sendError(messageId, `Inference failed: ${err.message}`, code, err);
   } finally {
     try {
       image.close();
@@ -176,8 +182,11 @@ async function initializeModel(modelId: string): Promise<void> {
       });
     };
 
+    const appConfig = CONFIG.USE_INDEXED_DB_CACHE ? { useIndexedDBCache: true } : {};
+
     engine = await webllm.CreateMLCEngine(modelId, {
       initProgressCallback: initProgressCallback,
+      ...appConfig,
     });
 
     isInitialized = true;
@@ -187,14 +196,12 @@ async function initializeModel(modelId: string): Promise<void> {
       type: 'init_complete',
       model: modelId,
       progress: 100,
+      cacheStatus: CONFIG.USE_INDEXED_DB_CACHE ? 'indexeddb' : 'cache',
     });
   } catch (error) {
     const err = error as Error;
-    postMessage({
-      type: 'error',
-      message: `Failed to initialize model: ${err.message}`,
-      error: err.toString(),
-    });
+    const code = mapErrorToCode(err);
+    sendError('', `Failed to initialize model: ${err.message}`, code, err);
   }
 }
 

@@ -79,18 +79,14 @@ const actionStrings = useMemo(() => {
 
   const { captureFrame } = useFrameCapture();
 
-  const handleCaptureFrame = useCallback(async (video: HTMLVideoElement | null) => {
+const handleCaptureFrame = useCallback(async (video: HTMLVideoElement | null) => {
     const frame = await captureFrame(video);
     if (frame && sceneImageRef) {
-      // Update the shared ref for planning
       if (sceneImageRef.current) {
-        sceneImageRef.current.close();
+        try {
+          sceneImageRef.current.close();
+        } catch {}
       }
-      // Create a copy for the ref to avoid closing it when inference is done
-      // Actually ImageBitmap is transferable, but if we want to keep it we might need to clone it
-      // or just manage its lifecycle carefully.
-      // Since runInference might close it, we should probably clone it if we want to keep it.
-      // But createImageBitmap from ImageBitmap is a way to clone it.
       sceneImageRef.current = await createImageBitmap(frame);
     }
     return frame;

@@ -6,6 +6,8 @@ export const CONFIG = {
   INFERENCE_TIMEOUT_MS: 15000,
   PLANNING_TIMEOUT_MS: 30000,
   ENABLE_TELEMETRY: process.env.NODE_ENV === 'development',
+  USE_INDEXED_DB_CACHE: true,
+  SHOW_MODEL_CACHE_HINT: true,
 
   SPATIAL: {
     TARGET_SIZE: 512,
@@ -112,7 +114,7 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
       result.issues.push('Storage buffer binding size below minimum requirement');
     }
 
-    if (maxUniformBuffer < 64 * 1024) {
+    if (maxUniformBuffer < 64 * 1024 * 1024) {
       result.issues.push('Uniform buffer size below recommendation');
     }
 
@@ -125,6 +127,19 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     result.issues.push(`WebGPU initialization failed: ${(error as Error).message}`);
     return result;
   }
+}
+
+export function estimateModelCacheStatus(): { likelyCached: boolean; message: string } {
+  if (!CONFIG.SHOW_MODEL_CACHE_HINT) {
+    return { likelyCached: false, message: '' };
+  }
+  
+  return {
+    likelyCached: CONFIG.USE_INDEXED_DB_CACHE,
+    message: CONFIG.USE_INDEXED_DB_CACHE 
+      ? `Model will be cached in IndexedDB after first load. Subsequent uses won't require ${CONFIG.MODEL_SIZE_GB}GB download.`
+      : `Model uses browser Cache API. May require re-download on subsequent uses.`,
+  };
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'trace';

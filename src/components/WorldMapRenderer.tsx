@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
+import { PooledBoundingBoxes, shouldUsePooling } from './DetectedObject3D/PooledBoundingBox';
 import type { WorldObject } from '@/hooks/useWorldMap';
 import { getCategoryColor } from '@/utils/objectProcessing';
 import { SharedVideoPlane } from './SharedVideoPlane';
 import type { DetectedObject } from '@/schemas/vision';
+import { CONFIG } from '@/config';
 
 const xrStore = createXRStore();
 
@@ -44,6 +46,35 @@ export function WorldMapRenderer({
   }, [videoElement]);
 
   const resolvedWorldObjects = worldObjects ?? [];
+  const useInstancedRendering = shouldUsePooling(resolvedWorldObjects.length);
+
+  const pooledBoxData = useMemo(() => {
+    if (!useInstancedRendering) return null;
+
+    const boxSizes: Array<{ width: number; height: number }> = [];
+    const positions: THREE.Matrix4[] = [];
+
+    resolvedWorldObjects.forEach((obj) => {
+      const width = 0.5;
+      const height = 0.5;
+      boxSizes.push({ width, height });
+
+      const matrix = new THREE.Matrix4();
+      matrix.setPosition(obj.smoothedPosition.x, obj.smoothedPosition.y, obj.smoothedPosition.z);
+      positions.push(matrix);
+    });
+
+    return { boxSizes, positions };
+  }, [resolvedWorldObjects, useInstancedRendering]);
+
+  const worldObjectObjects: DetectedObject[] = useMemo(() => {
+    return resolvedWorldObjects.map((obj) => ({
+      name: obj.name,
+      bbox_2d: [0, 0, 0, 0] as [number, number, number, number],
+      action: '',
+      category: obj.category,
+    }));
+  }, [resolvedWorldObjects]);
 
   return (
     <XR store={xrStore}>
@@ -66,25 +97,35 @@ export function WorldMapRenderer({
         );
       })}
 
-      {resolvedWorldObjects.map((obj) => {
-        const categoryColor = getCategoryColor(obj.category);
-        return (
-          <DetectedObject3D
-            key={`world-${obj.id}`}
-            obj={{
-              name: obj.name,
-              bbox_2d: [0, 0, 0, 0],
-              action: '',
-              category: obj.category,
-            }}
-            index={0}
-            position={obj.smoothedPosition}
-            isTarget={false}
-            useCategoryColor
-            categoryColor={categoryColor}
-          />
-        );
-      })}
+      {useInstancedRendering && pooledBoxData ? (
+        <PooledBoundingBoxes
+          objects={worldObjectObjects}
+          boxSizes={pooledBoxData.boxSizes}
+          positions={pooledBoxData.positions}
+          color={CONFIG.SPATIAL.BOX_COLOR}
+          opacity={CONFIG.SPATIAL.BOX_OPACITY}
+        />
+      ) : (
+        resolvedWorldObjects.map((obj) => {
+          const categoryColor = getCategoryColor(obj.category);
+          return (
+            <DetectedObject3D
+              key={`world-${obj.id}`}
+              obj={{
+                name: obj.name,
+                bbox_2d: [0, 0, 0, 0],
+                action: '',
+                category: obj.category,
+              }}
+              index={0}
+              position={obj.smoothedPosition}
+              isTarget={false}
+              useCategoryColor
+              categoryColor={categoryColor}
+            />
+          );
+        })
+      )}
     </XR>
   );
 }

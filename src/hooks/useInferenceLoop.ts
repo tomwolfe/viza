@@ -22,6 +22,13 @@ interface PendingFrame {
   processed: boolean;
 }
 
+interface TelemetryData {
+  captureTime: number;
+  inferenceTime: number;
+  processingTime: number;
+  skipCount: number;
+}
+
 export function useInferenceLoop({
   runInference,
   captureFrame,
@@ -35,6 +42,19 @@ export function useInferenceLoop({
   const isRunningRef = useRef(false);
   const pendingFrameRef = useRef<PendingFrame | null>(null);
   const acknowledgedRef = useRef(true);
+  
+  const lastInferenceDurationRef = useRef(0);
+  const skipCountRef = useRef(0);
+  const telemetryFrameCountRef = useRef(0);
+  const lastTelemetryRef = useRef<TelemetryData>({ captureTime: 0, inferenceTime: 0, processingTime: 0, skipCount: 0 });
+
+  const shouldSkipFrame = useCallback(() => {
+    if (lastInferenceDurationRef.current > intervalMs) {
+      skipCountRef.current += 1;
+      return true;
+    }
+    return false;
+  }, [intervalMs]);
 
   const processFrame = useCallback(
     async (prompt: string) => {
@@ -44,6 +64,14 @@ export function useInferenceLoop({
         return;
       }
 
+      if (shouldSkipFrame()) {
+        logger.debug('[useInferenceLoop] Skipping frame due to inference time');
+        isRunningRef.current = false;
+        acknowledgedRef.current = true;
+        return;
+      }
+
+      const loopStartTime = performance.now();
       isRunningRef.current = true;
       acknowledgedRef.current = false;
 
@@ -52,9 +80,14 @@ export function useInferenceLoop({
       }
 
       let frame: ImageBitmap | null = null;
+      let captureStartTime = 0;
+      let inferenceStartTime = 0;
+      
       try {
+        captureStartTime = performance.now();
         const frameResult = captureFrame(videoRef.current);
         frame = frameResult instanceof Promise ? await frameResult : frameResult;
+        
         if (!frame) {
           isRunningRef.current = false;
           acknowledgedRef.current = true;
@@ -67,6 +100,7 @@ export function useInferenceLoop({
           processed: false,
         };
 
+        inferenceStartTime = performance.now();
         const result = await runInference(frame, prompt);
 
         if (result?.objects && result.objects.length > 0) {
@@ -74,6 +108,31 @@ export function useInferenceLoop({
         }
 
         pendingFrameRef.current.processed = true;
+        
+        lastInferenceDurationRef.current = performance.now() - loopStartTime;
+        
+        if (CONFIG.ENABLE_TELEMETRY) {
+          const captureTime = inferenceStartTime - captureStartTime;
+          const inferenceTime = performance.now() - inferenceStartTime;
+          const processingTime = performance.now() - loopStartTime;
+          
+          telemetryFrameCountRef.current += 1;
+          
+          if (telemetryFrameCountRef.current % 10 === 0) {
+            lastTelemetryRef.current = {
+              captureTime,
+              inferenceTime,
+              processingTime,
+              skipCount: skipCountRef.current,
+            };
+            logger.debug('[Telemetry]', {
+              captureTime: `${captureTime.toFixed(1)}ms`,
+              inferenceTime: `${inferenceTime.toFixed(1)}ms`,
+              processingTime: `${processingTime.toFixed(1)}ms`,
+              skipCount: skipCountRef.current,
+            });
+          }
+        }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
         acknowledgedRef.current = true;
@@ -93,7 +152,7 @@ export function useInferenceLoop({
         }
       }
     },
-    [runInference, captureFrame, onObjectsDetected]
+    [runInference, captureFrame, onObjectsDetected, shouldSkipFrame]
   );
 
   const acknowledgeFrame = useCallback(() => {

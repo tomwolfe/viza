@@ -286,7 +286,17 @@ export class WorkerClient {
       } catch (err) {
         clearTimeout(timeoutId);
         this.pendingRequests.delete(messageId);
-        reject(err);
+        const error = err as Error;
+        if (error.message?.includes('transfer') || error.name === 'DataCloneError') {
+          this.options.onError(
+            'ImageBitmap transfer failed - resource may already be closed',
+            'INFERENCE_ERROR',
+            messageId
+          );
+          reject(new Error('ImageBitmap transfer failed - resource may already be closed'));
+        } else {
+          reject(error);
+        }
       }
     });
   }
