@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
@@ -32,17 +32,32 @@ export function WorldMapRenderer({
   cameraRef,
   viewportRef,
 }: WorldMapRendererProps) {
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   useEffect(() => {
-    if (videoElement) {
-      const video = videoElement;
-      const checkReady = () => {
-        if (video.readyState < 2) {
-          video.addEventListener('loadedmetadata', checkReady, { once: true });
-        }
-      };
-      checkReady();
-    }
+    if (!videoElement) return;
+    
+    const video = videoElement;
+    
+    const checkReady = () => {
+      if (video.readyState >= 2) {
+        setIsVideoReady(true);
+        return;
+      }
+    };
+    
+    const handleLoadedMetadata = () => {
+      if (video.readyState >= 2) {
+        setIsVideoReady(true);
+      }
+    };
+    
+    video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+    checkReady();
+    
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    };
   }, [videoElement]);
 
   const resolvedWorldObjects = useMemo(() => worldObjects ?? [], [worldObjects]);
@@ -81,7 +96,7 @@ export function WorldMapRenderer({
       <ambientLight intensity={0.5} />
       <directionalLight position={[5, 5, 5]} intensity={0.5} />
 
-      {videoElement ? (
+      {videoElement && isVideoReady ? (
         <SharedVideoPlane video={videoElement} />
       ) : null}
 

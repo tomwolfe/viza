@@ -36,6 +36,12 @@ interface InferenceBuffer {
   adjustedInterval: number;
 }
 
+interface TelemetryMetrics {
+  captureTime: number;
+  inferenceTime: number;
+  processingTime: number;
+}
+
 export function useInferenceLoop({
   runInference,
   captureFrame,
@@ -66,6 +72,35 @@ export function useInferenceLoop({
   const ADJUSTMENT_STEP_MS = 1000;
   const MIN_INTERVAL = 500;
   const MAX_INTERVAL = 10000;
+
+  function calculateAdjustedInterval(samples: number[], currentInterval: number, threshold: number, step: number, min: number, max: number): number {
+    const buffer = { samples: [...samples] };
+    if (buffer.samples.length >= MAX_BUFFER_SIZE) {
+      const sum = buffer.samples.reduce((a, b) => a + b, 0);
+      const avgInferenceTime = sum / buffer.samples.length;
+      if (avgInferenceTime > currentInterval * threshold) {
+        return Math.min(max, currentInterval + step);
+      }
+    }
+    return currentInterval;
+  }
+
+  function recordTelemetry(metrics: TelemetryMetrics, frameCount: number, skipCount: number): void {
+    if (frameCount % 10 === 0) {
+      lastTelemetryRef.current = {
+        captureTime: metrics.captureTime,
+        inferenceTime: metrics.inferenceTime,
+        processingTime: metrics.processingTime,
+        skipCount,
+      };
+      logger.debug('[Telemetry]', {
+        captureTime: `${metrics.captureTime.toFixed(1)}ms`,
+        inferenceTime: `${metrics.inferenceTime.toFixed(1)}ms`,
+        processingTime: `${metrics.processingTime.toFixed(1)}ms`,
+        skipCount,
+      });
+    }
+  }
 
   const shouldSkipFrame = useCallback(() => {
     if (lastInferenceDurationRef.current > intervalMs) {
@@ -132,46 +167,33 @@ export function useInferenceLoop({
         
         lastInferenceDurationRef.current = performance.now() - loopStartTime;
         
-        if (CONFIG.ENABLE_TELEMETRY) {
-          const captureTime = inferenceStartTime - captureStartTime;
-          const inferenceTime = performance.now() - inferenceStartTime;
-          const processingTime = performance.now() - loopStartTime;
-          
-          telemetryFrameCountRef.current += 1;
-          
-          if (telemetryFrameCountRef.current % 10 === 0) {
-            lastTelemetryRef.current = {
-              captureTime,
-              inferenceTime,
-              processingTime,
-              skipCount: skipCountRef.current,
-            };
-            logger.debug('[Telemetry]', {
-              captureTime: `${captureTime.toFixed(1)}ms`,
-              inferenceTime: `${inferenceTime.toFixed(1)}ms`,
-              processingTime: `${processingTime.toFixed(1)}ms`,
-              skipCount: skipCountRef.current,
-            });
-          }
-        }
-
         const inferenceDuration = performance.now() - loopStartTime;
         inferenceBufferRef.current.samples.push(inferenceDuration);
+
+        if (CONFIG.ENABLE_TELEMETRY) {
+          const metrics: TelemetryMetrics = {
+            captureTime: inferenceStartTime - captureStartTime,
+            inferenceTime: performance.now() - inferenceStartTime,
+            processingTime: inferenceDuration,
+          };
+          telemetryFrameCountRef.current += 1;
+          recordTelemetry(metrics, telemetryFrameCountRef.current, skipCountRef.current);
+        }
 
         if (inferenceBufferRef.current.samples.length > MAX_BUFFER_SIZE) {
           inferenceBufferRef.current.samples.shift();
         }
 
         if (inferenceBufferRef.current.samples.length >= MAX_BUFFER_SIZE) {
-          const sum = inferenceBufferRef.current.samples.reduce((a, b) => a + b, 0);
-          const avgInferenceTime = sum / inferenceBufferRef.current.samples.length;
-          inferenceBufferRef.current.avgInferenceTime = avgInferenceTime;
-
-          if (avgInferenceTime > intervalMs * ADJUSTMENT_THRESHOLD) {
-            const newInterval = Math.min(MAX_INTERVAL, inferenceBufferRef.current.adjustedInterval + ADJUSTMENT_STEP_MS);
-            inferenceBufferRef.current.adjustedInterval = newInterval;
-            logger.debug('[useInferenceLoop] Adjusting interval to', newInterval, 'ms due to high inference time');
-          }
+          const newInterval = calculateAdjustedInterval(
+            inferenceBufferRef.current.samples,
+            inferenceBufferRef.current.adjustedInterval,
+            ADJUSTMENT_THRESHOLD,
+            ADJUSTMENT_STEP_MS,
+            MIN_INTERVAL,
+            MAX_INTERVAL
+          );
+          inferenceBufferRef.current.adjustedInterval = newInterval;
         }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);

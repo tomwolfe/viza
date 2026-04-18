@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
@@ -10,6 +10,13 @@ import type { DetectedObject } from '@/schemas/vision';
 import type { WorldObject } from '@/hooks/useWorldMap';
 import { CONFIG } from '@/config';
 import * as THREE from 'three';
+
+function actionStrings(objects: DetectedObject[]): string {
+  return objects
+    .filter(obj => obj.action)
+    .map(obj => `${obj.name}: ${obj.action}`)
+    .join('. ');
+}
 
 interface ARSceneProps {
   isARActive: boolean;
@@ -52,14 +59,6 @@ export function ARScene({
   const { videoElement } = useUserMedia({ isActive: isARActive && !isXRMode });
   const { isInferring } = useWebLLM();
 
-const actionStrings = useMemo(() => {
-    return (objects: DetectedObject[]) =>
-      objects
-        .filter(obj => obj.action)
-        .map(obj => `${obj.name}: ${obj.action}`)
-        .join('. ');
-  }, []);
-
   const handleObjectsDetected = useCallback(
     (objects: DetectedObject[]) => {
       onObjectsDetected(objects);
@@ -74,7 +73,7 @@ const actionStrings = useMemo(() => {
         speak(actions);
       }
     },
-    [onObjectsDetected, checkTargetFound, speak, actionStrings]
+    [onObjectsDetected, checkTargetFound, speak]
   );
 
   const { captureFrame } = useFrameCapture();

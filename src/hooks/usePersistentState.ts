@@ -115,20 +115,6 @@ function usePersistentStateInternal<T>(key: string, options?: Partial<UsePersist
   };
 }
 
-export function usePersistentStateHook<T>(options?: Partial<UsePersistentStateOptions<T>>): {
-  value: T;
-  setValue: (newValue: T | ((prev: T) => T)) => void;
-  resetValue: () => void;
-  removeValue: () => void;
-  getStoredValue: () => T | null;
-  isPersisted: boolean;
-} {
-  const key = options?.key ?? 'viza_default_state';
-  const defaultValue = options?.defaultValue;
-
-  return usePersistentState(key, { ...options, defaultValue });
-}
-
 export function usePersistentState<T>(
   key: string, 
   options?: Partial<UsePersistentStateOptions<T>> & { defaultValue?: T }
@@ -137,11 +123,4 @@ export function usePersistentState<T>(
     ...options,
     defaultValue: options?.defaultValue,
   });
-}
-
-export function createPersistentStateHook<T>(key: string, options?: Partial<UsePersistentStateOptions<T>>) {
-  function PersistentStateHook(defaultValue?: T) {
-    return usePersistentState<T>(key, { ...options, defaultValue });
-  }
-  return PersistentStateHook;
 }

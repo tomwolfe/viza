@@ -50,7 +50,7 @@ self.onmessage = async (event: MessageEvent) => {
   switch (msg.type) {
     case 'init':
       if (msg.systemPrompt) {
-        systemPrompt = msg.systemPrompt;
+        workerState.systemPrompt = msg.systemPrompt;
       }
       await initializeModel(msg.model || CONFIG.DEFAULT_MODEL);
       break;
@@ -95,10 +95,19 @@ self.onmessage = async (event: MessageEvent) => {
   }
 };
 
-let engine: webllm.MLCEngine | null = null;
-let isInitialized = false;
-let currentModel: string | null = null;
-let systemPrompt = '';
+interface WorkerState {
+  engine: webllm.MLCEngine | null;
+  isInitialized: boolean;
+  currentModel: string | null;
+  systemPrompt: string;
+}
+
+const workerState: WorkerState = {
+  engine: null,
+  isInitialized: false,
+  currentModel: null,
+  systemPrompt: '',
+};
 
 async function runTask(
   image: ImageBitmap,
@@ -106,7 +115,7 @@ async function runTask(
   messageId: string,
   config: TaskRunnerConfig
 ): Promise<void> {
-  if (!engine || !isInitialized) {
+  if (!workerState.engine || !workerState.isInitialized) {
     sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY');
     return;
   }
@@ -114,17 +123,17 @@ async function runTask(
   let messages: webllm.ChatCompletionMessageParam[];
   
   if (config.responseType === 'planning_complete') {
-    messages = buildPlanningMessages(image, userInput, systemPrompt) as webllm.ChatCompletionMessageParam[];
+    messages = buildPlanningMessages(image, userInput, workerState.systemPrompt) as webllm.ChatCompletionMessageParam[];
   } else if (config.responseType === 'inference_complete' && config.maxTokens === 1024) {
-    messages = buildCategoryMessages(image, userInput, systemPrompt) as webllm.ChatCompletionMessageParam[];
+    messages = buildCategoryMessages(image, userInput, workerState.systemPrompt) as webllm.ChatCompletionMessageParam[];
   } else {
-    messages = buildChatMessages(image, userInput, systemPrompt) as webllm.ChatCompletionMessageParam[];
+    messages = buildChatMessages(image, userInput, workerState.systemPrompt) as webllm.ChatCompletionMessageParam[];
   }
 
   try {
     postMessage({ type: 'inference_start' });
 
-    const response = await engine.chat.completions.create({
+    const response = await workerState.engine!.chat.completions.create({
       messages,
       temperature: 0.1,
       max_tokens: config.maxTokens,
@@ -168,7 +177,7 @@ async function runTask(
 }
 
 async function initializeModel(modelId: string): Promise<void> {
-  if (isInitialized && currentModel === modelId) {
+  if (workerState.isInitialized && workerState.currentModel === modelId) {
     postMessage({ type: 'init_progress', progress: 100, status: 'already_loaded' });
     return;
   }
@@ -188,13 +197,13 @@ async function initializeModel(modelId: string): Promise<void> {
 
     const appConfig = CONFIG.USE_INDEXED_DB_CACHE ? { useIndexedDBCache: true } : {};
 
-    engine = await webllm.CreateMLCEngine(modelId, {
+    workerState.engine = await webllm.CreateMLCEngine(modelId, {
       initProgressCallback: initProgressCallback,
       ...appConfig,
     });
 
-    isInitialized = true;
-    currentModel = modelId;
+    workerState.isInitialized = true;
+    workerState.currentModel = modelId;
 
     postMessage({
       type: 'init_complete',
@@ -210,21 +219,21 @@ async function initializeModel(modelId: string): Promise<void> {
 }
 
 async function reloadEngine(): Promise<void> {
-  if (engine) {
+  if (workerState.engine) {
     try {
-      await engine.unload();
+      await workerState.engine.unload();
     } catch (e) {
       logger.warn('Engine unload error:', e);
     }
   }
-  engine = null;
-  isInitialized = false;
-  currentModel = null;
+  workerState.engine = null;
+  workerState.isInitialized = false;
+  workerState.currentModel = null;
   postMessage({ type: 'reloaded' });
 }
 
 async function softReloadEngine(modelId?: string, newSystemPrompt?: string): Promise<void> {
-  if (!engine) {
+  if (!workerState.engine) {
     logger.warn('[Worker] Cannot soft reload - no engine available');
     return;
   }
@@ -232,16 +241,15 @@ async function softReloadEngine(modelId?: string, newSystemPrompt?: string): Pro
   try {
     postMessage({ type: 'inference_start' });
 
-    const oldEngine = engine;
-    const oldModel = currentModel;
+    const oldModel = workerState.currentModel;
 
-    engine = null;
-    isInitialized = false;
+    workerState.engine = null;
+    workerState.isInitialized = false;
 
     await initializeModel(oldModel || modelId || CONFIG.DEFAULT_MODEL);
 
-    if (newSystemPrompt && engine) {
-      systemPrompt = newSystemPrompt;
+    if (newSystemPrompt && workerState.engine) {
+      workerState.systemPrompt = newSystemPrompt;
     }
 
     postMessage({
@@ -255,16 +263,16 @@ async function softReloadEngine(modelId?: string, newSystemPrompt?: string): Pro
     logger.error('[Worker] Soft reload failed:', err);
     sendError('', `Soft reload failed: ${err.message}`, 'WORKER_INIT_FAILED');
 
-    if (engine) {
+    if (workerState.engine) {
       try {
-        await engine.unload();
+        await workerState.engine.unload();
       } catch (e) {
         logger.warn('[Worker] Engine unload after failed soft reload:', e);
       }
     }
-    engine = null;
-    isInitialized = false;
-    currentModel = null;
+    workerState.engine = null;
+    workerState.isInitialized = false;
+    workerState.currentModel = null;
   }
 }
 

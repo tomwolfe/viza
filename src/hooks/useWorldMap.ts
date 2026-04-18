@@ -51,6 +51,40 @@ function findExistingObject(
   return null;
 }
 
+function updateExistingObject(
+  existing: WorldObject,
+  position: THREE.Vector3,
+  smoothedPosition: THREE.Vector3,
+  category: ObjectCategory,
+  confidence: number | undefined,
+  timestamp: number,
+  detectionCount: number
+): WorldObject {
+  return {
+    ...existing,
+    position: position.clone(),
+    smoothedPosition: smoothedPosition.clone(),
+    category: category !== 'unknown' ? category : existing.category,
+    confidence: confidence ?? existing.confidence,
+    lastSeen: timestamp,
+    detectionCount: existing.detectionCount + 1,
+  };
+}
+
+function addNewObject(
+  newObj: WorldObject,
+  currentObjects: WorldObject[]
+): WorldObject[] {
+  const newObjects = [...currentObjects, newObj];
+
+  if (newObjects.length > CONFIG.SPATIAL.MAX_WORLD_OBJECTS) {
+    newObjects.sort((a, b) => b.lastSeen - a.lastSeen);
+    newObjects.splice(CONFIG.SPATIAL.MAX_WORLD_OBJECTS);
+  }
+
+  return newObjects;
+}
+
 export function findExistingObjectKey(
   objects: Map<string, WorldObject>,
   position: THREE.Vector3,
@@ -85,15 +119,15 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
           ...state,
           objects: state.objects.map((o) =>
             o.id === existing.id
-              ? {
-                  ...o,
-                  position: position.clone(),
-                  smoothedPosition: smoothedPosition.clone(),
-                  category: category !== 'unknown' ? category : o.category,
-                  confidence: obj.confidence ?? o.confidence,
-                  lastSeen: timestamp,
-                  detectionCount: o.detectionCount + 1,
-                }
+              ? updateExistingObject(
+                  o,
+                  position,
+                  smoothedPosition,
+                  category,
+                  obj.confidence,
+                  timestamp,
+                  o.detectionCount
+                )
               : o
           ),
         };
@@ -111,12 +145,7 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
           detectionCount: 1,
         };
 
-        const newObjects = [...state.objects, newObj];
-
-        if (newObjects.length > CONFIG.SPATIAL.MAX_WORLD_OBJECTS) {
-          newObjects.sort((a, b) => b.lastSeen - a.lastSeen);
-          newObjects.splice(CONFIG.SPATIAL.MAX_WORLD_OBJECTS);
-        }
+        const newObjects = addNewObject(newObj, state.objects);
 
         return {
           ...state,
