@@ -238,7 +238,7 @@ async function softReloadEngine(modelId?: string, newSystemPrompt?: string): Pro
     engine = null;
     isInitialized = false;
 
-    await initializeModel(oldModel || modelId);
+    await initializeModel(oldModel || modelId || CONFIG.DEFAULT_MODEL);
 
     if (newSystemPrompt && engine) {
       systemPrompt = newSystemPrompt;

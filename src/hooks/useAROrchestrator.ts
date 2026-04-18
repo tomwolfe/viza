@@ -6,7 +6,9 @@ import { useARSessionManager } from './useARSessionManager';
 import { useARStateMachine, type ARState } from './useARStateMachine';
 import { useTaskOrchestrator } from './useTaskOrchestrator';
 import { useWorldMap, type WorldObject } from './useWorldMap';
-import type { DetectedObject } from '@/schemas/vision';
+import type { DetectedObject, VisionResponse } from '@/schemas/vision';
+import type { TaskStep } from '@/hooks/useTaskState';
+import type { VizaErrorCode } from '@/types/worker';
 import { logger } from '@/config';
 
 type ARStateType = ARState['type'];
@@ -19,11 +21,12 @@ interface UseAROrchestratorResult {
   isModelReady: boolean;
   isInferring: boolean;
   isDeviceCompatible: boolean;
-  runInference: (image: ImageBitmap, prompt: string) => Promise<DetectedObject[] | null>;
+  runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
   taskState: {
     isActive: boolean;
     completed: boolean;
     currentStepIndex: number;
+    steps: TaskStep[];
   };
   isPlanning: boolean;
   checkTargetFound: (detectedObjects: DetectedObject[]) => void;
@@ -32,12 +35,13 @@ interface UseAROrchestratorResult {
   transcript: string;
   speak: (text: string) => void;
   voiceError: string | null;
+  llmError: string | null;
   error: string | null;
-  errorCode: string | null;
+  errorCode: VizaErrorCode | null;
   handleStartAR: () => Promise<void>;
   handleVoiceInput: () => void;
   handleObjectsDetected: (objects: DetectedObject[]) => void;
-  currentInstruction: string;
+  currentInstruction: string | null;
   dispatchActions: {
     initModel: () => void;
     startInferencing: () => void;
@@ -45,12 +49,17 @@ interface UseAROrchestratorResult {
     startPlanning: () => void;
     stopPlanning: () => void;
     completeStep: () => void;
-    handleError: (error: string, errorCode?: string | null) => void;
+    handleError: (error: string, errorCode: string | null) => void;
     reset: () => void;
   };
+  detectedObjects: DetectedObject[];
   worldMap: WorldObject[];
   addOrUpdateObject: (obj: DetectedObject, position: import('three').Vector3) => void;
   clearWorldMap: () => void;
+  voiceCommandRef: { current: string | null };
+  sceneImageRef: { current: ImageBitmap | null };
+  isXRMode: boolean;
+  xrSession: XRSession | null;
 }
 
 export function useAROrchestrator(): UseAROrchestratorResult {
@@ -135,7 +144,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   }, [arState]);
 
   const unifiedError = xrError || llmError || taskOrchestrator.voiceError || (arState.type === 'error' ? (arState as ARState & { error: string }).error : null) || null;
-  const unifiedErrorCode = xrErrorCode || llmErrorCode || (arState.type === 'error' ? (arState as ARState & { errorCode: string | null }).errorCode : null) || null;
+  const unifiedErrorCode = xrErrorCode || llmErrorCode || (arState.type === 'error' ? (arState as ARState & { errorCode: VizaErrorCode | null }).errorCode : null) || null;
 
   return {
     arState,
@@ -154,6 +163,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     transcript: taskOrchestrator.transcript,
     speak: taskOrchestrator.speak,
     voiceError: taskOrchestrator.voiceError,
+    llmError,
     error: unifiedError,
     errorCode: unifiedErrorCode,
     handleStartAR,
@@ -161,6 +171,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     handleObjectsDetected,
     currentInstruction: taskOrchestrator.currentInstruction,
     dispatchActions,
+    detectedObjects,
     worldMap,
     addOrUpdateObject,
     clearWorldMap,

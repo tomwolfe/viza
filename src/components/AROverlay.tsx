@@ -107,9 +107,9 @@ function TranscriptDisplay({ transcript }: TranscriptDisplayProps) {
 }
 
 interface ErrorToastProps {
-  llmError: string | null;
-  voiceError: string | null;
-  appError: string | null;
+  llmError?: string | null;
+  voiceError?: string | null;
+  appError?: string | null;
 }
 
 function ErrorToast({ llmError, voiceError, appError }: ErrorToastProps) {

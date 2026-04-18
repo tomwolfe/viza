@@ -4,7 +4,7 @@ import { logger } from '@/config';
 export type ARState = 
   | { type: 'idle' }
   | { type: 'initializing' }
-  | { type: 'ready'; modelProgress: number }
+  | { type: 'ready'; modelProgress?: number }
   | { type: 'running' }
   | { type: 'planning' }
   | { type: 'error'; error: string; errorCode: string | null };
@@ -101,7 +101,7 @@ export interface UseARStateMachineReturn {
     startPlanning: () => void;
     stopPlanning: () => void;
     completeStep: () => void;
-    handleError: (error: string, errorCode?: string | null) => void;
+    handleError: (error: string, errorCode: string | null) => void;
     reset: () => void;
   };
 }
@@ -138,8 +138,12 @@ export function useARStateMachine(): UseARStateMachineReturn {
       dispatch({ type: 'STOP_PLANNING' });
     }, []),
 
-    handleError: useCallback((error: string, errorCode?: string | null) => {
+    handleError: useCallback((error: string, errorCode: string | null) => {
       dispatch({ type: 'ERROR', error, errorCode });
+    }, []),
+
+    completeStep: useCallback(() => {
+      dispatch({ type: 'COMPLETE_STEP' });
     }, []),
 
     reset: useCallback(() => {

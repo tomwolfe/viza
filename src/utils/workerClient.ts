@@ -284,7 +284,7 @@ export class WorkerClient {
     return new Promise<T>((resolve, reject) => {
       const timeoutId = this.createTimeout(inferenceType, messageId);
 
-      const bitmapHandle = (transfer?.[0] as ImageBitmap | null) ?? null;
+      let bitmapHandle = (transfer?.[0] as ImageBitmap | null) ?? null;
       
       this.pendingRequests.set(messageId, {
         resolve: resolve as (value: unknown) => void,

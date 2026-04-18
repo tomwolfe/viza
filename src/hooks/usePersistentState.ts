@@ -63,7 +63,7 @@ function _usePersistentStateInternal<T>(key: string, options?: Partial<UsePersis
     stateRef.current.lastPersisted = null;
 
     const computedValue = typeof newValue === 'function'
-      ? newValue(stateRef.current.value)
+      ? (newValue as (prev: T) => T)(stateRef.current.value)
       : newValue;
     
     stateRef.current.value = computedValue;

@@ -8,6 +8,7 @@ export type WorkerOutgoingMessage =
   | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string }
   | { type: 'category'; image: ImageBitmap; goal: string; messageId: string }
   | { type: 'reload' }
+  | { type: 'soft_reload'; model: string; systemPrompt?: string }
   | { type: 'ping' }
   | { type: 'app_reset' };
 
