@@ -49,7 +49,7 @@ export function ARScene({
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
 
-  const { videoElement } = useUserMedia({ isActive: isARActive && isModelReady && !isXRMode });
+  const { videoElement } = useUserMedia({ isActive: isARActive && !isXRMode });
   const { isInferring } = useWebLLM();
 
 const actionStrings = useMemo(() => {

@@ -86,7 +86,7 @@ export function useUserMedia({
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode,
+          facingMode: { ideal: facingMode },
           width: { ideal: width },
           height: { ideal: height },
         },

@@ -89,6 +89,10 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         setError('Microphone permission denied. Please allow microphone access.');
         setErrorCode('MICROPHONE_NOT_ALLOWED');
         break;
+      case 'network':
+        setError('Speech recognition network error. Check connection or try again later.');
+        setErrorCode('VOICE_ERROR');
+        break;
       default:
         setError(`Speech recognition error: ${event.error}`);
         setErrorCode('VOICE_ERROR');
