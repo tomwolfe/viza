@@ -17,11 +17,12 @@ export interface UseARSessionManagerResult {
 
 export function useARSessionManager(): UseARSessionManagerResult {
   const [isARActive, setIsARActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
 
   const webXR = useWebXR();
   const initModelRef = useRef<(() => void) | null>(null);
+
+  const errorRef = useRef<string | null>(null);
+  const errorCodeRef = useRef<VizaErrorCode | null>(null);
 
   const startAR = useCallback(async () => {
     try {
@@ -33,19 +34,19 @@ export function useARSessionManager(): UseARSessionManagerResult {
         const xrSuccess = await webXR.startSession();
         if (xrSuccess) {
           setIsARActive(true);
-          setError(null);
-          setErrorCode(null);
+          errorRef.current = null;
+          errorCodeRef.current = null;
           return;
         }
       }
 
       setIsARActive(true);
-      setError(null);
-      setErrorCode(null);
+      errorRef.current = null;
+      errorCodeRef.current = null;
     } catch (err) {
       logger.error('[ARSession] Failed to start AR:', err);
-      setError('Failed to start AR session. Please refresh and try again.');
-      setErrorCode('CAMERA_XR_UNAVAILABLE');
+      errorRef.current = 'Failed to start AR session. Please refresh and try again.';
+      errorCodeRef.current = 'CAMERA_XR_UNAVAILABLE';
     }
   }, [webXR]);
 
@@ -56,19 +57,12 @@ export function useARSessionManager(): UseARSessionManagerResult {
     setIsARActive(false);
   }, [webXR]);
 
-  useEffect(() => {
-    if (webXR.error) {
-      setErrorCode(webXR.error);
-      setError(webXR.errorMessage);
-    }
-  }, [webXR.error, webXR.errorMessage]);
-
   return {
     isARActive,
     isXRMode: webXR.isActive,
     xrSession: webXR.session,
-    error,
-    errorCode,
+    error: errorRef.current,
+    errorCode: errorCodeRef.current,
     startAR,
     stopAR,
   };

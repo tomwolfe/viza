@@ -66,7 +66,7 @@ export function useTaskOrchestrator(
       logger.error('[TaskOrchestrator] Planning inference failed:', error);
     }
     return DEFAULT_ASSEMBLY_TASK;
-  }, [runPlanningInference]);
+  }, [runPlanningInference, sceneImageRef]);
 
   const triggerPlanningMode = useCallback(async (userGoal: string) => {
     if (!isModelReady || isPlanning) return;
@@ -77,7 +77,7 @@ export function useTaskOrchestrator(
     }
 
     await generateTaskPlan(userGoal, sceneImage!, generatePlanFromGoal);
-  }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal]);
+  }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal, sceneImageRef]);
 
   const handleTranscriptReady = useCallback((transcript: string) => {
     if (isModelReady && !taskState.isActive) {

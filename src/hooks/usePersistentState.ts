@@ -14,12 +14,16 @@ interface PersistentStateInternal<T> {
   persistTimeout: ReturnType<typeof setTimeout> | null;
 }
 
-function _usePersistentStateInternal<T>(key: string, options?: Partial<UsePersistentStateOptions<T>>) {
+function usePersistentStateInternal<T>(key: string, options?: Partial<UsePersistentStateOptions<T>>) {
   const STORAGE_KEY = key;
   const SCHEMA_VERSION = 1;
   const persistDelayMs = options?.persistDelayMs ?? 1000;
-  const onPersistError = options?.onPersistError ?? ((_error: Error) => {});
   const defaultValue = options?.defaultValue;
+
+  const onPersistErrorRef = useRef(options?.onPersistError ?? ((_error: Error) => {}));
+  useEffect(() => {
+    onPersistErrorRef.current = options?.onPersistError ?? ((_error: Error) => {});
+  });
 
   const stateRef = useRef<PersistentStateInternal<T>>({
     value: defaultValue ?? (null as unknown as T),
@@ -45,10 +49,10 @@ function _usePersistentStateInternal<T>(key: string, options?: Partial<UsePersis
       safeSet(stateRef.current.value, { key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
     } catch (error) {
       stateRef.current.lastPersisted = null;
-      onPersistError(error as Error);
+      onPersistErrorRef.current(error as Error);
       return;
     }
-  }, [STORAGE_KEY, onPersistError]);
+  }, [STORAGE_KEY]);
 
   const schedulePersist = useCallback(() => {
     if (stateRef.current.persistTimeout) {
@@ -129,15 +133,15 @@ export function usePersistentState<T>(
   key: string, 
   options?: Partial<UsePersistentStateOptions<T>> & { defaultValue?: T }
 ) {
-  return _usePersistentStateInternal(key, {
+  return usePersistentStateInternal(key, {
     ...options,
     defaultValue: options?.defaultValue,
   });
 }
 
 export function createPersistentStateHook<T>(key: string, options?: Partial<UsePersistentStateOptions<T>>) {
-  function persistentStateHook(defaultValue?: T) {
+  function PersistentStateHook(defaultValue?: T) {
     return usePersistentState<T>(key, { ...options, defaultValue });
   }
-  return persistentStateHook;
+  return PersistentStateHook;
 }

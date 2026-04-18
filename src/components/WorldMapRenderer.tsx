@@ -45,7 +45,7 @@ export function WorldMapRenderer({
     }
   }, [videoElement]);
 
-  const resolvedWorldObjects = worldObjects ?? [];
+  const resolvedWorldObjects = useMemo(() => worldObjects ?? [], [worldObjects]);
   const useInstancedRendering = shouldUsePooling(resolvedWorldObjects.length);
 
   const pooledBoxData = useMemo(() => {

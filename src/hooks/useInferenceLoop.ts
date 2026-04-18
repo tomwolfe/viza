@@ -73,7 +73,7 @@ export function useInferenceLoop({
       return true;
     }
     return false;
-  }, [intervalMs]);
+  }, [intervalMs, lastInferenceDurationRef]);
 
   const processFrame = useCallback(
     async (prompt: string) => {
@@ -194,7 +194,7 @@ export function useInferenceLoop({
         }
       }
     },
-    [runInference, captureFrame, onObjectsDetected, shouldSkipFrame]
+    [runInference, captureFrame, onObjectsDetected, shouldSkipFrame, intervalMs]
   );
 
   const acknowledgeFrame = useCallback(() => {
