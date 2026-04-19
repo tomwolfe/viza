@@ -86,7 +86,7 @@ export function useTaskOrchestrator(
         return;
       }
     }
-  }, [isModelReady, taskState.isActive, triggerPlanningMode, isCleaningIntent]);
+  }, [isModelReady, taskState, triggerPlanningMode, isCleaningIntent]);
 
   const voiceRef = useRef<((text: string) => void) | null>(null);
 

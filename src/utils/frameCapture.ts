@@ -5,41 +5,36 @@ const TARGET_SIZE = CONFIG.TARGET_SIZE;
 class FrameCaptureManager {
   private canvas: OffscreenCanvas | HTMLCanvasElement | null = null;
   private ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
-  private useOffscreen: boolean = false;
 
   getCanvasAndContext(): {
     canvas: OffscreenCanvas | HTMLCanvasElement;
     ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
-    useOffscreen: boolean;
   } {
     if (this.canvas && this.ctx) {
       return {
         canvas: this.canvas,
         ctx: this.ctx,
-        useOffscreen: this.useOffscreen
       };
     }
 
     if (typeof OffscreenCanvas !== 'undefined') {
       this.canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
       this.ctx = this.canvas.getContext('2d');
-      this.useOffscreen = true;
     } else if (typeof document !== 'undefined') {
       this.canvas = document.createElement('canvas');
       this.canvas.width = TARGET_SIZE;
       this.canvas.height = TARGET_SIZE;
       this.ctx = this.canvas.getContext('2d');
-      this.useOffscreen = false;
     } else {
       throw new Error('Neither OffscreenCanvas nor document.createElement is available');
     }
 
-    return { canvas: this.canvas, ctx: this.ctx, useOffscreen: this.useOffscreen };
+    return { canvas: this.canvas, ctx: this.ctx };
   }
 
-  dispose(): void {
+ dispose(): void {
     if (this.canvas) {
-      if (this.useOffscreen) {
+      if (this.canvas instanceof OffscreenCanvas) {
         try {
           (this.canvas as unknown as { close(): void }).close();
         } catch {
@@ -69,15 +64,20 @@ export function disposeFrameCapture(): void {
 
 function isValidSource(source: CanvasImageSource): boolean {
   if (!source) return false;
-  const width = 'videoWidth' in source ? (source as HTMLVideoElement).videoWidth : (source as { width: number }).width;
-  const height = 'videoHeight' in source ? (source as HTMLVideoElement).videoHeight : (source as { height: number }).height;
-  return width > 0 && height > 0;
+  if (source instanceof HTMLVideoElement) {
+    return source.videoWidth > 0 && source.videoHeight > 0;
+  }
+  const isVideoLike = 'videoWidth' in source && 'videoHeight' in source;
+  if (isVideoLike) {
+    return (source as HTMLVideoElement).videoWidth > 0 && (source as HTMLVideoElement).videoHeight > 0;
+  }
+  return (source as HTMLCanvasElement | OffscreenCanvas).width > 0 && (source as HTMLCanvasElement | OffscreenCanvas).height > 0;
 }
 
 async function downsampleToBitmap(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  const { canvas, ctx, useOffscreen } = manager.getCanvasAndContext();
+  const { canvas, ctx } = manager.getCanvasAndContext();
 
   if (!ctx) {
     throw new Error('Failed to get 2D context from canvas');
@@ -110,10 +110,10 @@ async function downsampleToBitmap(
     0, 0, TARGET_SIZE, TARGET_SIZE
   );
 
-  if (useOffscreen) {
-    return (canvas as OffscreenCanvas).transferToImageBitmap();
+  if (canvas instanceof OffscreenCanvas) {
+    return canvas.transferToImageBitmap();
   }
-  return createImageBitmap(canvas as HTMLCanvasElement);
+  return createImageBitmap(canvas);
 }
 
 export async function captureFrame(source: CanvasImageSource): Promise<ImageBitmap | null> {

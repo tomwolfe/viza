@@ -119,7 +119,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     if (llmError) {
       logger.error('[Orchestrator] WebLLM Error:', llmError);
     }
-  }, [llmError]);
+  }, [llmError, logger]);
 
   useEffect(() => {
     return () => {
@@ -134,17 +134,18 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     if (lastCompleted && taskOrchestrator.taskState.isActive && !taskOrchestrator.taskState.completed) {
       dispatchActions.completeStep();
     }
-  }, [lastCompleted, taskOrchestrator.taskState.isActive, taskOrchestrator.taskState.completed, dispatchActions]);
+  }, [lastCompleted, taskOrchestrator.taskState, dispatchActions]);
 
   useEffect(() => {
     if (arState.type === 'error') {
-      const state = arState;
-      logger.error('[Orchestrator] AR State Error:', state.error);
+      logger.error('[Orchestrator] AR State Error:', arState.error);
     }
-  }, [arState]);
+  }, [arState, logger]);
 
-  const unifiedError = xrError || llmError || taskOrchestrator.voiceError || (arState.type === 'error' ? (arState as ARState & { error: string }).error : null) || null;
-  const unifiedErrorCode = xrErrorCode || llmErrorCode || (arState.type === 'error' ? (arState as ARState & { errorCode: VizaErrorCode | null }).errorCode : null) || null;
+  const arError = arState.type === 'error' && 'error' in arState ? (arState as ARState & { error: string }).error : null;
+  const arErrorCode = arState.type === 'error' && 'errorCode' in arState ? (arState as ARState & { errorCode: VizaErrorCode | null }).errorCode : null;
+  const unifiedError = xrError || llmError || taskOrchestrator.voiceError || arError || null;
+  const unifiedErrorCode = xrErrorCode || llmErrorCode || arErrorCode || null;
 
   return {
     arState,

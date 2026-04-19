@@ -110,6 +110,40 @@ export function useInferenceLoop({
     return false;
   }, [intervalMs, lastInferenceDurationRef]);
 
+  const captureAndValidateFrame = useCallback(async (video: HTMLVideoElement | null): Promise<ImageBitmap | null> => {
+    if (!video) return null;
+    const result = captureFrame(video);
+    return result instanceof Promise ? await result : result;
+  }, [captureFrame]);
+
+  const calculateTelemetryMetrics = (captureTime: number, inferenceStartTime: number, inferenceDuration: number): TelemetryMetrics => {
+    return {
+      captureTime: inferenceStartTime - captureTime,
+      inferenceTime: performance.now() - inferenceStartTime,
+      processingTime: inferenceDuration,
+    };
+  };
+
+  const updateInferenceBuffer = useCallback((duration: number): void => {
+    inferenceBufferRef.current.samples.push(duration);
+
+    if (inferenceBufferRef.current.samples.length > MAX_BUFFER_SIZE) {
+      inferenceBufferRef.current.samples.shift();
+    }
+
+    if (inferenceBufferRef.current.samples.length >= MAX_BUFFER_SIZE) {
+      const newInterval = calculateAdjustedInterval(
+        inferenceBufferRef.current.samples,
+        inferenceBufferRef.current.adjustedInterval,
+        ADJUSTMENT_THRESHOLD,
+        ADJUSTMENT_STEP_MS,
+        MIN_INTERVAL,
+        MAX_INTERVAL
+      );
+      inferenceBufferRef.current.adjustedInterval = newInterval;
+    }
+  }, []);
+
   const processFrame = useCallback(
     async (prompt: string) => {
       if (isRunningRef.current || !videoRef.current) return;
@@ -139,8 +173,7 @@ export function useInferenceLoop({
       
       try {
         captureStartTime = performance.now();
-        const frameResult = captureFrame(videoRef.current);
-        frame = frameResult instanceof Promise ? await frameResult : frameResult;
+        frame = await captureAndValidateFrame(videoRef.current);
         
         if (!frame) {
           isRunningRef.current = false;
@@ -168,32 +201,12 @@ export function useInferenceLoop({
         lastInferenceDurationRef.current = performance.now() - loopStartTime;
         
         const inferenceDuration = performance.now() - loopStartTime;
-        inferenceBufferRef.current.samples.push(inferenceDuration);
+        updateInferenceBuffer(inferenceDuration);
 
         if (CONFIG.ENABLE_TELEMETRY) {
-          const metrics: TelemetryMetrics = {
-            captureTime: inferenceStartTime - captureStartTime,
-            inferenceTime: performance.now() - inferenceStartTime,
-            processingTime: inferenceDuration,
-          };
+          const metrics = calculateTelemetryMetrics(captureStartTime, inferenceStartTime, inferenceDuration);
           telemetryFrameCountRef.current += 1;
           recordTelemetry(metrics, telemetryFrameCountRef.current, skipCountRef.current);
-        }
-
-        if (inferenceBufferRef.current.samples.length > MAX_BUFFER_SIZE) {
-          inferenceBufferRef.current.samples.shift();
-        }
-
-        if (inferenceBufferRef.current.samples.length >= MAX_BUFFER_SIZE) {
-          const newInterval = calculateAdjustedInterval(
-            inferenceBufferRef.current.samples,
-            inferenceBufferRef.current.adjustedInterval,
-            ADJUSTMENT_THRESHOLD,
-            ADJUSTMENT_STEP_MS,
-            MIN_INTERVAL,
-            MAX_INTERVAL
-          );
-          inferenceBufferRef.current.adjustedInterval = newInterval;
         }
       } catch (error) {
         logger.error('[useInferenceLoop] Inference error:', error);
@@ -216,7 +229,7 @@ export function useInferenceLoop({
         }
       }
     },
-    [runInference, captureFrame, onObjectsDetected, shouldSkipFrame, intervalMs]
+    [runInference, captureAndValidateFrame, onObjectsDetected, shouldSkipFrame, intervalMs, updateInferenceBuffer, calculateTelemetryMetrics]
   );
 
   const acknowledgeFrame = useCallback(() => {

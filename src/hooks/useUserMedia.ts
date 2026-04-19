@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { VizaErrorCode } from '@/types/worker';
+import { parseSystemError } from '@/utils/errorUtils';
 import { logger } from '@/config';
 
 export interface UseUserMediaOptions {
@@ -41,26 +42,6 @@ export function useUserMedia({
   
   const streamRef = useRef<MediaStream | null>(null);
   const cancelledRef = useRef(false);
-
-  const mapMediaError = (err: Error): CameraError => {
-    const domErr = err as unknown as DOMException;
-    if (domErr.name === 'NotAllowedError') {
-      return {
-        code: 'CAMERA_NOT_ALLOWED',
-        message: 'Camera access denied. Please allow camera permissions in your browser settings.',
-      };
-    }
-    if (domErr.name === 'NotFoundError') {
-      return {
-        code: 'CAMERA_NOT_FOUND',
-        message: 'No camera found. Please connect a camera and try again.',
-      };
-    }
-    return {
-      code: 'CAMERA_XR_UNAVAILABLE',
-      message: err.message || 'Unknown camera error',
-    };
-  };
 
   const stop = useCallback(() => {
     if (streamRef.current) {
@@ -141,7 +122,7 @@ export function useUserMedia({
     if (!cancelledRef.current) {
       if (lastError) {
         logger.error('[useUserMedia] Camera initialization failed:', lastError.message);
-        setError(mapMediaError(lastError));
+        setError(parseSystemError(lastError, 'media') as CameraError);
       } else {
         setError({
           code: 'CAMERA_XR_UNAVAILABLE',

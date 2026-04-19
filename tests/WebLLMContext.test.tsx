@@ -10,7 +10,7 @@ let triggerError: ((message: string, code: string) => void) | null = null;
 let enableAutoComplete = true;
 let autoCompleteDelay = 50;
 
-const createMockWorkerClient = (callbacks: {
+const createMockWorkerClient = (options: {
   onComplete?: (messageId: string, response: unknown, completed?: boolean) => void;
   onError?: (message: string, code: string, messageId?: string) => void;
   onReady?: () => void;
@@ -20,12 +20,13 @@ const createMockWorkerClient = (callbacks: {
   onUnresponsive?: () => void;
 }) => {
   let capturedMessageId: string | null = null;
+  const capturedOptions = options;
 
   triggerComplete = (messageId: string, response: unknown) => {
-    callbacks.onComplete?.(messageId, response);
+    capturedOptions.onComplete?.(messageId, response);
   };
   triggerError = (message: string, code: string) => {
-    callbacks.onError?.(message, code);
+    capturedOptions.onError?.(message, code);
   };
 
   const chatFn = vi.fn().mockImplementation((_image: ImageBitmap, _prompt: string, messageId: string) => {
@@ -33,7 +34,7 @@ const createMockWorkerClient = (callbacks: {
     return new Promise((resolve) => {
       const complete = () => {
         const response = { objects: [{ item: 'test', coordinates: [10, 10, 50, 50], action_step: 'test-action' }] };
-        callbacks.onComplete?.(messageId, response, true);
+        capturedOptions.onComplete?.(messageId, response, true);
         resolve(response);
       };
 
@@ -49,8 +50,8 @@ const createMockWorkerClient = (callbacks: {
 
   const initFn = vi.fn().mockImplementation(() => {
     setTimeout(() => {
-      callbacks.onReady?.();
-      callbacks.onProgress?.(100);
+      options.onReady?.();
+      options.onProgress?.(100);
     }, 50);
     return Promise.resolve();
   });

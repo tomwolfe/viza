@@ -259,7 +259,7 @@ export class WorkerClient {
     transfer?: Transferable[]
   ): PendingRequest<unknown> {
     const timeoutId = this.createTimeout(inferenceType, messageId);
-    const bitmapHandle = (transfer?.[0] as ImageBitmap | null) ?? null;
+    const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
 
     const pending: PendingRequest<unknown> = {
       resolve: (() => {}) as (value: unknown) => void,
@@ -286,7 +286,7 @@ export class WorkerClient {
     this.pendingRequests.clear();
   }
 
-  sendMessage<T>(
+sendMessage<T>(
     type: WorkerMessageType,
     payload: Record<string, unknown>,
     transfer?: Transferable[],
@@ -302,19 +302,25 @@ export class WorkerClient {
 
     const messageId = this.createRequestId();
     const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : 'chat';
+    const timeoutId = this.createTimeout(inferenceType, messageId);
 
     return new Promise<T>((resolve, reject) => {
-      const pending = this.createPendingRequest(type, messageId, inferenceType, transfer);
+      const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
+      const pending: PendingRequest<T> = {
+        resolve,
+        reject,
+        timeoutId,
+        bitmapHandle,
+        type: inferenceType,
+      };
 
-      pending.resolve = resolve as (value: unknown) => void;
-      pending.reject = reject as (error: Error) => void;
+this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);
 
       const abortHandler = () => {
-        clearTimeout(pending.timeoutId);
+        clearTimeout(timeoutId);
         this.pendingRequests.delete(messageId);
-        if (pending.bitmapHandle) {
-          try { pending.bitmapHandle.close(); } catch {}
-          pending.bitmapHandle = null;
+        if (bitmapHandle) {
+          try { bitmapHandle.close(); } catch {}
         }
         reject(new Error('Request aborted'));
       };
@@ -331,14 +337,14 @@ export class WorkerClient {
       } catch (err) {
         const error = err as Error;
         const transferError = error.message?.includes('transfer') || error.name === 'DataCloneError';
-        const resourceHandle = (payload as any)?.image ?? pending.bitmapHandle;
+        const resourceHandle = transfer?.[0] instanceof ImageBitmap ? transfer[0] : bitmapHandle;
         if (transferError) {
           this.options.onError(
             'ImageBitmap transfer failed - resource may already be closed',
             'INFERENCE_ERROR',
             messageId
           );
-          clearTimeout(pending.timeoutId);
+          clearTimeout(timeoutId);
           this.pendingRequests.delete(messageId);
           if (resourceHandle) {
             try { resourceHandle.close(); } catch {}

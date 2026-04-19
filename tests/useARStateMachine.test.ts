@@ -174,7 +174,7 @@ describe('useARStateMachine', () => {
     });
 
     act(() => {
-      result.current.dispatchActions.handleError('Error occurred');
+      result.current.dispatchActions.handleError('Error occurred', null);
     });
 
     act(() => {

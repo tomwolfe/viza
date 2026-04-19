@@ -88,7 +88,7 @@ it('should handle function updates', () => {
     expect(result.current.value).toEqual({ counter: 0 });
 
     act(() => {
-      result.current.setValue((prev) => ({ counter: (prev as { counter: number }).counter + 1 }));
+      result.current.setValue((prev: { counter: number }) => ({ counter: prev.counter + 1 }));
     });
 
     expect(result.current.value).toEqual({ counter: 1 });
