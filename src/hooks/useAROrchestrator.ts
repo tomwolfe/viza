@@ -100,8 +100,9 @@ export function useAROrchestrator(): UseAROrchestratorResult {
 
   const handleStartAR = useCallback(async () => {
     dispatchActions.initModel();
+    webllmInitModel();
     await startAR();
-  }, [startAR, dispatchActions]);
+  }, [startAR, dispatchActions, webllmInitModel]);
 
   const handleVoiceInput = useCallback(() => {
     if (taskOrchestrator.isListening) {

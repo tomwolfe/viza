@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import React from 'react';
 import { useAROrchestrator } from '../src/hooks/useAROrchestrator';
 import * as config from '../src/config';
 import * as workerClient from '../src/utils/workerClient';
@@ -17,50 +18,40 @@ vi.stubGlobal('navigator', {
 });
 
 vi.mock('../src/contexts/WebLLMContext', () => {
-  const state = {
-    isModelLoadingState: false,
-    isModelReadyState: false,
-    isInferringState: false,
-    error: null as string | null,
-    errorCode: null as string | null,
-    modelProgress: 0,
-    workerClient: null as unknown as ReturnType<typeof workerClient.createWorkerClient>,
-    isModelReadyRef: { current: false } as { current: boolean },
-    setIsInferring: vi.fn(),
-    setError: vi.fn(),
-    setErrorCode: vi.fn(),
-  };
-
   return {
-    WebLLMProvider: ({ children }: { children: import('react').ReactNode }) => {
-      return ({ children }: { children: import('react').ReactNode }) => children;
-    },
+    WebLLMProvider: ({ children }: { children: React.ReactNode }) => ({ children }),
     useWebLLM: vi.fn(() => {
+      const [isModelLoading, setIsModelLoading] = React.useState(false);
+      const [isModelReady, setIsModelReady] = React.useState(false);
+      const [isInferring, setIsInferring] = React.useState(false);
+      const [modelProgress, setModelProgress] = React.useState(0);
+      const [error, setError] = React.useState<string | null>(null);
+      const [errorCode, setErrorCode] = React.useState<string | null>(null);
+      const [lastCompleted, setLastCompleted] = React.useState<Date | null>(null);
+
       return {
-        get isModelLoading() { return state.isModelLoadingState; },
-        get isModelReady() { return state.isModelReadyState; },
-        get isInferring() { return state.isInferringState; },
-        get isDeviceCompatible() { return true; },
-        get modelProgress() { return state.modelProgress; },
-        get error() { return state.error; },
-        get errorCode() { return state.errorCode; },
-        get lastCompleted() { return false; },
-        workerClient: state.workerClient,
-        isModelReadyRef: state.isModelReadyRef,
-        setIsInferring: state.setIsInferring,
-        setError: state.setError,
-        setErrorCode: state.setErrorCode,
+        isModelLoading,
+        isModelReady,
+        isInferring,
+        isDeviceCompatible: true,
+        modelProgress,
+        error,
+        errorCode,
+        lastCompleted,
+        workerClient: null as unknown as ReturnType<typeof workerClient.createWorkerClient>,
+        isModelReadyRef: { current: false } as { current: boolean },
+        setIsInferring: vi.fn().mockImplementation((val: boolean) => setIsInferring(val)),
+        setError: vi.fn().mockImplementation((msg: string | null) => setError(msg)),
+        setErrorCode: vi.fn().mockImplementation((code: string | null) => setErrorCode(code)),
         initModel: vi.fn().mockImplementation(async () => {
-          state.isModelLoadingState = true;
-          await new Promise(resolve => setTimeout(resolve, 50));
-          state.isModelReadyState = true;
-          state.isModelLoadingState = false;
+          setIsModelLoading(true);
+          setIsModelReady(true);
         }),
-        runInference: vi.fn().mockImplementation(async () => {
-          state.isInferringState = true;
-          const result = { objects: [] };
-          state.isInferringState = false;
-          return result;
+        runInference: vi.fn().mockImplementation(async (_image: ImageBitmap, _prompt: string) => {
+          setIsInferring(true);
+          setLastCompleted(new Date());
+          setIsInferring(false);
+          return { objects: [] };
         }),
         runPlanningInference: vi.fn().mockResolvedValue([]),
         runCategoryInference: vi.fn().mockResolvedValue(null),
@@ -113,43 +104,26 @@ vi.mock('../src/hooks/useARSessionManager', () => {
 });
 
 vi.mock('../src/hooks/useARStateMachine', () => {
-  const state = {
-    isModelLoadingState: false,
-    isModelReadyState: false,
-    isInferringState: false,
-    error: null as string | null,
-    errorCode: null as string | null,
-  };
-
-  const arState = { type: 'idle' as const };
-
-  const mockInitModel = vi.fn().mockImplementation(async () => {
-    state.isModelLoadingState = true;
-    await new Promise(resolve => setTimeout(resolve, 50));
-    state.isModelReadyState = true;
-    state.isModelLoadingState = false;
-  });
-
   return {
     useARStateMachine: vi.fn(() => {
+      const [arState, setArState] = React.useState({ type: 'idle' as const });
+
       return {
-        get state() { return arState; },
+        state: arState,
         dispatchActions: {
-          initModel: vi.fn(() => mockInitModel()),
-          startInferencing: vi.fn(() => { state.isInferringState = true; }),
-          stopInferencing: vi.fn(() => { state.isInferringState = false; }),
+          initModel: vi.fn().mockImplementation(async () => {
+            // No-op for testing
+          }),
+          startInferencing: vi.fn(),
+          stopInferencing: vi.fn(),
           startPlanning: vi.fn(),
           stopPlanning: vi.fn(),
           completeStep: vi.fn(),
-          handleError: vi.fn((error: string, errorCode: string | null) => {
-            state.error = error;
-            state.errorCode = errorCode;
-            Object.assign(arState, { type: 'error', error, errorCode });
+          handleError: vi.fn().mockImplementation((error: string, errorCode: string | null) => {
+            setArState({ type: 'error', error, errorCode } as any);
           }),
           reset: vi.fn(() => {
-            state.error = null;
-            state.errorCode = null;
-            Object.assign(arState, { type: 'idle' });
+            setArState({ type: 'idle' });
           }),
         },
       };
@@ -158,31 +132,35 @@ vi.mock('../src/hooks/useARStateMachine', () => {
 });
 
 vi.mock('../src/hooks/useTaskOrchestrator', () => {
-  const taskState = {
-    isActive: false,
-    completed: false,
-    currentStepIndex: 0,
-    steps: [],
-    isListeningState: false,
-  };
   return {
-    useTaskOrchestrator: vi.fn(() => ({
-      taskState,
-      isPlanning: false,
-      checkTargetFound: vi.fn(),
-      triggerPlanningMode: vi.fn(),
-      handleTranscriptReady: vi.fn(),
-      get isListening() { return taskState.isListeningState; },
-      get isSpeaking() { return false; },
-      get transcript() { return ''; },
-      speak: vi.fn(),
-      startListening: vi.fn(() => { taskState.isListeningState = true; }),
-      stopListening: vi.fn(() => { taskState.isListeningState = false; }),
-      voiceError: null,
-      voiceErrorCode: null,
-      currentInstruction: null,
-      completeCurrentStep: vi.fn(),
-    })),
+    useTaskOrchestrator: vi.fn(() => {
+      const [isListening, setIsListening] = React.useState(false);
+      const [voiceError, setVoiceError] = React.useState<string | null>(null);
+      const [currentInstruction, setCurrentInstruction] = React.useState<string | null>(null);
+
+      return {
+        taskState: {
+          isActive: false,
+          completed: false,
+          currentStepIndex: 0,
+          steps: [] as any[],
+        },
+        isPlanning: false,
+        checkTargetFound: vi.fn(),
+        triggerPlanningMode: vi.fn(),
+        handleTranscriptReady: vi.fn(),
+        isListening,
+        isSpeaking: false,
+        transcript: '',
+        speak: vi.fn(),
+        startListening: vi.fn(() => setIsListening(true)),
+        stopListening: vi.fn(() => setIsListening(false)),
+        voiceError,
+        voiceErrorCode: null,
+        currentInstruction,
+        completeCurrentStep: vi.fn(),
+      };
+    }),
   };
 });
 
