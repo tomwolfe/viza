@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { SYSTEM_PROMPT, logger, CONFIG, checkWebGPU } from '@/config';
+import { DEFAULT_SYSTEM_PROMPT } from '@/services/promptManager';
+import { logger, CONFIG, checkWebGPU } from '@/config';
 import { WorkerClient, createWorkerClient } from '@/utils/workerClient';
 import type { VizaErrorCode } from '@/types/worker';
 
@@ -93,7 +94,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     setError(null);
 
     try {
-      await client.init(modelIdRef.current, SYSTEM_PROMPT);
+      await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
       isModelReadyRef.current = true;
       setIsModelLoading(false);
       setIsModelReady(true);

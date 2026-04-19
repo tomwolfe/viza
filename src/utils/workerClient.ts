@@ -302,10 +302,11 @@ sendMessage<T>(
 
     const messageId = this.createRequestId();
     const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : 'chat';
-    const timeoutId = this.createTimeout(inferenceType, messageId);
+    const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
 
     return new Promise<T>((resolve, reject) => {
-      const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
+      const timeoutId = this.createTimeout(inferenceType, messageId);
+
       const pending: PendingRequest<T> = {
         resolve,
         reject,
@@ -314,45 +315,41 @@ sendMessage<T>(
         type: inferenceType,
       };
 
-this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);
+      this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);
 
-      const abortHandler = () => {
+      const cleanup = () => {
         clearTimeout(timeoutId);
         this.pendingRequests.delete(messageId);
+      };
+
+      const abortHandler = () => {
+        cleanup();
         if (bitmapHandle) {
           try { bitmapHandle.close(); } catch {}
         }
         reject(new Error('Request aborted'));
       };
 
-      if (signal) {
-        signal.addEventListener('abort', abortHandler, { once: true });
-      }
+      signal?.addEventListener('abort', () => {
+        abortHandler();
+      }, { once: true });
 
       try {
         this.worker!.postMessage(
           { type, messageId, ...payload },
           transfer
         );
-      } catch (err) {
-        const error = err as Error;
-        const transferError = error.message?.includes('transfer') || error.name === 'DataCloneError';
-        const resourceHandle = transfer?.[0] instanceof ImageBitmap ? transfer[0] : bitmapHandle;
-        if (transferError) {
-          this.options.onError(
-            'ImageBitmap transfer failed - resource may already be closed',
-            'INFERENCE_ERROR',
-            messageId
-          );
-          clearTimeout(timeoutId);
-          this.pendingRequests.delete(messageId);
-          if (resourceHandle) {
-            try { resourceHandle.close(); } catch {}
-          }
-          reject(new Error('ImageBitmap transfer failed - resource may already be closed'));
-        } else {
-          reject(error);
+
+        const req = this.pendingRequests.get(messageId);
+        if (req) {
+          req.bitmapHandle = null;
         }
+      } catch (err) {
+        cleanup();
+        if (bitmapHandle) {
+          try { bitmapHandle.close(); } catch {}
+        }
+        reject(err);
       }
     });
   }

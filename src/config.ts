@@ -47,20 +47,6 @@ export const CONFIG = {
   },
 };
 
-export const SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
-
 export interface WebGPUCheckResult {
   supported: boolean;
   memoryGB: number;

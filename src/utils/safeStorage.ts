@@ -1,6 +1,6 @@
 import { logger } from '@/config';
 
-const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface SafeStorageOptions {
   key: string;
@@ -67,4 +67,4 @@ export function safeRemove({ key }: SafeStorageOptions): void {
   localStorage.removeItem(`${key}_version`);
 }
 
-export { SCHEMA_VERSION };
+

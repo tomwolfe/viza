@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { safeGet, SCHEMA_VERSION } from '@/utils/safeStorage';
+import { useState, useCallback, useRef, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { safeGet, safeRemove } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
 import { usePersistentState } from './usePersistentState';
-import { safeRemove } from '@/utils/safeStorage';
 
 export interface TaskStep {
   id: string;
@@ -39,6 +38,7 @@ export interface UseTaskStateReturn {
 }
 
 const STORAGE_KEY = 'viza_task_state';
+const SCHEMA_VERSION = 2;
 
 export const DEFAULT_ASSEMBLY_TASK: TaskStep[] = [
   {
@@ -111,7 +111,7 @@ export function useTaskState(): UseTaskStateReturn {
   }, []);
 
   const startTask = useCallback((taskName: string, steps: TaskStep[]) => {
-    const newState = {
+    const newState: TaskState = {
       taskId: `task-${Date.now()}`,
       taskName,
       currentStepIndex: 0,

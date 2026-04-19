@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { safeGet, safeSet, safeRemove, type SafeStorageOptions } from '@/utils/safeStorage';
+import { safeGet, safeSet, safeRemove, SCHEMA_VERSION, type SafeStorageOptions } from '@/utils/safeStorage';
 import { logger } from '@/config';
 
 export interface UsePersistentStateOptions<T> extends SafeStorageOptions {
@@ -16,7 +16,6 @@ interface PersistentStateInternal<T> {
 
 function usePersistentStateInternal<T>(key: string, options?: Partial<UsePersistentStateOptions<T>>) {
   const STORAGE_KEY = key;
-  const SCHEMA_VERSION = 1;
   const persistDelayMs = options?.persistDelayMs ?? 1000;
   const defaultValue = options?.defaultValue;
 
