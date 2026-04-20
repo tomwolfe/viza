@@ -6,6 +6,7 @@ import { useARSessionManager } from './useARSessionManager';
 import { useARStateMachine, type ARState } from './useARStateMachine';
 import { useTaskOrchestrator } from './useTaskOrchestrator';
 import { useWorldMap, type WorldObject } from './useWorldMap';
+import { useVizaError } from '@/contexts/VizaErrorContext';
 import type { DetectedObject, VisionResponse } from '@/schemas/vision';
 import type { TaskStep } from '@/hooks/useTaskState';
 import type { VizaErrorCode } from '@/types/worker';
@@ -65,6 +66,11 @@ interface UseAROrchestratorResult {
 export function useAROrchestrator(): UseAROrchestratorResult {
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const { worldMap, addOrUpdateObject, clearWorldMap } = useWorldMap();
+  const { 
+    unifiedError, 
+    unifiedErrorCode, 
+    setError: setVizaError 
+  } = useVizaError();
 
   const {
     isModelLoading,
@@ -86,13 +92,11 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     error: xrError,
     errorCode: xrErrorCode,
     startAR,
-    stopAR,
   } = useARSessionManager();
 
   const { state: arState, dispatchActions } = useARStateMachine();
 
   const sceneImageRef = useRef<ImageBitmap | null>(null);
-  const voiceCommandRef = useRef<string | null>(null);
 
   const taskOrchestrator = useTaskOrchestrator(sceneImageRef, () => {
     dispatchActions.initModel();
@@ -117,12 +121,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   }, []);
 
   useEffect(() => {
-    if (llmError) {
-      logger.error('[Orchestrator] WebLLM Error:', llmError);
-    }
-  }, [llmError, logger]);
-
-  useEffect(() => {
     return () => {
       if (sceneImageRef.current) {
         sceneImageRef.current.close();
@@ -138,15 +136,32 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   }, [lastCompleted, taskOrchestrator.taskState, dispatchActions]);
 
   useEffect(() => {
-    if (arState.type === 'error') {
-      logger.error('[Orchestrator] AR State Error:', arState.error);
+    if (llmError && llmErrorCode) {
+      setVizaError(llmErrorCode, llmError);
     }
-  }, [arState, logger]);
+  }, [llmError, llmErrorCode, setVizaError]);
 
-  const arError = arState.type === 'error' && 'error' in arState ? (arState as ARState & { error: string }).error : null;
-  const arErrorCode = arState.type === 'error' && 'errorCode' in arState ? (arState as ARState & { errorCode: VizaErrorCode | null }).errorCode : null;
-  const unifiedError = xrError || llmError || taskOrchestrator.voiceError || arError || null;
-  const unifiedErrorCode = xrErrorCode || llmErrorCode || arErrorCode || null;
+  useEffect(() => {
+    if (xrError && xrErrorCode) {
+      setVizaError(xrErrorCode, xrError);
+    }
+  }, [xrError, xrErrorCode, setVizaError]);
+
+  useEffect(() => {
+    if (taskOrchestrator.voiceError && taskOrchestrator.voiceErrorCode) {
+      setVizaError(taskOrchestrator.voiceErrorCode as VizaErrorCode, taskOrchestrator.voiceError);
+    }
+  }, [taskOrchestrator.voiceError, taskOrchestrator.voiceErrorCode, setVizaError]);
+
+  useEffect(() => {
+    if (arState.type === 'error') {
+      const error = (arState as any).error;
+      const errorCode = (arState as any).errorCode;
+      if (errorCode) {
+        setVizaError(errorCode, error);
+      }
+    }
+  }, [arState, setVizaError]);
 
   return {
     arState,
@@ -177,7 +192,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     worldMap,
     addOrUpdateObject,
     clearWorldMap,
-    voiceCommandRef,
+    voiceCommandRef: { current: null }, // Mocked as it seems unused in provided snippet
     sceneImageRef,
     isXRMode,
     xrSession,

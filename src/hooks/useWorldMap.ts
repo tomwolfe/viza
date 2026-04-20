@@ -236,7 +236,7 @@ export function useWorldMap(): UseWorldMapReturn {
     }
     saveTimeoutRef.current = setTimeout(() => {
       saveWorldMapToStorage(objects);
-    }, 500);
+    }, CONFIG.SPATIAL.SAVE_DELAY_MS);
   }, []);
 
   useEffect(() => {

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 import { useObject3DTransform } from '@/hooks/useObject3DTransform';
-import { get3DPosition } from '@/utils/spatial';
+import { SpatialEngine } from '@/utils/spatial';
 import { BoundingBox } from './DetectedObject3D/BoundingBox';
 import { ObjectLabel } from './DetectedObject3D/ObjectLabel';
 import { TargetHighlighter } from './DetectedObject3D/TargetHighlighter';
@@ -23,7 +23,7 @@ interface DetectedObject3DProps {
 
 export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isTarget, targetName, useCategoryColor, categoryColor, position }: DetectedObject3DProps) {
   const groupRef = useRef<THREE.Group>(null);
-  const { x, y, width, height, worldDepth, targetSize, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
+  const { x, y, worldDepth, targetSize, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
 
   const isCurrentTarget = isTarget && targetName && obj.name.toLowerCase().includes(targetName.toLowerCase());
   const displayColor = useCategoryColor && categoryColor
@@ -36,17 +36,17 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
     const camera = state.camera as THREE.PerspectiveCamera;
     const viewport = state.viewport;
 
-    get3DPosition({
+    const pos = SpatialEngine.get3DPosition({
       x,
       y,
-      width,
-      height,
-      camera,
-      viewport: { width: viewport.width, height: viewport.height },
       targetSize,
       depth: position ? 0 : worldDepth,
-      targetVector: groupRef.current.position,
+      aspect: viewport.aspect,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      cameraPosition: camera.position,
     });
+    groupRef.current.position.copy(pos);
   });
 
   return (

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, type Dispatch, type SetStateAction } from 'react';
-import { safeGet, safeRemove } from '@/utils/safeStorage';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
-import { usePersistentState } from './usePersistentState';
+import { useSyncedStorage } from './useSyncedStorage';
 
 export interface TaskStep {
   id: string;
@@ -38,7 +38,7 @@ export interface UseTaskStateReturn {
 }
 
 const STORAGE_KEY = 'viza_task_state';
-const SCHEMA_VERSION = 2;
+const TASK_SCHEMA_VERSION = 2;
 
 export const DEFAULT_ASSEMBLY_TASK: TaskStep[] = [
   {
@@ -58,38 +58,24 @@ export const DEFAULT_ASSEMBLY_TASK: TaskStep[] = [
   },
 ];
 
-function getInitialState(): TaskState {
-  const stored = safeGet<Partial<TaskState>>({ key: STORAGE_KEY, schemaVersion: SCHEMA_VERSION });
-  if (stored && stored.taskId && stored.steps && stored.steps.length > 0) {
-    return {
-      taskId: stored.taskId,
-      taskName: stored.taskName || '',
-      currentStepIndex: stored.currentStepIndex || 0,
-      steps: stored.steps,
-      isActive: stored.isActive ?? false,
-      completed: stored.completed ?? false,
-    };
-  }
-  return {
-    taskId: null,
-    taskName: '',
-    currentStepIndex: 0,
-    steps: [],
-    isActive: false,
-    completed: false,
-  };
-}
+const INITIAL_TASK_STATE: TaskState = {
+  taskId: null,
+  taskName: '',
+  currentStepIndex: 0,
+  steps: [],
+  isActive: false,
+  completed: false,
+};
 
 export function useTaskState(): UseTaskStateReturn {
-  const [taskState, setTaskState] = useState<TaskState>(getInitialState);
+  const [taskState, setTaskState] = useSyncedStorage<TaskState>(STORAGE_KEY, {
+    defaultValue: INITIAL_TASK_STATE,
+    schemaVersion: TASK_SCHEMA_VERSION,
+  });
+
   const [isPlanning, setIsPlanning] = useState(false);
   const speakRef = useRef<((text: string) => void) | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  const persistentState = usePersistentState<TaskState>(STORAGE_KEY, {
-    schemaVersion: SCHEMA_VERSION,
-    defaultValue: getInitialState(),
-  });
 
   useEffect(() => {
     return () => {
@@ -120,12 +106,11 @@ export function useTaskState(): UseTaskStateReturn {
       completed: false,
     };
     setTaskState(newState);
-    persistentState.setValue(newState);
 
     if (steps.length > 0 && speakRef.current) {
       speakRef.current(steps[0].instruction);
     }
-  }, [persistentState]);
+  }, [setTaskState]);
 
   const generateTaskPlan = useCallback(async (
     userGoal: string,
@@ -164,21 +149,19 @@ export function useTaskState(): UseTaskStateReturn {
   }, [getCurrentStep]);
 
   const nextStep = useCallback(() => {
-    const newState = { ...taskState };
-
     if (taskState.currentStepIndex >= taskState.steps.length - 1) {
-      setTaskState({ ...newState, completed: true, isActive: false });
-      persistentState.setValue({ ...newState, completed: true, isActive: false });
+      setTaskState(prev => ({ ...prev, completed: true, isActive: false }));
     } else {
       const nextInstruction = taskState.steps[taskState.currentStepIndex + 1]?.instruction || '';
       if (speakRef.current && nextInstruction) {
         speakRef.current(nextInstruction);
       }
-      newState.currentStepIndex = taskState.currentStepIndex + 1;
-      setTaskState(newState);
-      persistentState.setValue(newState);
+      setTaskState(prev => ({
+        ...prev,
+        currentStepIndex: prev.currentStepIndex + 1
+      }));
     }
-  }, [persistentState, taskState]);
+  }, [taskState, setTaskState]);
 
   const previousStep = useCallback(() => {
     setTaskState((prev) => {
@@ -198,23 +181,16 @@ export function useTaskState(): UseTaskStateReturn {
         currentStepIndex: newIndex,
       };
     });
-  }, []);
+  }, [setTaskState]);
 
   const completeCurrentStep = useCallback(() => {
     nextStep();
   }, [nextStep]);
 
   const resetTask = useCallback(() => {
-    setTaskState({
-      taskId: null,
-      taskName: '',
-      currentStepIndex: 0,
-      steps: [],
-      isActive: false,
-      completed: false,
-    });
-    persistentState.removeValue();
-  }, [persistentState]);
+    setTaskState(INITIAL_TASK_STATE);
+    safeRemove({ key: STORAGE_KEY });
+  }, [setTaskState]);
 
   const checkTargetFound = useCallback((detectedObjects: DetectedObject[]) => {
     if (!taskState.isActive || detectedObjects.length === 0) return;

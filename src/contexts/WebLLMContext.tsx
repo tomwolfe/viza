@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { useVizaError } from '@/contexts/VizaErrorContext';
 import type { VisionResponse, TaskStep } from '@/schemas/vision';
 import { logger } from '@/config';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
@@ -35,6 +36,7 @@ interface WebLLMProviderProps {
 }
 
 export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
+  const { setError: setVizaError } = useVizaError();
   const {
     isModelLoading,
     modelProgress,
@@ -48,8 +50,6 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     initModel,
     dispose,
     setIsInferring,
-    setError,
-    setErrorCode,
   } = useWebLLMWorker({ modelId });
 
   const [lastCompleted, setLastCompleted] = useState(false);
@@ -62,18 +62,18 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       signal?: AbortSignal
     ): Promise<InferenceResult> => {
       if (!isModelReadyRef.current) {
-        setError('Model not ready. Call initModel first.');
+        setVizaError('MODEL_NOT_READY', 'Model not ready. Call initModel first.');
         return inferenceType === 'planning' ? [] : null;
       }
 
       const client = workerClient;
       if (!client) {
-        setError('Worker not initialized');
+        setVizaError('WORKER_INIT_FAILED', 'Worker not initialized');
         return inferenceType === 'planning' ? [] : null;
       }
 
       setIsInferring(true);
-      setError(null);
+      // We don't clear error here as we want to keep it until next success or explicit clear
 
       const messageId = crypto.randomUUID();
 
@@ -100,15 +100,14 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         if (errorMessage !== 'Request aborted') {
           logger.error(`[WebLLM] ${inferenceType} error:`, err);
-          setError(errorMessage);
-          setErrorCode('INFERENCE_ERROR');
+          setVizaError('INFERENCE_ERROR', errorMessage);
         }
         return inferenceType === 'planning' ? [] : null;
       } finally {
         setIsInferring(false);
       }
     },
-    [isModelReadyRef, workerClient, setIsInferring, setError, setErrorCode]
+    [isModelReadyRef, workerClient, setIsInferring, setVizaError]
   );
 
   const runInference = useCallback(

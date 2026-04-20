@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 import { useAROrchestrator } from '../src/hooks/useAROrchestrator';
 import * as config from '../src/config';
@@ -16,6 +16,18 @@ vi.stubGlobal('navigator', {
     }),
   },
 });
+
+vi.mock('@/contexts/VizaErrorContext', () => ({
+  useVizaError: vi.fn(() => ({
+    unifiedError: null,
+    unifiedErrorCode: null,
+    error: { code: null, message: null, originalError: null },
+    setError: vi.fn(),
+    clearError: vi.fn(),
+  })),
+}));
+
+import { useVizaError } from '@/contexts/VizaErrorContext';
 
 vi.mock('../src/contexts/WebLLMContext', () => {
   return {
@@ -215,7 +227,7 @@ describe('useAROrchestrator', () => {
     const { result } = renderHook(() => useAROrchestrator());
 
     const mockObjects = [
-      { name: 'chair', bbox_2d: [0, 0, 100, 100], action: 'keep', category: 'keep', confidence: 0.9 },
+      { name: 'chair', bbox_2d: [0, 0, 100, 100], action: 'keep', category: 'keep' as any, confidence: 0.9 },
     ];
 
     act(() => {
@@ -236,30 +248,35 @@ describe('useAROrchestrator', () => {
   });
 
   it('should handle error state from AR state machine', () => {
+    vi.mocked(useVizaError).mockReturnValue({
+      unifiedError: 'Test error',
+      unifiedErrorCode: 'INFERENCE_ERROR' as any,
+      setError: vi.fn(),
+      clearError: vi.fn(),
+      error: { code: 'INFERENCE_ERROR' as any, message: 'Test error', originalError: null },
+    });
+
     const { result } = renderHook(() => useAROrchestrator());
 
     act(() => {
-      result.current.dispatchActions.handleError('Test error', null);
+      result.current.dispatchActions.handleError('Test error', 'INFERENCE_ERROR');
     });
 
     expect(result.current.error).toBe('Test error');
   });
 
   it('should handle error state from LLM', () => {
-    const { result } = renderHook(() => useAROrchestrator());
-
-    const mockWebLLM = {
-      ...result.current,
-      llmError: 'LLM Error occurred',
-      errorCode: 'INFERENCE_ERROR' as any,
-    };
-
-    act(() => {
-      (result.current as any).llmError = 'LLM Error occurred';
-      (result.current as any).errorCode = 'INFERENCE_ERROR';
+    vi.mocked(useVizaError).mockReturnValue({
+      unifiedError: 'LLM Error occurred',
+      unifiedErrorCode: 'INFERENCE_ERROR' as any,
+      setError: vi.fn(),
+      clearError: vi.fn(),
+      error: { code: 'INFERENCE_ERROR' as any, message: 'LLM Error occurred', originalError: null },
     });
 
-    expect(result.current.llmError).toBe('LLM Error occurred');
+    const { result } = renderHook(() => useAROrchestrator());
+
+    expect(result.current.error).toBe('LLM Error occurred');
     expect(result.current.errorCode).toBe('INFERENCE_ERROR');
   });
 

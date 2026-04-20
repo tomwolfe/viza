@@ -286,7 +286,7 @@ export class WorkerClient {
     this.pendingRequests.clear();
   }
 
-sendMessage<T>(
+ sendMessage<T>(
     type: WorkerMessageType,
     payload: Record<string, unknown>,
     transfer?: Transferable[],
@@ -317,16 +317,20 @@ sendMessage<T>(
 
       this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);
 
+      const closeBitmap = () => {
+        if (bitmapHandle) {
+          try { bitmapHandle.close(); } catch {}
+        }
+      };
+
       const cleanup = () => {
         clearTimeout(timeoutId);
         this.pendingRequests.delete(messageId);
       };
 
       const abortHandler = () => {
+        closeBitmap();
         cleanup();
-        if (bitmapHandle) {
-          try { bitmapHandle.close(); } catch {}
-        }
         reject(new Error('Request aborted'));
       };
 
@@ -345,10 +349,8 @@ sendMessage<T>(
           req.bitmapHandle = null;
         }
       } catch (err) {
+        closeBitmap();
         cleanup();
-        if (bitmapHandle) {
-          try { bitmapHandle.close(); } catch {}
-        }
         reject(err);
       }
     });

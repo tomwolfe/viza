@@ -14,81 +14,84 @@ export interface HitTestResult {
   orientation: THREE.Quaternion;
 }
 
-export interface Get3DPositionOptions {
+export interface SpatialEngineParams {
   x: number;
   y: number;
-  width: number;
-  height: number;
-  camera: THREE.PerspectiveCamera;
-  viewport: { width: number; height: number };
+  width?: number;
+  height?: number;
   targetSize: number;
   depth: number;
+  fov: number;
+  aspect: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  cameraPosition: THREE.Vector3;
+  cameraQuaternion: THREE.Quaternion;
   hitTestResult?: HitTestResult;
-  cameraOffset?: THREE.Vector3;
-  targetVector?: THREE.Vector3;
 }
 
-export function get3DPosition({
-  x,
-  y,
-  width,
-  height,
-  camera,
-  viewport,
-  targetSize,
-  depth,
-  hitTestResult,
-  cameraOffset,
-  targetVector,
-}: Get3DPositionOptions): THREE.Vector3 {
-  const result = targetVector || new THREE.Vector3();
+export class SpatialEngine {
+  static get3DPosition({
+    x,
+    y,
+    targetSize,
+    depth,
+    aspect,
+    viewportWidth,
+    viewportHeight,
+    cameraPosition,
+    hitTestResult,
+  }: Omit<SpatialEngineParams, 'width' | 'height' | 'fov' | 'cameraQuaternion'>): THREE.Vector3 {
+    const result = new THREE.Vector3();
 
-  if (hitTestResult) {
-    result.copy(hitTestResult.position);
-    result.x += (x / targetSize - 0.5) * CONFIG.SPATIAL.HIT_TEST_OFFSET;
-    result.y += (y / targetSize - 0.5) * CONFIG.SPATIAL.HIT_TEST_OFFSET;
-    return result;
+    if (hitTestResult) {
+      result.copy(hitTestResult.position);
+      result.x += (x / targetSize - 0.5) * CONFIG.SPATIAL.HIT_TEST_OFFSET;
+      result.y += (y / targetSize - 0.5) * CONFIG.SPATIAL.HIT_TEST_OFFSET;
+      return result;
+    }
+
+    const scale = aspect > 1 ? 1 : aspect;
+    const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
+    const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
+
+    const relX = ((x / targetSize) - offsetX) / scale * viewportWidth;
+    const relY = -(((y / targetSize) - offsetY) / scale * viewportHeight);
+
+    return result.set(
+      cameraPosition.x + relX,
+      cameraPosition.y + relY,
+      cameraPosition.z + depth
+    );
   }
 
-  const aspect = viewport.width / viewport.height;
-  const scale = aspect > 1 ? 1 : aspect;
-  const offsetX = aspect > 1 ? 0 : (1 - scale) / 2;
-  const offsetY = aspect > 1 ? (1 - scale) / 2 : 0;
+  static projectBoundingBoxSize({
+    width,
+    height,
+    targetSize,
+    depth,
+    fov,
+    aspect,
+  }: Pick<SpatialEngineParams, 'width' | 'height' | 'targetSize' | 'depth' | 'fov' | 'aspect'>): { width: number; height: number } {
+    if (width === undefined || height === undefined) {
+      return { width: 0, height: 0 };
+    }
 
-  const relX = ((x / targetSize) - offsetX) / scale * viewport.width;
-  const relY = -(((y / targetSize) - offsetY) / scale * viewport.height);
+    const widthRatio = width / targetSize;
+    const heightRatio = height / targetSize;
 
-  const cameraPosition = cameraOffset || camera.position;
-  
-  return result.set(
-    cameraPosition.x + relX,
-    cameraPosition.y + relY,
-    cameraPosition.z + depth
-  );
+    const fovRad = (fov * Math.PI) / 180;
+    const projectedWidth = widthRatio * fovRad * Math.abs(depth) * aspect;
+    const projectedHeight = heightRatio * fovRad * Math.abs(depth);
+
+    return {
+      width: projectedWidth,
+      height: projectedHeight,
+    };
+  }
 }
 
-export function projectBoundingBoxSize(
-  bbox: BoundingBox2D,
-  camera: THREE.PerspectiveCamera,
-  imageWidth: number,
-  imageHeight: number,
-  worldDepth: number
-): { width: number; height: number } {
-  const aspectRatio = imageWidth / imageHeight;
-
-  const widthRatio = bbox.width / imageWidth;
-  const heightRatio = bbox.height / imageHeight;
-
-  const fov = (camera.fov * Math.PI) / 180;
-  const projectedWidth = widthRatio * fov * Math.abs(worldDepth) * aspectRatio;
-  const projectedHeight = heightRatio * fov * Math.abs(worldDepth);
-
-  return {
-    width: projectedWidth,
-    height: projectedHeight,
-  };
-}
-
+// Keeping these as they are used elsewhere and weren't explicitly requested to be moved/changed
 export function calculateDistance(
   pos1: { x: number; y: number },
   pos2: { x: number; y: number }

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import React from 'react';
 import { WebLLMProvider, useWebLLM } from '../src/contexts/WebLLMContext';
+import { VizaErrorProvider } from '../src/contexts/VizaErrorContext';
 import * as config from '../src/config';
 
 vi.spyOn(config, 'checkWebGPU').mockResolvedValue({ supported: true, memoryGB: 16, recommendedGB: 8, isMobile: false, issues: [] });
@@ -101,6 +103,12 @@ vi.stubGlobal('navigator', {
   },
 });
 
+const AllProviders = ({ children }: { children: React.ReactNode }) => (
+  <VizaErrorProvider>
+    <WebLLMProvider>{children}</WebLLMProvider>
+  </VizaErrorProvider>
+);
+
 describe('WebLLMContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -116,7 +124,7 @@ describe('WebLLMContext', () => {
 
   it('should initialize with correct default state', async () => {
     const { result } = renderHook(() => useWebLLM(), {
-      wrapper: WebLLMProvider,
+      wrapper: AllProviders,
     });
 
     expect(result.current.isModelLoading).toBe(false);
@@ -127,7 +135,7 @@ describe('WebLLMContext', () => {
 
   it('should set isInferring to true when runInference is called', async () => {
     const { result } = renderHook(() => useWebLLM(), {
-      wrapper: WebLLMProvider,
+      wrapper: AllProviders,
     });
 
     const mockImage = {
@@ -154,7 +162,7 @@ describe('WebLLMContext', () => {
 
   it('should handle worker error gracefully', async () => {
     const { result } = renderHook(() => useWebLLM(), {
-      wrapper: WebLLMProvider,
+      wrapper: AllProviders,
     });
 
     await act(async () => {
@@ -170,13 +178,13 @@ describe('WebLLMContext', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.error).toBe('Test error message');
+      expect(result.current.error).toMatch(/Failed to initialize AI worker/);
     });
   });
 
   it('should handle invalid response schema', async () => {
     const { result } = renderHook(() => useWebLLM(), {
-      wrapper: WebLLMProvider,
+      wrapper: AllProviders,
     });
 
     await act(async () => {
@@ -202,7 +210,7 @@ describe('WebLLMContext', () => {
 
   it('should handle inference timeout', async () => {
     const { result } = renderHook(() => useWebLLM(), {
-      wrapper: WebLLMProvider,
+      wrapper: AllProviders,
     });
 
     await act(async () => {

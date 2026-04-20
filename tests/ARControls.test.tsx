@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Play, Mic, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
+import React from 'react';
 
 vi.mock('lucide-react', () => ({
   Play: () => <svg data-testid="play-icon" />,
@@ -10,6 +10,14 @@ vi.mock('lucide-react', () => ({
   RotateCcw: () => <svg data-testid="reset-icon" />,
 }));
 
+vi.mock('@/contexts/VizaErrorContext', () => ({
+  useVizaError: vi.fn(() => ({
+    unifiedError: null,
+    unifiedErrorCode: null,
+  })),
+}));
+
+import { useVizaError } from '@/contexts/VizaErrorContext';
 import ARControls from '../src/components/ARControls';
 
 describe('ARControls', () => {
@@ -43,12 +51,14 @@ describe('ARControls', () => {
   });
 
   it('should show error message when errorCode is provided', () => {
-    const props = {
-      ...defaultProps,
-      errorCode: 'CAMERA_NOT_ALLOWED' as const,
-      error: 'Permission denied',
-    };
-    render(<ARControls {...props} />);
+    vi.mocked(useVizaError).mockReturnValue({
+      unifiedError: 'Please allow camera permissions in your browser settings.',
+      unifiedErrorCode: 'CAMERA_NOT_ALLOWED' as any,
+      error: { code: 'CAMERA_NOT_ALLOWED' as any, message: '...', originalError: null },
+      setError: vi.fn(),
+      clearError: vi.fn(),
+    });
+    render(<ARControls {...defaultProps} />);
     expect(screen.getByText('Error')).toBeInTheDocument();
     expect(screen.getByText(/Please allow camera/)).toBeInTheDocument();
   });

@@ -4,7 +4,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
-import { projectBoundingBoxSize } from '@/utils/spatial';
+import { SpatialEngine } from '@/utils/spatial';
 import { CONFIG } from '@/config';
 
 interface UseObject3DTransformOptions {
@@ -25,14 +25,15 @@ export function useObject3DTransform({ obj, index, position }: UseObject3DTransf
 
   const size = useMemo(
     () =>
-      projectBoundingBoxSize(
-        { x, y, width, height },
-        cameraPerspective,
+      SpatialEngine.projectBoundingBoxSize({
+        width,
+        height,
         targetSize,
-        targetSize,
-        Math.abs(worldDepth)
-      ),
-    [x, y, width, height, cameraPerspective, worldDepth, targetSize]
+        depth: worldDepth,
+        fov: cameraPerspective.fov,
+        aspect: viewport.aspect,
+      }),
+    [width, height, cameraPerspective.fov, viewport.aspect, worldDepth, targetSize]
   );
 
   const boxWidth = Math.max(size.width, SPATIAL.MIN_BOX_SIZE);

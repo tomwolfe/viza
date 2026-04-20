@@ -2,42 +2,19 @@
 
 import { Play, Mic, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useId } from 'react';
+import { useVizaError } from '@/contexts/VizaErrorContext';
 import type { VizaErrorCode } from '@/types/worker';
 
 interface ARControlsProps {
   onStartAR: () => void;
- onVoiceInput: () => void;
+  onVoiceInput: () => void;
   onResetCamera?: () => void;
   isARActive: boolean;
   isModelLoading: boolean;
   modelProgress: number;
   isListening: boolean;
   isDeviceIncompatible?: boolean;
-  unifiedErrorCode?: VizaErrorCode | null;
-  unifiedError?: string | null;
-  errorCode?: VizaErrorCode | null;
-  error?: string | null;
 }
-
-const getSpecificAdvice = (code?: VizaErrorCode | null, err?: string | null): string | null => {
-  if (!code && !err) return null;
-  switch (code) {
-    case 'WEBGPU_NOT_SUPPORTED':
-      return 'Please use a WebGPU-capable browser (Chrome 113+, Edge 113+) on a compatible device.';
-    case 'CAMERA_NOT_ALLOWED':
-    case 'MICROPHONE_NOT_ALLOWED':
-      return 'Please allow camera/microphone access in your browser settings.';
-    case 'CAMERA_NOT_FOUND':
-    case 'MICROPHONE_NOT_FOUND':
-      return 'Please connect a camera/microphone to your device.';
-    case 'WORKER_INIT_FAILED':
-      return 'Failed to initialize AI worker. Please refresh and try again.';
-    case 'INFERENCE_TIMEOUT':
-      return 'AI processing timed out. Please try again.';
-    default:
-      return err ? `Error: ${err}` : null;
-  }
-};
 
 export default function ARControls({
   onStartAR,
@@ -48,12 +25,9 @@ export default function ARControls({
   modelProgress,
   isListening,
   isDeviceIncompatible,
-  errorCode,
-  error,
 }: ARControlsProps) {
   const statusId = useId();
-
-  const specificAdvice = getSpecificAdvice(errorCode, error);
+  const { unifiedError, unifiedErrorCode } = useVizaError();
 
   const renderStatusContent = () => {
     if (isDeviceIncompatible) {
@@ -65,16 +39,14 @@ export default function ARControls({
       );
     }
 
-    if (error && errorCode) {
+    if (unifiedError && unifiedErrorCode) {
       return (
         <div className="flex flex-col items-center gap-1">
           <div className="flex items-center gap-2 text-red-400">
             <AlertTriangle className="w-5 h-5" aria-hidden="true" />
             <span>Error</span>
           </div>
-          {specificAdvice && (
-            <span className="text-xs text-red-300">{specificAdvice}</span>
-          )}
+          <span className="text-xs text-red-300">{unifiedError}</span>
         </div>
       );
     }

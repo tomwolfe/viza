@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useWebXR } from '@/hooks/useWebXR';
+import { useVizaError } from '@/contexts/VizaErrorContext';
 import type { VizaErrorCode } from '@/types/worker';
 import { logger } from '@/config';
 
@@ -17,12 +18,10 @@ export interface UseARSessionManagerResult {
 
 export function useARSessionManager(): UseARSessionManagerResult {
   const [isARActive, setIsARActive] = useState(false);
+  const { setError: setVizaError, clearError: clearVizaError } = useVizaError();
 
   const webXR = useWebXR();
   const initModelRef = useRef<(() => void) | null>(null);
-
-  const errorRef = useRef<string | null>(null);
-  const errorCodeRef = useRef<VizaErrorCode | null>(null);
 
   const startAR = useCallback(async () => {
     try {
@@ -34,21 +33,18 @@ export function useARSessionManager(): UseARSessionManagerResult {
         const xrSuccess = await webXR.startSession();
         if (xrSuccess) {
           setIsARActive(true);
-          errorRef.current = null;
-          errorCodeRef.current = null;
+          clearVizaError();
           return;
         }
       }
 
       setIsARActive(true);
-      errorRef.current = null;
-      errorCodeRef.current = null;
+      clearVizaError();
     } catch (err) {
       logger.error('[ARSession] Failed to start AR:', err);
-      errorRef.current = 'Failed to start AR session. Please refresh and try again.';
-      errorCodeRef.current = 'CAMERA_XR_UNAVAILABLE';
+      setVizaError('CAMERA_XR_UNAVAILABLE', 'Failed to start AR session. Please refresh and try again.');
     }
-  }, [webXR]);
+  }, [webXR, setVizaError, clearVizaError]);
 
   const stopAR = useCallback(async () => {
     if (webXR.isActive) {
@@ -61,8 +57,8 @@ export function useARSessionManager(): UseARSessionManagerResult {
     isARActive,
     isXRMode: webXR.isActive,
     xrSession: webXR.session,
-    error: errorRef.current,
-    errorCode: errorCodeRef.current,
+    error: null,
+    errorCode: null,
     startAR,
     stopAR,
   };

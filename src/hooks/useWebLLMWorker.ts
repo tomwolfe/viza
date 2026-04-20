@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { DEFAULT_SYSTEM_PROMPT } from '@/services/promptManager';
 import { logger, CONFIG, checkWebGPU } from '@/config';
 import { WorkerClient, createWorkerClient } from '@/utils/workerClient';
+import { useVizaError } from '@/contexts/VizaErrorContext';
 import type { VizaErrorCode } from '@/types/worker';
 
 interface UseWebLLMWorkerOptions {
@@ -15,9 +16,11 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const [modelProgress, setModelProgress] = useState(0);
   const [isModelReady, setIsModelReady] = useState(false);
   const [isInferring, setIsInferring] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
+  const { setError: setVizaError, clearError: clearVizaError, error: vizaErrorState } = useVizaError();
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
+
+  const error = vizaErrorState.message;
+  const errorCode = vizaErrorState.code;
 
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
   const workerClientRef = useRef<WorkerClient | null>(null);
@@ -30,8 +33,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     const gpuCheck = await checkWebGPU();
     if (!gpuCheck.supported || gpuCheck.memoryGB < 8) {
       setIsDeviceCompatible(false);
-      setError(`WebGPU not supported or insufficient memory (requires ${gpuCheck.recommendedGB}GB+).`);
-      setErrorCode('WEBGPU_NOT_SUPPORTED');
+      setVizaError('WEBGPU_NOT_SUPPORTED', `WebGPU not supported or insufficient memory (requires ${gpuCheck.recommendedGB}GB+).`);
       return;
     }
     setIsDeviceCompatible(true);
@@ -48,8 +50,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       },
       onError: (message, code) => {
         logger.error('[WebLLM] Error:', message);
-        setError(message);
-        setErrorCode(code);
+        setVizaError(code, message);
         setIsModelLoading(false);
         setIsInferring(false);
       },
@@ -59,7 +60,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       onPong: () => {},
       onUnresponsive: () => {
         logger.warn('[WebLLM] Worker unresponsive');
-        setError('AI Engine Lost - Restarting...');
+        setVizaError('WORKER_CRASHED', 'AI Engine Lost - Restarting...');
         setIsModelReady(false);
         isModelReadyRef.current = false;
       },
@@ -70,7 +71,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     client.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
     workerClientRef.current = client;
     isInitializedRef.current = true;
-  }, []);
+  }, [setVizaError]);
 
   const initModel = useCallback(async () => {
     if (!isInitializedRef.current) {
@@ -78,20 +79,19 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     }
 
     if (!isDeviceCompatible) {
-      setError('Device not compatible with WebGPU');
+      setVizaError('WEBGPU_NOT_SUPPORTED', 'Device not compatible with WebGPU');
       return;
     }
 
     const client = workerClientRef.current;
     if (!client) {
-      setError('Worker not initialized');
+      setVizaError('WORKER_INIT_FAILED', 'Worker not initialized');
       return;
     }
 
     setIsModelReady(false);
     setModelProgress(0);
     setIsModelLoading(true);
-    setError(null);
 
     try {
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
@@ -103,11 +103,10 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
         logger.info('[WebLLM] Heartbeat reconnected');
       });
     } catch (err) {
-      setError((err as Error).message);
-      setErrorCode('WORKER_INIT_FAILED');
+      setVizaError('WORKER_INIT_FAILED', (err as Error).message);
       setIsModelLoading(false);
     }
-  }, [initWorker, isDeviceCompatible]);
+  }, [initWorker, isDeviceCompatible, setVizaError]);
 
   const dispose = useCallback(() => {
     const client = workerClientRef.current;
@@ -121,9 +120,8 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     setIsModelReady(false);
     setIsModelLoading(false);
     setIsInferring(false);
-    setError(null);
-    setErrorCode(null);
-  }, []);
+    clearVizaError();
+  }, [clearVizaError]);
 
   useEffect(() => {
     return () => {
@@ -144,7 +142,5 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     initModel,
     dispose,
     setIsInferring,
-    setError,
-    setErrorCode,
   };
 }
