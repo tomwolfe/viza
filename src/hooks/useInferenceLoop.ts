@@ -15,6 +15,9 @@ interface UseInferenceLoopOptions {
   isInferring: boolean;
   intervalMs?: number;
   isActive?: boolean;
+  getStallStatus?: () => { isStalled: boolean; timeOnStep: number; shouldSuggestHint: boolean };
+  triggerHint?: (worldMapObjects: { name: string }[]) => void;
+  worldMapObjects?: { name: string }[];
 }
 
 export function useInferenceLoop({
@@ -24,6 +27,9 @@ export function useInferenceLoop({
   isInferring,
   intervalMs = CONFIG.INFERENCE_INTERVAL,
   isActive = false,
+  getStallStatus,
+  triggerHint,
+  worldMapObjects = [],
 }: UseInferenceLoopOptions) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,6 +117,13 @@ export function useInferenceLoop({
 
     const loop = async () => {
       if (!isRunningRef.current && acknowledgedRef.current) {
+        if (getStallStatus && triggerHint) {
+          const stallStatus = getStallStatus();
+          if (stallStatus.shouldSuggestHint) {
+            triggerHint(worldMapObjects);
+          }
+        }
+
         await processFrame('Identify objects in this scene.');
       }
       intervalRef.current = setTimeout(loop, adjustedInterval);
@@ -119,7 +132,7 @@ export function useInferenceLoop({
     intervalRef.current = setTimeout(loop, intervalMs);
 
     return () => cancelPending();
-  }, [isActive, isInferring, intervalMs, adjustedInterval, processFrame, cancelPending]);
+  }, [isActive, isInferring, intervalMs, adjustedInterval, processFrame, cancelPending, getStallStatus, triggerHint, worldMapObjects]);
 
   const run = useCallback(
     async (prompt: string): Promise<void> => {

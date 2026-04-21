@@ -5,14 +5,28 @@ export interface SpatialFilterOptions {
   minCutoff?: number;
   beta?: number;
   dCutoff?: number;
+  velocityThreshold?: number;
+  staticPrecision?: number;
+  dynamicSmoothing?: number;
 }
 
 export function createSpatialFilter(
   initialValue: THREE.Vector3 = new THREE.Vector3(),
   options: SpatialFilterOptions = {}
 ): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
-  const { minCutoff = CONFIG.SPATIAL.ONE_EURO.MIN_CUTOFF, beta = CONFIG.SPATIAL.ONE_EURO.BETA, dCutoff = CONFIG.SPATIAL.ONE_EURO.DCUTOFF } = options;
-  return createOneEuroFilter(initialValue, minCutoff, beta, dCutoff);
+  const { 
+    minCutoff = CONFIG.SPATIAL.ONE_EURO.MIN_CUTOFF, 
+    beta = CONFIG.SPATIAL.ONE_EURO.BETA, 
+    dCutoff = CONFIG.SPATIAL.ONE_EURO.DCUTOFF,
+    velocityThreshold = CONFIG.SPATIAL.ONE_EURO.VELOCITY_THRESHOLD,
+    staticPrecision = CONFIG.SPATIAL.ONE_EURO.STATIC_PRECISION,
+    dynamicSmoothing = CONFIG.SPATIAL.ONE_EURO.DYNAMIC_SMOOTHING,
+  } = options;
+  return createOneEuroFilter(initialValue, minCutoff, beta, dCutoff, {
+    velocityThreshold,
+    staticPrecision,
+    dynamicSmoothing,
+  });
 }
 
 export interface BoundingBox2D {
@@ -166,52 +180,95 @@ export function isWithinThreshold(
 interface OneEuroFilterState {
   lastValue: THREE.Vector3;
   lastTime: number;
+  velocity: THREE.Vector3;
+  lastFiltered: THREE.Vector3;
+}
+
+export interface VelocityAwareFilterOptions {
+  minCutoff?: number;
+  beta?: number;
+  dCutoff?: number;
+  velocityThreshold?: number;
+  staticPrecision?: number;
+  dynamicSmoothing?: number;
 }
 
 export function createOneEuroFilter(
   initialValue: THREE.Vector3 = new THREE.Vector3(),
   minCutoff: number = 0.5,
   beta: number = 0.7,
-  dCutoff: number = 1.0
+  dCutoff: number = 1.0,
+  options: VelocityAwareFilterOptions = {}
 ): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
+  const { 
+    velocityThreshold = 0.5, 
+    staticPrecision = 0.3,
+    dynamicSmoothing = 1.5 
+  } = options;
+
   const lastValue = initialValue.clone();
   const filteredResult = new THREE.Vector3();
-  let dx = new THREE.Vector3();
-  let dy = new THREE.Vector3();
-  let dz = new THREE.Vector3();
+  const velocity = new THREE.Vector3();
+  const lastFiltered = initialValue.clone();
 
   const state: OneEuroFilterState = {
     lastValue,
     lastTime: 0,
+    velocity,
+    lastFiltered,
   };
 
   return (value: THREE.Vector3, timestamp: number) => {
     if (state.lastTime === 0) {
       lastValue.set(value.x, value.y, value.z);
+      lastFiltered.set(value.x, value.y, value.z);
       state.lastTime = timestamp;
       return filteredResult.set(value.x, value.y, value.z);
     }
 
     const dt = (timestamp - state.lastTime) / 1000;
     if (dt <= 0) {
-      return filteredResult.set(lastValue.x, lastValue.y, lastValue.z);
+      return filteredResult.set(lastFiltered.x, lastFiltered.y, lastFiltered.z);
     }
 
-    dx.set((value.x - lastValue.x) / dt, 0, 0);
-    dy.set(0, (value.y - lastValue.y) / dt, 0);
-    dz.set(0, 0, (value.z - lastValue.z) / dt);
+    const rawVelocityX = (value.x - lastValue.x) / dt;
+    const rawVelocityY = (value.y - lastValue.y) / dt;
+    const rawVelocityZ = (value.z - lastValue.z) / dt;
+    
+    velocity.set(rawVelocityX, rawVelocityY, rawVelocityZ);
+    const speed = velocity.length();
 
-    const rate = Math.sqrt(dx.x * dx.x + dy.y * dy.y + dz.z * dz.z);
-    const cutoff = minCutoff + beta * Math.max(0, rate - dCutoff);
-    const alpha = Math.min(1, (cutoff * dt) / (1 + cutoff * dt));
-
-    filteredResult.set(
-      lastValue.x + alpha * (value.x - lastValue.x),
-      lastValue.y + alpha * (value.y - lastValue.y),
-      lastValue.z + alpha * (value.z - lastValue.z)
+    const smoothedDt = Math.min(dt, 0.1);
+    velocity.lerp(
+      new THREE.Vector3(rawVelocityX, rawVelocityY, rawVelocityZ).divideScalar(smoothedDt || 1),
+      0.3
     );
 
-    lastValue.set(filteredResult.x, filteredResult.y, filteredResult.z);
+    const effectiveSpeed = velocity.length();
+    
+    let effectiveMinCutoff = minCutoff;
+    let effectiveBeta = beta;
+
+    if (effectiveSpeed < velocityThreshold) {
+      effectiveMinCutoff = minCutoff * staticPrecision;
+      effectiveBeta = beta * 0.5;
+    } else {
+      effectiveMinCutoff = minCutoff * dynamicSmoothing;
+      effectiveBeta = beta * 1.2;
+    }
+
+    const rate = effectiveSpeed;
+    const cutoff = effectiveMinCutoff + effectiveBeta * Math.max(0, rate - dCutoff);
+    const alpha = Math.min(0.95, Math.max(0.05, (cutoff * dt) / (1 + cutoff * dt)));
+
+    filteredResult.set(
+      lastFiltered.x + alpha * (value.x - lastFiltered.x),
+      lastFiltered.y + alpha * (value.y - lastFiltered.y),
+      lastFiltered.z + alpha * (value.z - lastFiltered.z)
+    );
+
+    lastValue.set(value.x, value.y, value.z);
+    lastFiltered.set(filteredResult.x, filteredResult.y, filteredResult.z);
     state.lastTime = timestamp;
 
     return filteredResult;

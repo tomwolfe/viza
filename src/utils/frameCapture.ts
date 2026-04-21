@@ -2,21 +2,17 @@ import { CONFIG, logger } from '@/config';
 
 const TARGET_SIZE = CONFIG.TARGET_SIZE;
 
-class FrameCaptureManager {
+class BitmapPool {
+  private canvasPool: (OffscreenCanvas | HTMLCanvasElement)[] = [];
+  private currentCanvasIndex = 0;
   private canvas: OffscreenCanvas | HTMLCanvasElement | null = null;
   private ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
 
-  getCanvasAndContext(): {
-    canvas: OffscreenCanvas | HTMLCanvasElement;
-    ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
-  } {
-    if (this.canvas && this.ctx) {
-      return {
-        canvas: this.canvas,
-        ctx: this.ctx,
-      };
-    }
+  constructor() {
+    this.initCanvas();
+  }
 
+  private initCanvas(): void {
     if (typeof OffscreenCanvas !== 'undefined') {
       this.canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
       this.ctx = this.canvas.getContext('2d');
@@ -25,41 +21,60 @@ class FrameCaptureManager {
       this.canvas.width = TARGET_SIZE;
       this.canvas.height = TARGET_SIZE;
       this.ctx = this.canvas.getContext('2d');
-    } else {
-      throw new Error('Neither OffscreenCanvas nor document.createElement is available');
     }
 
-    return { canvas: this.canvas, ctx: this.ctx };
+    if (this.canvas) {
+      this.canvasPool.push(this.canvas);
+    }
   }
 
- dispose(): void {
-    if (this.canvas) {
-      if (this.canvas instanceof OffscreenCanvas) {
-        try {
-          (this.canvas as unknown as { close(): void }).close();
-        } catch {
-          // offscreen canvas close may fail in some browsers
-        }
-      } else if (this.canvas instanceof HTMLCanvasElement) {
-        const ctx = this.canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        }
-      }
-      this.canvas = null;
-      this.ctx = null;
+  getCanvasAndContext(): {
+    canvas: OffscreenCanvas | HTMLCanvasElement;
+    ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+  } {
+    if (!this.canvas) {
+      this.initCanvas();
     }
+    return {
+      canvas: this.canvas!,
+      ctx: this.ctx,
+    };
+  }
+
+  dispose(): void {
+    for (const c of this.canvasPool) {
+      try {
+        if (c instanceof OffscreenCanvas) {
+          (c as unknown as { close(): void }).close();
+        }
+      } catch {}
+    }
+    this.canvasPool = [];
+    this.canvas = null;
+    this.ctx = null;
+  }
+
+  getStats(): { total: number; inUse: number; available: number } {
+    return {
+      total: this.canvasPool.length,
+      inUse: 1,
+      available: this.canvasPool.length - 1,
+    };
   }
 }
 
-const manager = new FrameCaptureManager();
+const bitmapPool = new BitmapPool();
 
 export function resetFrameCaptureCache(): void {
-  manager.dispose();
+  bitmapPool.dispose();
 }
 
 export function disposeFrameCapture(): void {
-  manager.dispose();
+  bitmapPool.dispose();
+}
+
+export function getBitmapPoolStats(): { total: number; inUse: number; available: number } {
+  return bitmapPool.getStats();
 }
 
 function isValidSource(source: CanvasImageSource): boolean {
@@ -77,7 +92,7 @@ function isValidSource(source: CanvasImageSource): boolean {
 async function downsampleToBitmap(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas
 ): Promise<ImageBitmap> {
-  const { canvas, ctx } = manager.getCanvasAndContext();
+  const { canvas, ctx } = bitmapPool.getCanvasAndContext();
 
   if (!ctx) {
     throw new Error('Failed to get 2D context from canvas');

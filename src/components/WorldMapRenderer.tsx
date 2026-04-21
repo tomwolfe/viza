@@ -5,6 +5,7 @@ import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
 import { PooledBoundingBoxes, shouldUsePooling } from './DetectedObject3D/PooledBoundingBox';
+import { DirectionalIndicators, getOffScreenIndicator } from './DetectedObject3D/DirectionalIndicator';
 import type { WorldObject } from '@/hooks/useWorldMap';
 import { getCategoryColor } from '@/utils/objectProcessing';
 import { SharedVideoPlane } from './SharedVideoPlane';
@@ -105,6 +106,9 @@ export function WorldMapRenderer({
     return obj.name.toLowerCase().includes(currentStepTarget.toLowerCase());
   }, [taskActive, currentStepTarget]);
 
+  const localCameraRef = useMemo(() => cameraRef ?? { current: null }, [cameraRef]);
+  const localViewportRef = useMemo(() => viewportRef ?? { current: new THREE.Vector3(1, 1, 1) }, [viewportRef]);
+
   return (
     <XR store={xrStore}>
       <ambientLight intensity={0.5} />
@@ -113,6 +117,15 @@ export function WorldMapRenderer({
       {videoElement && isVideoReady ? (
         <SharedVideoPlane video={videoElement} />
       ) : null}
+
+      {taskActive && currentStepTarget && localCameraRef.current && (
+        <DirectionalIndicators
+          targets={resolvedWorldObjects}
+          currentTarget={currentStepTarget}
+          cameraRef={localCameraRef}
+          viewportRef={localViewportRef}
+        />
+      )}
 
       {detectedObjects.map((obj, index) => {
         return (

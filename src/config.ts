@@ -50,6 +50,9 @@ export const CONFIG = {
       MIN_CUTOFF: 0.5,
       BETA: 0.7,
       DCUTOFF: 1.0,
+      VELOCITY_THRESHOLD: 0.5,
+      STATIC_PRECISION: 0.3,
+      DYNAMIC_SMOOTHING: 1.5,
     },
   },
 

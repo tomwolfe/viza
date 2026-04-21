@@ -10,10 +10,18 @@ export interface HitTestResult {
   orientation: THREE.Quaternion;
 }
 
+export interface XRAnchor {
+  id: string;
+  position: THREE.Vector3;
+  orientation: THREE.Quaternion;
+  timestamp: number;
+}
+
 export interface UseWebXROptions {
   sessionMode?: 'immersive-ar' | 'immersive-vr';
   requiredFeatures?: string[];
   optionalFeatures?: string[];
+  enableAnchors?: boolean;
 }
 
 export interface UseWebXRResult {
@@ -22,29 +30,39 @@ export interface UseWebXRResult {
   session: XRSession | null;
   hasCameraAccess: boolean;
   hasHitTest: boolean;
+  hasAnchors: boolean;
   hitTestResult: HitTestResult | null;
+  anchors: Map<string, XRAnchor>;
   error: VizaErrorCode | null;
   errorMessage: string | null;
   startSession: () => Promise<boolean>;
   endSession: () => Promise<void>;
+  createAnchor: (position: THREE.Vector3, orientation?: THREE.Quaternion) => Promise<XRAnchor | null>;
+  getAnchor: (id: string) => XRAnchor | undefined;
+  updateAnchor: (id: string, position: THREE.Vector3, orientation?: THREE.Quaternion) => void;
+  removeAnchor: (id: string) => void;
 }
 
 export function useWebXR({
   sessionMode = 'immersive-ar',
   requiredFeatures = ['hit-test'],
   optionalFeatures = ['camera-access', 'local-floor'],
+  enableAnchors = true,
 }: UseWebXROptions = {}): UseWebXRResult {
   const [isSupported, setIsSupported] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [session, setSession] = useState<XRSession | null>(null);
   const [hasCameraAccess, setHasCameraAccess] = useState(false);
   const [hasHitTest, setHasHitTest] = useState(false);
+  const [hasAnchors, setHasAnchors] = useState(false);
   const [hitTestResult, setHitTestResult] = useState<HitTestResult | null>(null);
+  const [anchors, setAnchors] = useState<Map<string, XRAnchor>>(new Map());
   const [error, setError] = useState<VizaErrorCode | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const sessionRef = useRef<XRSession | null>(null);
   const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
   const refSpaceRef = useRef<XRReferenceSpace | null>(null);
+  const anchorsRef = useRef<Map<string, XRAnchor>>(new Map());
   const cancelledRef = useRef(false);
   const isMountedRef = useRef(true);
 
@@ -112,6 +130,16 @@ export function useWebXR({
 
       refSpaceRef.current = await xrSession.requestReferenceSpace('local-floor');
       
+      if (enableAnchors) {
+        try {
+          if ('createAnchor' in xrSession && typeof xrSession.createAnchor === 'function') {
+            setHasAnchors(true);
+          }
+        } catch {
+          logger.debug('[WebXR] Anchor support not available');
+        }
+      }
+      
       if (requiredFeatures.includes('hit-test') && xrSession.requestHitTestSource) {
         const source = await xrSession.requestHitTestSource({ space: refSpaceRef.current });
         hitTestSourceRef.current = source ?? null;
@@ -148,6 +176,49 @@ export function useWebXR({
   }, [sessionMode, requiredFeatures, optionalFeatures]);
 
   const onSelect = useCallback(() => {
+  }, []);
+
+  const createAnchor = useCallback(async (
+    position: THREE.Vector3,
+    orientation?: THREE.Quaternion
+  ): Promise<XRAnchor | null> => {
+    const id = `anchor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const anchor: XRAnchor = {
+      id,
+      position: position.clone(),
+      orientation: orientation?.clone() ?? new THREE.Quaternion(),
+      timestamp: performance.now(),
+    };
+
+    anchorsRef.current.set(id, anchor);
+    setAnchors(new Map(anchorsRef.current));
+
+    logger.debug('[WebXR] Created anchor:', id, position);
+    return anchor;
+  }, []);
+
+  const getAnchor = useCallback((id: string): XRAnchor | undefined => {
+    return anchorsRef.current.get(id);
+  }, []);
+
+  const updateAnchor = useCallback((
+    id: string,
+    position: THREE.Vector3,
+    orientation?: THREE.Quaternion
+  ) => {
+    const existing = anchorsRef.current.get(id);
+    if (existing) {
+      existing.position.copy(position);
+      if (orientation) existing.orientation.copy(orientation);
+      existing.timestamp = performance.now();
+      setAnchors(new Map(anchorsRef.current));
+    }
+  }, []);
+
+  const removeAnchor = useCallback((id: string) => {
+    anchorsRef.current.delete(id);
+    setAnchors(new Map(anchorsRef.current));
+    logger.debug('[WebXR] Removed anchor:', id);
   }, []);
 
   const onXRFrame = useCallback(async (time: number, frame: XRFrame) => {
@@ -204,10 +275,16 @@ export function useWebXR({
     session,
     hasCameraAccess,
     hasHitTest,
+    hasAnchors,
     hitTestResult,
+    anchors,
     error,
     errorMessage,
     startSession,
     endSession,
+    createAnchor,
+    getAnchor,
+    updateAnchor,
+    removeAnchor,
   };
 }

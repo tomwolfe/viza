@@ -11,6 +11,12 @@ import type {
 
 type VoiceStatus = 'idle' | 'listening' | 'starting';
 
+interface SpatialQueryHandler {
+  getWorldMapObjects: () => { name: string; position?: { x: number; y: number; z: number }; lastSeen?: number }[];
+  highlightObject: (name: string) => void;
+  getCameraDirection: () => { x: number; y: number; z: number } | null;
+}
+
 interface UseVoiceReturn {
   isListening: boolean;
   isSpeaking: boolean;
@@ -22,6 +28,8 @@ interface UseVoiceReturn {
   isSupported: boolean;
   error: string | null;
   errorCode: VizaErrorCode | null;
+  setSpatialQueryHandler: (handler: SpatialQueryHandler | null) => void;
+  lastQueryType: 'command' | 'spatial_query' | 'none';
 }
 
 export function useVoice(onCommand?: (transcript: string) => void): UseVoiceReturn {
@@ -47,6 +55,19 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const shouldRestartRef = useRef(false);
   const isIntendingToListenRef = useRef(false);
+  const spatialQueryHandlerRef = useRef<SpatialQueryHandler | null>(null);
+  const [lastQueryType, setLastQueryType] = useState<'command' | 'spatial_query' | 'none'>('none');
+
+  const SPATIAL_QUERY_PATTERNS = [
+    /where.*(is|was|are|were)\s+(the\s+)?(\w+)/i,
+    /where.*did.*see\s+(the\s+)?(\w+)/i,
+    /where.*(\w+)\s+located/i,
+    /where.*(\w+)\s+position/i,
+    /how.*far.*(\w+)/i,
+    /direction.*(\w+)/i,
+    /where.*should.*look/i,
+    /point.*to.*(\w+)/i,
+  ];
 
   useEffect(() => {
     onCommandRef.current = onCommand;
@@ -65,10 +86,94 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       }
     }
 
-    setTranscript(finalTranscript || interimTranscript);
+    const transcriptText = (finalTranscript || interimTranscript).trim();
+    setTranscript(transcriptText);
 
-    if (finalTranscript && onCommandRef.current) {
-      onCommandRef.current(finalTranscript.trim());
+    if (!finalTranscript) return;
+
+    if (spatialQueryHandlerRef.current && transcriptText) {
+      const isSpatialQuery = SPATIAL_QUERY_PATTERNS.some(pattern => pattern.test(transcriptText));
+      
+      if (isSpatialQuery) {
+        setLastQueryType('spatial_query');
+        handleSpatialQuery(transcriptText);
+        return;
+      }
+    }
+
+    setLastQueryType('command');
+    if (onCommandRef.current) {
+      onCommandRef.current(transcriptText);
+    }
+  }, []);
+
+  const handleSpatialQuery = useCallback((query: string) => {
+    const handler = spatialQueryHandlerRef.current;
+    if (!handler) return;
+
+    const queryLower = query.toLowerCase();
+    let targetName = '';
+    let isDirectionQuery = false;
+    let isDistanceQuery = false;
+
+    for (const pattern of SPATIAL_QUERY_PATTERNS) {
+      const match = query.match(pattern);
+      if (match) {
+        targetName = match[match.length - 1] || '';
+        if (query.includes('direction') || query.includes('point')) {
+          isDirectionQuery = true;
+        }
+        if (query.includes('far')) {
+          isDistanceQuery = true;
+        }
+        break;
+      }
+    }
+
+    if (!targetName) {
+      targetName = query.replace(/where|is|was|are|were|did|see|how|far|direction|point|to|the|a|an/gi, '').trim();
+    }
+
+    if (!targetName) return;
+
+    const worldObjects = handler.getWorldMapObjects();
+    const matchingObjects = worldObjects.filter(obj => 
+      obj.name.toLowerCase().includes(targetName.toLowerCase())
+    );
+
+    if (matchingObjects.length === 0) {
+      speak(`I don't remember seeing a ${targetName}. Try scanning the room to let me see it.`);
+      return;
+    }
+
+    const obj = matchingObjects[0];
+    const cameraDir = handler.getCameraDirection();
+
+    if (isDistanceQuery && obj.position) {
+      const dist = Math.sqrt(
+        (obj.position.x || 0) ** 2 + 
+        (obj.position.y || 0) ** 2 + 
+        (obj.position.z || 0) ** 2
+      );
+      speak(`The ${obj.name} is about ${dist.toFixed(1)} meters away.`);
+      return;
+    }
+
+    if (obj.position) {
+      const dirX = obj.position.x > 0.5 ? 'to your right' : 
+                obj.position.x < -0.5 ? 'to your left' : 
+                'straight ahead';
+      const dirY = obj.position.y > 0.5 ? 'above you' : 
+                   obj.position.y < -0.5 ? 'below you' : '';
+      const dirZ = obj.position.z > 0 ? 'behind you' : 'in front';
+
+      const response = `The ${obj.name} is ${dirX}${dirY ? ', ' + dirY : ''}. Try looking ${dirZ}.`;
+      speak(response);
+      
+      handler.highlightObject(targetName);
+    } else {
+      speak(`I saw the ${obj.name} earlier, but I don't have its exact position. Try looking around.`);
+      handler.highlightObject(targetName);
     }
   }, []);
 
@@ -232,6 +337,10 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     setIsSpeaking(false);
   }, []);
 
+  const setSpatialQueryHandler = useCallback((handler: SpatialQueryHandler | null) => {
+    spatialQueryHandlerRef.current = handler;
+  }, []);
+
   return {
     isListening: status === 'listening',
     isSpeaking,
@@ -243,5 +352,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     isSupported,
     error,
     errorCode,
+    setSpatialQueryHandler,
+    lastQueryType,
   };
 }

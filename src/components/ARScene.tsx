@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useEffect } from 'react';
+import { useThree } from '@react-three/fiber';
 import { WorldMapRenderer } from './WorldMapRenderer';
 import { useInferenceLoop } from '@/hooks/useInferenceLoop';
 import { useFrameCapture } from '@/hooks/useFrameCapture';
@@ -55,6 +56,13 @@ export function ARScene({
   const lastVoiceCommandRef = useRef<string | null>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
+
+  const { camera, size } = useThree();
+
+  useEffect(() => {
+    cameraRef.current = camera;
+    viewportRef.current = new THREE.Vector3(size.width, size.height, 1);
+  }, [camera, size]);
 
   const { videoElement } = useUserMedia({ isActive: isARActive && !isXRMode });
   const { isInferring, runInference: contextRunInference } = useWebLLM();
