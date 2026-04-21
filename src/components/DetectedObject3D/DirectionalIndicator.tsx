@@ -5,6 +5,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { WorldObject } from '@/hooks/useWorldMap';
+import { CONFIG } from '@/config';
+import { projectPositionToScreen, calculateIndicatorScreenPosition, updateBreadcrumbs, computeBreadcrumbLines } from '@/utils/indicatorUtils';
+
+const INDICATOR_CONFIG = CONFIG.DIRECTIONAL_INDICATOR;
 
 interface DirectionalIndicatorsProps {
   targets: WorldObject[];
@@ -30,12 +34,6 @@ interface BreadcrumbPoint {
   timestamp: number;
 }
 
-const EDGE_MARGIN = 60;
-const ARROW_SIZE = 24;
-const MAX_BREADCRUMBS = 10;
-const BREADCRUMB_INTERVAL_MS = 2000;
-const GHOST_OPACITY = 0.3;
-
 function resolvePosition(
   obj: WorldObject,
   anchors?: Map<string, { position: THREE.Vector3; orientation?: THREE.Quaternion }>
@@ -57,7 +55,6 @@ export function DirectionalIndicators({
 }: DirectionalIndicatorsProps) {
   const { camera, size } = useThree();
   const tempVector = useMemo(() => new THREE.Vector3(), []);
-  const tempScreenPos = useMemo(() => new THREE.Vector3(), []);
   const breadcrumbsRef = useRef<Map<string, BreadcrumbPoint[]>>(new Map());
 
   const indicators = useMemo<IndicatorPosition[]>(() => {
@@ -73,40 +70,26 @@ export function DirectionalIndicators({
       }
 
       const effectivePos = resolvePosition(obj, anchors);
-      tempVector.copy(effectivePos);
-      tempScreenPos.copy(tempVector).project(cam);
+      const screenResult = projectPositionToScreen(effectivePos, cam, size.width, size.height);
 
-      const isOnScreen =
-        tempScreenPos.x >= -1 &&
-        tempScreenPos.x <= 1 &&
-        tempScreenPos.y >= -1 &&
-        tempScreenPos.y <= 1;
-
-      const screenX = (tempScreenPos.x + 1) / 2 * size.width;
-      const screenY = (-tempScreenPos.y + 1) / 2 * size.height;
-
-      const angle = Math.atan2(tempScreenPos.y, tempScreenPos.x);
-      const distance = tempVector.distanceTo(cam.position);
+      const angle = Math.atan2(screenResult.y / size.height - 0.5, screenResult.x / size.width - 0.5);
+      const distance = effectivePos.distanceTo(cam.position);
 
       if (breadcrumbs && obj.potentiallyMoved) {
-        const objBreadcrumbs = breadcrumbsRef.current.get(obj.id) || [];
-        if (objBreadcrumbs.length === 0 ||
-            now - objBreadcrumbs[objBreadcrumbs.length - 1].timestamp > BREADCRUMB_INTERVAL_MS) {
-          objBreadcrumbs.push({
-            position: obj.smoothedPosition.clone(),
-            timestamp: now,
-          });
-          if (objBreadcrumbs.length > MAX_BREADCRUMBS) {
-            objBreadcrumbs.shift();
-          }
-          breadcrumbsRef.current.set(obj.id, objBreadcrumbs);
-        }
+        updateBreadcrumbs(
+          breadcrumbsRef,
+          obj.id,
+          obj.smoothedPosition,
+          now,
+          INDICATOR_CONFIG.MAX_BREADCRUMBS,
+          INDICATOR_CONFIG.BREADCRUMB_INTERVAL_MS
+        );
       }
 
       results.push({
         position: obj.smoothedPosition.clone(),
-        screenPos: { x: screenX, y: screenY },
-        isOnScreen,
+        screenPos: { x: screenResult.x, y: screenResult.y },
+        isOnScreen: screenResult.isOnScreen,
         angle,
         distance,
         isStale: obj.potentiallyMoved,
@@ -114,31 +97,20 @@ export function DirectionalIndicators({
     }
 
     return results;
-  }, [targets, currentTarget, cameraRef, size, breadcrumbs]);
+  }, [targets, currentTarget, cameraRef, size, breadcrumbs, anchors]);
 
   const breadcrumbLines = useMemo(() => {
     if (!breadcrumbs) return [];
-    const lines: { points: THREE.Vector3[]; id: string }[] = [];
-
-    for (const [objId, crumbs] of breadcrumbsRef.current) {
-      if (crumbs.length < 2) continue;
-      const points = crumbs.map(c => c.position);
-      lines.push({ points, id: objId });
-    }
-
-    return lines;
+    return computeBreadcrumbLines(breadcrumbsRef);
   }, [breadcrumbs, indicators]);
 
   const ghostTargets = useMemo(() => {
     if (!showGhostTrail || !cameraRef.current) return [];
 
     return indicators
-      .filter(ind => !ind.isOnScreen && ind.distance < 10)
+      .filter(ind => !ind.isOnScreen && ind.distance < INDICATOR_CONFIG.GHOST_DISTANCE_THRESHOLD)
       .map(ind => {
-        const cam = cameraRef.current!;
-        const direction = ind.position.clone().sub(cam.position).normalize();
         const ghostPos = ind.position.clone();
-
         return {
           position: ghostPos,
           distance: ind.distance,
@@ -168,7 +140,7 @@ export function DirectionalIndicators({
           <meshBasicMaterial
             color="#ff6b00"
             transparent
-            opacity={GHOST_OPACITY}
+            opacity={INDICATOR_CONFIG.GHOST_OPACITY}
             wireframe
           />
         </mesh>
@@ -177,18 +149,12 @@ export function DirectionalIndicators({
       {indicators.map((indicator) => {
         if (indicator.isOnScreen) return null;
 
-        const clampedX = Math.max(
-          EDGE_MARGIN,
-          Math.min(size.width - EDGE_MARGIN, indicator.screenPos.x)
-        );
-        const clampedY = Math.max(
-          EDGE_MARGIN,
-          Math.min(size.height - EDGE_MARGIN, indicator.screenPos.y)
-        );
-
-        const angleToCenter = Math.atan2(
-          size.height / 2 - clampedY,
-          size.width / 2 - clampedX
+        const { x: clampedX, y: clampedY, angleToCenter } = calculateIndicatorScreenPosition(
+          indicator.screenPos.x,
+          indicator.screenPos.y,
+          size.width,
+          size.height,
+          INDICATOR_CONFIG.EDGE_MARGIN
         );
 
         return (
@@ -205,8 +171,8 @@ export function DirectionalIndicators({
             }}
           >
             <svg
-              width={ARROW_SIZE}
-              height={ARROW_SIZE}
+              width={INDICATOR_CONFIG.ARROW_SIZE}
+              height={INDICATOR_CONFIG.ARROW_SIZE}
               viewBox="0 0 24 24"
               style={{ opacity: indicator.isStale ? 0.5 : 0.8 }}
             >
@@ -247,6 +213,24 @@ export function getOffScreenIndicator(
   screenHeight: number,
   breadcrumbs?: THREE.Vector3[]
 ): { x: number; y: number; angle: number; distance: number; pathPoints: { x: number; y: number }[] } | null {
+  return calculateOffScreenIndicator(
+    targetPos,
+    camera,
+    screenWidth,
+    screenHeight,
+    INDICATOR_CONFIG.EDGE_MARGIN,
+    breadcrumbs
+  );
+}
+
+function calculateOffScreenIndicator(
+  targetPos: THREE.Vector3,
+  camera: THREE.Camera,
+  screenWidth: number,
+  screenHeight: number,
+  edgeMargin: number,
+  breadcrumbs?: THREE.Vector3[]
+): { x: number; y: number; angle: number; distance: number; pathPoints: { x: number; y: number }[] } | null {
   const projected = targetPos.clone().project(camera);
 
   if (projected.z < 0 || projected.z > 1) {
@@ -266,16 +250,15 @@ export function getOffScreenIndicator(
 
   const dx = screenX - centerX;
   const dy = screenY - centerY;
-  const angle = Math.atan2(dy, dx);
 
   const edgeX =
     dx > 0
-      ? Math.min(screenX, screenWidth - EDGE_MARGIN)
-      : Math.max(screenX, EDGE_MARGIN);
+      ? Math.min(screenX, screenWidth - edgeMargin)
+      : Math.max(screenX, edgeMargin);
   const edgeY =
     dy > 0
-      ? Math.min(screenY, screenHeight - EDGE_MARGIN)
-      : Math.max(screenY, EDGE_MARGIN);
+      ? Math.min(screenY, screenHeight - edgeMargin)
+      : Math.max(screenY, edgeMargin);
 
   const clampedEdgeX = Math.abs(dx) > Math.abs(dy)
     ? edgeX

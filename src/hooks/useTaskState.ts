@@ -5,6 +5,7 @@ import { safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
 import { useSyncedStorage } from './useSyncedStorage';
+import { checkTargetFound, type VerificationResult, type DetectionRecord, VLM_VERIFICATION_CONFIDENCE_THRESHOLD, VLM_FAILED_VERIFICATION_THRESHOLD } from '@/utils/taskVerification';
 
 export interface TaskStep {
   id: string;
@@ -108,14 +109,8 @@ const INITIAL_TASK_STATE: TaskState = {
 const STALL_THRESHOLD_MS = 20000;
 const HINT_COOLDOWN_MS = 30000;
 const MAX_HINTS_PER_STEP = 3;
-const DEFAULT_CONSECUTIVE_DETECTIONS = 3;
-const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
-const DETECTION_HISTORY_SIZE = 10;
-const VERIFICATION_COOLDOWN_MS = 2000;
 const CORRECTION_FAILURE_THRESHOLD_MS = 30000;
 const MAX_CORRECTION_ATTEMPTS = 2;
-const VLM_VERIFICATION_CONFIDENCE_THRESHOLD = 0.75;
-const VLM_FAILED_VERIFICATION_THRESHOLD = 3;
 
 export function useTaskState(): UseTaskStateReturn {
   const [taskState, setTaskState] = useSyncedStorage<TaskState>(STORAGE_KEY, {
@@ -357,136 +352,42 @@ export function useTaskState(): UseTaskStateReturn {
     detectedObjects: DetectedObject[],
     worldMapPositions?: Map<string, { x: number; y: number; z: number }>
   ): VerificationResult => {
-    const result: VerificationResult = {
-      verified: false,
-      confidence: 0,
-      mode: 'none',
-      consecutiveMatches: 0,
-      missingCount: 0,
-      message: '',
+    const params = {
+      detectedObjects,
+      worldMapPositions,
+      taskState: {
+        isActive: taskState.isActive,
+        currentStepIndex: taskState.currentStepIndex,
+        steps: taskState.steps,
+      },
+      consecutiveMatchCount: consecutiveMatchCountRef.current,
+      lastVerificationTime: lastVerificationTimeRef.current,
+      detectionHistory: detectionHistoryRef.current,
     };
 
-    if (!taskState.isActive) {
-      return result;
+    const result = checkTargetFound(params);
+
+    if (result.newConsecutiveMatchCount !== consecutiveMatchCountRef.current) {
+      consecutiveMatchCountRef.current = result.newConsecutiveMatchCount;
+    }
+    if (result.newLastVerificationTime !== lastVerificationTimeRef.current) {
+      lastVerificationTimeRef.current = result.newLastVerificationTime;
+    }
+    if (result.newDetectionHistory !== detectionHistoryRef.current) {
+      detectionHistoryRef.current = result.newDetectionHistory;
+    }
+    if (result.shouldAdvanceStep) {
+      nextStep();
     }
 
-    const currentStep = taskState.steps[taskState.currentStepIndex];
-    if (!currentStep) {
-      return result;
-    }
-
-    const targetObject = currentStep.targetObject;
-    const verificationMode = currentStep.verificationMode || 'presence';
-    const requiredDetections = currentStep.requiredConsecutiveDetections || DEFAULT_CONSECUTIVE_DETECTIONS;
-    const confidenceThreshold = currentStep.confidenceThreshold || DEFAULT_CONFIDENCE_THRESHOLD;
-
-    result.mode = verificationMode;
-
-    if (!targetObject) {
-      result.verified = true;
-      result.message = 'No target object specified';
-      return result;
-    }
-
-    const targetLower = targetObject.toLowerCase();
-    const foundTarget = detectedObjects.find(obj =>
-      obj.name.toLowerCase().includes(targetLower)
-    );
-
-    const now = performance.now();
-    const timeSinceLastCheck = now - lastVerificationTimeRef.current;
-    if (timeSinceLastCheck < VERIFICATION_COOLDOWN_MS && consecutiveMatchCountRef.current > 0) {
-      result.consecutiveMatches = consecutiveMatchCountRef.current;
-      return result;
-    }
-
-    if (verificationMode === 'removal') {
-      const worldMapPosition = worldMapPositions?.get(targetLower);
-      const wasPreviouslyPresent = worldMapPosition !== undefined;
-
-      if (!foundTarget && wasPreviouslyPresent) {
-        const recentHistory = detectionHistoryRef.current.slice(-5);
-        const absentCount = recentHistory.filter(r => !r.wasPresent && r.objectName === targetLower).length;
-
-        detectionHistoryRef.current.push({
-          objectName: targetLower,
-          timestamp: now,
-          wasPresent: false,
-        });
-        detectionHistoryRef.current = detectionHistoryRef.current.slice(-DETECTION_HISTORY_SIZE);
-
-        if (absentCount >= requiredDetections - 1 || !wasPreviouslyPresent) {
-          result.verified = true;
-          result.confidence = 1.0;
-          result.missingCount = absentCount + 1;
-          result.message = `Verified: ${targetObject} has been removed`;
-          consecutiveMatchCountRef.current = 0;
-          nextStep();
-        } else {
-          result.missingCount = absentCount + 1;
-          result.consecutiveMatches = absentCount;
-          result.message = `Verifying removal: ${targetObject} not seen for ${absentCount} checks`;
-        }
-      } else if (foundTarget) {
-        result.confidence = foundTarget.confidence || 0.5;
-        result.message = `${targetObject} still visible - waiting for removal`;
-        consecutiveMatchCountRef.current = 0;
-      }
-    } else if (verificationMode === 'placement') {
-      if (foundTarget) {
-        const conf = foundTarget.confidence || 0.5;
-        if (conf >= confidenceThreshold) {
-          consecutiveMatchCountRef.current += 1;
-          result.confidence = conf;
-          result.consecutiveMatches = consecutiveMatchCountRef.current;
-
-          if (consecutiveMatchCountRef.current >= requiredDetections) {
-            result.verified = true;
-            result.message = `Verified: ${targetObject} is properly placed`;
-            nextStep();
-          } else {
-            result.message = `Verifying placement: ${consecutiveMatchCountRef.current}/${requiredDetections} confirmations`;
-          }
-        }
-      } else {
-        consecutiveMatchCountRef.current = 0;
-        result.message = `${targetObject} not found for placement verification`;
-      }
-    } else {
-      if (foundTarget) {
-        const conf = foundTarget.confidence || 0.5;
-        if (conf >= confidenceThreshold) {
-          consecutiveMatchCountRef.current += 1;
-          result.confidence = conf;
-          result.consecutiveMatches = consecutiveMatchCountRef.current;
-
-          detectionHistoryRef.current.push({
-            objectName: targetLower,
-            timestamp: now,
-            wasPresent: true,
-          });
-          detectionHistoryRef.current = detectionHistoryRef.current.slice(-DETECTION_HISTORY_SIZE);
-
-          if (consecutiveMatchCountRef.current >= requiredDetections) {
-            result.verified = true;
-            result.message = `Verified: ${targetObject} found with ${(conf * 100).toFixed(0)}% confidence`;
-            nextStep();
-          } else {
-            result.message = `Verifying: ${consecutiveMatchCountRef.current}/${requiredDetections} confirmations`;
-          }
-        } else {
-          result.confidence = conf;
-          result.message = `Low confidence (${(conf * 100).toFixed(0)}%) - need higher confidence`;
-          consecutiveMatchCountRef.current = 0;
-        }
-      } else {
-        result.message = `${targetObject} not detected`;
-        consecutiveMatchCountRef.current = 0;
-      }
-    }
-
-    lastVerificationTimeRef.current = now;
-    return result;
+    return {
+      verified: result.verified,
+      confidence: result.confidence,
+      mode: result.mode,
+      consecutiveMatches: result.consecutiveMatches,
+      missingCount: result.missingCount,
+      message: result.message,
+    };
   }, [taskState, nextStep]);
 
   const getStallStatus = useCallback(() => {

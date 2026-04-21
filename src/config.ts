@@ -81,6 +81,15 @@ export const CONFIG = {
     KEEP: { color: '#44ff44', label: 'Keep', keywords: ['keep', 'save', 'important', 'valuable'] },
     TOOL: { color: '#4488ff', label: 'Tool', keywords: ['screwdriver', 'wrench', 'hammer', 'driver', 'pliers', 'saw', 'tool'] },
   },
+
+  DIRECTIONAL_INDICATOR: {
+    EDGE_MARGIN: 60,
+    ARROW_SIZE: 24,
+    MAX_BREADCRUMBS: 10,
+    BREADCRUMB_INTERVAL_MS: 2000,
+    GHOST_OPACITY: 0.3,
+    GHOST_DISTANCE_THRESHOLD: 10,
+  },
 };
 
 export interface WebGPUCheckResult {

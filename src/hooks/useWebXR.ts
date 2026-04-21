@@ -306,16 +306,6 @@ export function useWebXR({
     };
   }, []);
 
-  useEffect(() => {
-    cancelledRef.current = false;
-    return () => {
-      cancelledRef.current = true;
-      if (sessionRef.current) {
-        sessionRef.current.end();
-      }
-    };
-  }, []);
-
   return {
     isSupported,
     isActive,
