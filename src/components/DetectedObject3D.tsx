@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
 import { useObject3DTransform } from '@/hooks/useObject3DTransform';
-import { SpatialEngine } from '@/utils/spatial';
+import { SpatialEngine, type HitTestResult } from '@/utils/spatial';
 import { BoundingBox } from './DetectedObject3D/BoundingBox';
 import { ObjectLabel } from './DetectedObject3D/ObjectLabel';
 import { TargetHighlighter } from './DetectedObject3D/TargetHighlighter';
@@ -21,6 +21,7 @@ interface DetectedObject3DProps {
   position?: THREE.Vector3;
   isGhost?: boolean;
   isSearching?: boolean;
+  hitTestResult?: HitTestResult | null;
 }
 
 export const DetectedObject3D = memo(function DetectedObject3D({ 
@@ -33,6 +34,7 @@ export const DetectedObject3D = memo(function DetectedObject3D({
   position,
   isGhost = false,
   isSearching = false,
+  hitTestResult,
 }: DetectedObject3DProps) {
   const groupRef = useRef<THREE.Group>(null);
   const { x, y, worldDepth, targetSize, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
@@ -48,6 +50,11 @@ export const DetectedObject3D = memo(function DetectedObject3D({
     const camera = state.camera as THREE.PerspectiveCamera;
     const viewport = state.viewport;
 
+    const effectiveHitTestResult = hitTestResult ? {
+      position: hitTestResult.position,
+      orientation: hitTestResult.orientation,
+    } : undefined;
+
     const pos = SpatialEngine.get3DPosition({
       x,
       y,
@@ -57,6 +64,7 @@ export const DetectedObject3D = memo(function DetectedObject3D({
       viewportWidth: viewport.width,
       viewportHeight: viewport.height,
       cameraPosition: camera.position,
+      hitTestResult: effectiveHitTestResult,
     });
     groupRef.current.position.copy(pos);
   });

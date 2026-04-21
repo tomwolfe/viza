@@ -1,4 +1,4 @@
-const CACHE_NAME = 'viza-v1';
+const CACHE_NAME = 'viza-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -34,6 +34,11 @@ self.addEventListener('fetch', (event) => {
   
   if (url.origin !== location.origin) return;
   
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(staleWhileRevalidate(event.request));
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -66,4 +71,45 @@ self.addEventListener('fetch', (event) => {
       });
     })
   );
+});
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cachedResponse = await cache.match(request);
+  
+  const fetchPromise = fetch(request).then((networkResponse) => {
+    if (networkResponse && networkResponse.status === 200) {
+      cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  }).catch(() => {
+    return cachedResponse || new Response('Offline', { status: 503 });
+  });
+  
+  return cachedResponse || fetchPromise;
+}
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CHECK_OFFLINE_READY') {
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) => {
+        return Promise.all([
+          cache.match('/'),
+          cache.match('/index.html'),
+          cache.match('/manifest.json'),
+        ]).then((results) => {
+          const allReady = results.every((response) => response !== undefined);
+          event.source.postMessage({
+            type: 'OFFLINE_READY_STATUS',
+            ready: allReady,
+            cacheName: CACHE_NAME,
+          });
+        });
+      })
+    );
+  }
+  
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

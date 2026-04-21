@@ -8,6 +8,7 @@ export type WorkerMessageType =
   | 'planning'
   | 'correction'
   | 'category'
+  | 'verification'
   | 'reload'
   | 'soft_reload'
   | 'ping'
@@ -18,7 +19,7 @@ export interface PendingRequest<T> {
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   bitmapHandle: ImageBitmap | null;
-  type: 'chat' | 'planning' | 'correction' | 'category';
+  type: 'chat' | 'planning' | 'correction' | 'category' | 'verification';
 }
 
 export interface WorkerClientOptions {
@@ -215,6 +216,22 @@ export class WorkerClient {
         break;
       }
 
+      case 'verification_complete': {
+        const messageId = data.messageId as string;
+        const pending = this.pendingRequests.get(messageId);
+        
+        if (pending) {
+          clearTimeout(pending.timeoutId);
+          this.pendingRequests.delete(messageId);
+          pending.resolve({
+            isCompleted: (data as { isCompleted?: boolean }).isCompleted ?? false,
+            confidence: (data as { confidence?: number }).confidence ?? 0,
+            rawText: (data as { rawText?: string }).rawText,
+          });
+        }
+        break;
+      }
+
       case 'error': {
         const messageId = (data as { messageId?: string }).messageId;
         if (messageId) {
@@ -250,7 +267,7 @@ export class WorkerClient {
     return crypto.randomUUID();
   }
 
-  private createTimeout(type: 'chat' | 'planning' | 'correction' | 'category', messageId: string): ReturnType<typeof setTimeout> {
+  private createTimeout(type: 'chat' | 'planning' | 'correction' | 'category' | 'verification', messageId: string): ReturnType<typeof setTimeout> {
     const timeoutMs = type === 'planning' || type === 'correction'
       ? this.options.planningTimeoutMs 
       : this.options.inferenceTimeoutMs;
@@ -268,7 +285,7 @@ export class WorkerClient {
   private createPendingRequest(
     type: WorkerMessageType,
     messageId: string,
-    inferenceType: 'chat' | 'planning' | 'correction' | 'category',
+    inferenceType: 'chat' | 'planning' | 'correction' | 'category' | 'verification',
     transfer?: Transferable[]
   ): PendingRequest<unknown> {
     const timeoutId = this.createTimeout(inferenceType, messageId);
@@ -310,7 +327,7 @@ export class WorkerClient {
     }
 
     const messageId = this.createRequestId();
-    const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : 'chat';
+    const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : type === 'verification' ? 'verification' : 'chat';
     const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
 
     return new Promise<T>((resolve, reject) => {
@@ -378,6 +395,11 @@ export class WorkerClient {
 
   category(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
     return this.sendMessage('category', { image, goal, messageId }, [image], signal);
+  }
+
+  verification(image: ImageBitmap, validationPrompt: string, targetObject: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    const userInput = `${validationPrompt}|||${targetObject}`;
+    return this.sendMessage('verification', { image, validationPrompt, targetObject, messageId }, [image], signal);
   }
 
   ping(): void {

@@ -8,9 +8,9 @@ import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
 import { useWebLLMWorker } from '@/hooks/useWebLLMWorker';
 
-type InferenceResult = VisionResponse | null | TaskStep[];
+type InferenceResult = VisionResponse | null | TaskStep[] | { isCompleted: boolean; confidence: number };
 
-type InferenceType = 'chat' | 'planning' | 'category';
+type InferenceType = 'chat' | 'planning' | 'category' | 'verification';
 
 export interface WebLLMContextValue {
   isModelReady: boolean;
@@ -21,6 +21,7 @@ export interface WebLLMContextValue {
   runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
   runPlanningInference: (image: ImageBitmap, goal: string, signal?: AbortSignal) => Promise<TaskStep[]>;
   runCategoryInference: (image: ImageBitmap, goal: string) => Promise<VisionResponse | null>;
+  runVerificationInference: (image: ImageBitmap, validationPrompt: string, targetObject: string) => Promise<{ isCompleted: boolean; confidence: number } | null>;
   dispose: () => void;
   error: string | null;
   errorCode: VizaErrorCode | null;
@@ -78,6 +79,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           ? client.planning(image, prompt, messageId, signal)
           : inferenceType === 'category'
           ? client.category(image, prompt, messageId, signal)
+          : inferenceType === 'verification'
+          ? client.verification(image, prompt, '', messageId, signal)
           : client.chat(image, prompt, messageId, signal);
 
         const response = await infPromise;
@@ -85,6 +88,8 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         if (inferenceType === 'planning') {
           const validated = parsePlanningResponse(response);
           return validated?.taskSteps ?? [];
+        } else if (inferenceType === 'verification') {
+          return response as { isCompleted: boolean; confidence: number };
         } else {
           const validated = parseVisionResponse(response);
           if (validated) {
@@ -98,7 +103,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
           logger.error(`[WebLLM] ${inferenceType} error:`, err);
           setVizaError('INFERENCE_ERROR', errorMessage);
         }
-        return inferenceType === 'planning' ? [] : null;
+        return inferenceType === 'planning' ? [] : inferenceType === 'verification' ? { isCompleted: false, confidence: 0 } : null;
       } finally {
         setIsInferring(false);
       }
@@ -130,6 +135,14 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
     [dispatchInference]
   );
 
+  const runVerificationInference = useCallback(
+    async (image: ImageBitmap, validationPrompt: string, targetObject: string): Promise<{ isCompleted: boolean; confidence: number } | null> => {
+      const result = await dispatchInference(image, validationPrompt, 'verification');
+      return result as { isCompleted: boolean; confidence: number } | null;
+    },
+    [dispatchInference]
+  );
+
   return (
     <WebLLMContext.Provider
       value={{
@@ -140,6 +153,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         runInference,
         runPlanningInference,
         runCategoryInference,
+        runVerificationInference,
         dispose,
         error,
         errorCode,

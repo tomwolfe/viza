@@ -3,8 +3,10 @@ import type { WorkerIncomingMessage } from '@/types/worker';
 import {
   VisionResponseSchemaRaw,
   PlanningResponseSchema,
+  VerificationResponseSchema,
   type VisionResponse,
   type PlanningResponse,
+  type VerificationResponse,
 } from '@/schemas/vision';
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
@@ -24,6 +26,7 @@ Do not include any other text. Only return the JSON object.`;
 export const VisionResponseSchema = VisionResponseSchemaRaw;
 export type InferenceResult = z.infer<typeof VisionResponseSchemaRaw>;
 export type PlanningResult = PlanningResponse;
+export type VerificationResult = VerificationResponse;
 
 export interface TaskRunnerConfig {
   promptBuilder: (userInput: string) => string;
@@ -97,23 +100,39 @@ export function buildCategoryPrompt(userGoal: string): string {
   }
 
   return `You are a spatial assistant for cleaning tasks.
-User Goal: "${userGoal}"
+  User Goal: "${userGoal}"
 
-${categoryFocus}
+  ${categoryFocus}
 
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string - object name",
-      "coordinates": [x, y, width, height],
-      "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
-      "category": "string - one of: trash, clutter, keep, tool, unknown"
-    }
-  ],
-  "completed": boolean
+  Return ONLY a valid JSON object with the structure:
+  {
+    "objects": [
+      {
+        "item": "string - object name",
+        "coordinates": [x, y, width, height],
+        "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
+        "category": "string - one of: trash, clutter, keep, tool, unknown"
+      }
+    ],
+    "completed": boolean
+  }
+  Do not include any other text. Only return the JSON object.`;
 }
-Do not include any other text. Only return the JSON object.`;
+
+export function buildVerifyPrompt(validationPrompt: string, targetObject: string): string {
+  return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.
+
+  Target Object: "${targetObject}"
+  Validation Question: "${validationPrompt}"
+
+  Return ONLY a valid JSON object with this structure:
+  {
+    "isCompleted": boolean - true if the task is successfully completed based on the validation question,
+    "confidence": number - a value between 0 and 1 indicating your confidence in this assessment,
+    "reasoning": "string - brief explanation of your verification decision"
+  }
+
+  Be strict but fair. Only return isCompleted: true if you are confident the step is truly complete.`;
 }
 
 export function buildSystemPrompt(taskContext: string, currentStep: string): string {
@@ -147,6 +166,15 @@ function normalizeVisionResult(raw: unknown): object {
   };
 }
 
+function normalizeVerificationResult(raw: unknown): object {
+  const r = raw as VerificationResult;
+  return {
+    isCompleted: r.isCompleted,
+    confidence: r.confidence,
+    reasoning: r.reasoning || '',
+  };
+}
+
 export const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
   chat: {
     promptBuilder: (userInput: string) => userInput || buildVisionPrompt(),
@@ -172,6 +200,17 @@ export const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
     responseType: 'inference_complete',
     maxTokens: 1024,
   },
+  verify: {
+    promptBuilder: (input: string) => {
+      const [validationPrompt, targetObject] = input.split('|||');
+      return buildVerifyPrompt(validationPrompt || '', targetObject || '');
+    },
+    schema: VerificationResponseSchema,
+    normalizeFn: normalizeVerificationResult,
+    defaultValue: { isCompleted: false, confidence: 0, reasoning: '' },
+    responseType: 'verification_complete',
+    maxTokens: 512,
+  },
 };
 
 export function buildMessages(
@@ -188,6 +227,16 @@ export function buildMessages(
 
   if (config.responseType === 'planning_complete') {
     const prompt = buildPlanningPrompt(goal || '');
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: image } },
+        { type: 'text', text: prompt },
+      ],
+    });
+  } else if (config.responseType === 'verification_complete') {
+    const [validationPrompt, targetObject] = (userInput || '').split('|||');
+    const prompt = buildVerifyPrompt(validationPrompt || '', targetObject || '');
     messages.push({
       role: 'user',
       content: [
@@ -222,6 +271,7 @@ export const PromptFactory = {
   vision: buildVisionPrompt,
   planning: buildPlanningPrompt,
   category: buildCategoryPrompt,
+  verify: buildVerifyPrompt,
   system: buildSystemPrompt,
   buildMessages,
 };

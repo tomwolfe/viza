@@ -8,6 +8,7 @@ export type WorkerOutgoingMessage =
   | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
   | { type: 'correction'; image: ImageBitmap; analysis: string; originalStepIndex: number; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
   | { type: 'category'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+  | { type: 'verification'; image: ImageBitmap; validationPrompt: string; targetObject: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
   | { type: 'reload' }
   | { type: 'soft_reload'; model: string; systemPrompt?: string }
   | { type: 'ping' }
@@ -21,6 +22,7 @@ export type WorkerIncomingMessage =
   | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown; spatialContext?: string }
   | { type: 'planning_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
   | { type: 'correction_complete'; messageId: string; response: unknown; analysis: string; rawText?: string }
+  | { type: 'verification_complete'; messageId: string; isCompleted: boolean; confidence: number; rawText?: string; usage?: unknown }
   | { type: 'error'; message: string; messageId?: string; error?: string; errorCode: VizaErrorCode }
   | { type: 'warning'; message: string; rawResponse?: string }
   | { type: 'pong' }

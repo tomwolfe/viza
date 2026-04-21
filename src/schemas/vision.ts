@@ -65,12 +65,20 @@ export const CorrectionResponseSchema = z.object({
   rawText: z.string().optional(),
 });
 
+export const VerificationResponseSchema = z.object({
+  isCompleted: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  reasoning: z.string().optional(),
+  rawText: z.string().optional(),
+});
+
 export type DetectedObject = z.infer<typeof DetectedObjectSchema>;
 export type VisionResponse = z.infer<typeof VisionResponseSchema>;
 export type TaskStep = z.infer<typeof TaskStepSchema>;
 export type CorrectionTaskStep = z.infer<typeof CorrectionTaskStepSchema>;
 export type PlanningResponse = z.infer<typeof PlanningResponseSchema>;
 export type CorrectionResponse = z.infer<typeof CorrectionResponseSchema>;
+export type VerificationResponse = z.infer<typeof VerificationResponseSchema>;
 
 export function parseVisionResponse(data: unknown): VisionResponse | null {
   const result = VisionResponseSchema.safeParse(data);

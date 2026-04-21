@@ -11,6 +11,7 @@ import { getCategoryColor } from '@/utils/objectProcessing';
 import { SharedVideoPlane } from './SharedVideoPlane';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG } from '@/config';
+import type { HitTestResult } from '@/utils/spatial';
 
 const xrStore = createXRStore();
 
@@ -23,6 +24,7 @@ interface WorldMapRendererProps {
   cameraRef?: React.MutableRefObject<THREE.Camera | null>;
   viewportRef?: React.MutableRefObject<THREE.Vector3>;
   anchors?: Map<string, { position: THREE.Vector3; orientation?: THREE.Quaternion }>;
+  hitTestResult?: HitTestResult | null;
 }
 
 function resolveObjectPosition(
@@ -44,6 +46,7 @@ export function WorldMapRenderer({
   cameraRef,
   viewportRef,
   anchors,
+  hitTestResult,
 }: WorldMapRendererProps) {
   const [isVideoReady, setIsVideoReady] = useState(false);
 
@@ -151,6 +154,7 @@ export function WorldMapRenderer({
             index={index}
             isTarget={taskActive}
             targetName={currentStepTarget ?? undefined}
+            hitTestResult={hitTestResult}
           />
         );
       })}
@@ -187,6 +191,7 @@ export function WorldMapRenderer({
               categoryColor={categoryColor}
               isGhost={isGhost}
               isSearching={isSearching}
+              hitTestResult={hitTestResult}
             />
           );
         })

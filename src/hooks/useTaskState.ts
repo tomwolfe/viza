@@ -52,13 +52,15 @@ export interface UseTaskStateReturn {
   checkTargetFound: (detectedObjects: DetectedObject[], worldMapPositions?: Map<string, { x: number; y: number; z: number }>) => VerificationResult;
   getStallStatus: () => { isStalled: boolean; timeOnStep: number; shouldSuggestHint: boolean };
   triggerHint: (worldMapObjects: { name: string; position?: { x: number; y: number; z: number } }[]) => void;
-  verifyState: () => Promise<VerificationResult>;
+  verifyState: (image?: ImageBitmap, runVerificationInference?: (image: ImageBitmap, validationPrompt: string, targetObject: string) => Promise<{ isCompleted: boolean; confidence: number } | null>) => Promise<VerificationResult>;
   clearDetectionHistory: () => void;
   triggerCorrectionFlow: (
     analysis: string,
     image: ImageBitmap,
     generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
   ) => Promise<boolean>;
+  getVlmVerificationFailureCount: () => number;
+  resetVlmVerificationFailureCount: () => void;
 }
 
 export interface VerificationResult {
@@ -112,6 +114,8 @@ const DETECTION_HISTORY_SIZE = 10;
 const VERIFICATION_COOLDOWN_MS = 2000;
 const CORRECTION_FAILURE_THRESHOLD_MS = 30000;
 const MAX_CORRECTION_ATTEMPTS = 2;
+const VLM_VERIFICATION_CONFIDENCE_THRESHOLD = 0.75;
+const VLM_FAILED_VERIFICATION_THRESHOLD = 3;
 
 export function useTaskState(): UseTaskStateReturn {
   const [taskState, setTaskState] = useSyncedStorage<TaskState>(STORAGE_KEY, {
@@ -127,6 +131,7 @@ export function useTaskState(): UseTaskStateReturn {
   const lastVerificationTimeRef = useRef<number>(0);
   const correctionAttemptCountRef = useRef<number>(0);
   const lastCorrectionTimeRef = useRef<number>(0);
+  const vlmVerificationFailureCountRef = useRef<number>(0);
 
   useEffect(() => {
     return () => {
@@ -249,16 +254,98 @@ export function useTaskState(): UseTaskStateReturn {
     clearDetectionHistory();
   }, [setTaskState]);
 
-  const verifyState = useCallback(async (): Promise<VerificationResult> => {
-    return {
-      verified: false,
-      confidence: 0,
-      mode: 'none',
-      consecutiveMatches: consecutiveMatchCountRef.current,
-      missingCount: 0,
-      message: 'Manual verification requested - check target found to be updated',
-    };
-  }, []);
+  const verifyState = useCallback(async (
+    image?: ImageBitmap,
+    runVerificationInference?: (image: ImageBitmap, validationPrompt: string, targetObject: string) => Promise<{ isCompleted: boolean; confidence: number } | null>
+  ): Promise<VerificationResult> => {
+    const currentStep = getCurrentStep();
+    
+    if (!currentStep || !taskState.isActive) {
+      return {
+        verified: false,
+        confidence: 0,
+        mode: 'none',
+        consecutiveMatches: consecutiveMatchCountRef.current,
+        missingCount: 0,
+        message: 'No active task step',
+      };
+    }
+
+    if (!image || !runVerificationInference) {
+      return {
+        verified: false,
+        confidence: 0,
+        mode: 'none',
+        consecutiveMatches: consecutiveMatchCountRef.current,
+        missingCount: 0,
+        message: 'VLM verification requires image and inference function',
+      };
+    }
+
+    try {
+      const result = await runVerificationInference(
+        image,
+        currentStep.validationPrompt,
+        currentStep.targetObject || ''
+      );
+
+      if (!result) {
+        return {
+          verified: false,
+          confidence: 0,
+          mode: 'none',
+          consecutiveMatches: consecutiveMatchCountRef.current,
+          missingCount: 0,
+          message: 'VLM verification inference failed',
+        };
+      }
+
+      if (result.isCompleted && result.confidence >= VLM_VERIFICATION_CONFIDENCE_THRESHOLD) {
+        vlmVerificationFailureCountRef.current = 0;
+        consecutiveMatchCountRef.current += 1;
+        
+        const resultMessage: VerificationResult = {
+          verified: true,
+          confidence: result.confidence,
+          mode: currentStep.verificationMode || 'presence',
+          consecutiveMatches: consecutiveMatchCountRef.current,
+          missingCount: 0,
+          message: `VLM Verified: Task completed with ${(result.confidence * 100).toFixed(0)}% confidence`,
+        };
+        
+        nextStep();
+        return resultMessage;
+      } else {
+        vlmVerificationFailureCountRef.current += 1;
+        consecutiveMatchCountRef.current = 0;
+        
+        const resultMessage: VerificationResult = {
+          verified: false,
+          confidence: result.confidence,
+          mode: currentStep.verificationMode || 'presence',
+          consecutiveMatches: consecutiveMatchCountRef.current,
+          missingCount: vlmVerificationFailureCountRef.current,
+          message: `VLM Verification failed: ${result.confidence < VLM_VERIFICATION_CONFIDENCE_THRESHOLD ? 'Low confidence' : 'Task not completed'}. Attempts: ${vlmVerificationFailureCountRef.current}/${VLM_FAILED_VERIFICATION_THRESHOLD}`,
+        };
+
+        if (vlmVerificationFailureCountRef.current >= VLM_FAILED_VERIFICATION_THRESHOLD) {
+          resultMessage.message += ' - Correction flow triggered';
+        }
+        
+        return resultMessage;
+      }
+    } catch (error) {
+      logger.error('[TaskState] VLM verification error:', error);
+      return {
+        verified: false,
+        confidence: 0,
+        mode: 'none',
+        consecutiveMatches: consecutiveMatchCountRef.current,
+        missingCount: 0,
+        message: 'VLM verification error',
+      };
+    }
+  }, [taskState.isActive, getCurrentStep, nextStep]);
 
   const clearDetectionHistory = useCallback(() => {
     detectionHistoryRef.current = [];
@@ -554,6 +641,14 @@ export function useTaskState(): UseTaskStateReturn {
     return false;
   }, [taskState, setTaskState, abortPlanning]);
 
+  const getVlmVerificationFailureCount = useCallback(() => {
+    return vlmVerificationFailureCountRef.current;
+  }, []);
+
+  const resetVlmVerificationFailureCount = useCallback(() => {
+    vlmVerificationFailureCountRef.current = 0;
+  }, []);
+
   return {
     taskState,
     startTask,
@@ -572,5 +667,7 @@ export function useTaskState(): UseTaskStateReturn {
     verifyState,
     clearDetectionHistory,
     triggerCorrectionFlow,
+    getVlmVerificationFailureCount,
+    resetVlmVerificationFailureCount,
   };
 }

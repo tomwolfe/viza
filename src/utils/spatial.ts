@@ -37,7 +37,6 @@ export interface BoundingBox2D {
 }
 
 export interface HitTestResult {
-  distance: number;
   position: THREE.Vector3;
   orientation: THREE.Quaternion;
 }

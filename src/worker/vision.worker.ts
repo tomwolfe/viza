@@ -4,7 +4,7 @@ import type { WorkerOutgoingMessage, WorkerIncomingMessage, VizaErrorCode } from
 import { CONFIG, logger } from '@/config';
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
 import { TASK_CONFIGS, PromptFactory, type TaskRunnerConfig } from '@/services/promptManager';
-import { VisionResponseSchema, PlanningResponseSchema } from '@/schemas/vision';
+import { VisionResponseSchema, PlanningResponseSchema, VerificationResponseSchema } from '@/schemas/vision';
 
 function hasImage(msg: WorkerOutgoingMessage): msg is Extract<WorkerOutgoingMessage, { image: ImageBitmap }> {
   return 'image' in msg;
@@ -70,6 +70,12 @@ self.onmessage = async (event: MessageEvent) => {
     case 'category':
       if (validateImage(msg)) {
         await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['category'], msg.worldMapContext);
+      }
+      break;
+
+    case 'verification':
+      if (validateImage(msg)) {
+        await runVerification(msg.image!, msg.validationPrompt, msg.targetObject, msg.messageId, msg.worldMapContext);
       }
       break;
 
@@ -302,6 +308,74 @@ async function runTask(
     const err = error as Error;
     const code = mapErrorToCode(err);
     sendError(messageId, `Inference failed: ${err.message}`, code, err);
+  } finally {
+    image.close();
+  }
+}
+
+async function runVerification(
+  image: ImageBitmap,
+  validationPrompt: string,
+  targetObject: string,
+  messageId: string,
+  worldMapContext?: { name: string; x: number; y: number; z: number }[]
+): Promise<void> {
+  if (!workerState.engine || !workerState.isInitialized) {
+    sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY');
+    return;
+  }
+
+  const userInput = `${validationPrompt}|||${targetObject}`;
+  const messages = PromptFactory.buildMessages(
+    image,
+    userInput,
+    undefined,
+    workerState.systemPrompt,
+    TASK_CONFIGS['verify']
+  );
+
+  try {
+    postMessage({ type: 'inference_start' });
+
+    const response = await (workerState.engine!.chat.completions as any).create({
+      messages,
+      temperature: 0.1,
+      max_tokens: 512,
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+    const parseResult = parseJsonResponse(content, VerificationResponseSchema);
+
+    const normalized = parseResult.data ? TASK_CONFIGS['verify'].normalizeFn(parseResult.data) : TASK_CONFIGS['verify'].defaultValue;
+
+    if (!parseResult.success) {
+      postMessage({
+        type: 'warning',
+        message: 'JSON parse required fallback extraction for verification',
+        rawResponse: content,
+      });
+    }
+
+    const parsedData = parseResult.data as Record<string, unknown> | null;
+    const isCompleted = parsedData && typeof parsedData === 'object' && parsedData !== null
+      ? (parsedData as { isCompleted?: boolean }).isCompleted ?? false
+      : false;
+    const confidence = parsedData && typeof parsedData === 'object' && parsedData !== null
+      ? (parsedData as { confidence?: number }).confidence ?? 0
+      : 0;
+
+    postMessage({
+      type: 'verification_complete',
+      messageId,
+      isCompleted,
+      confidence,
+      rawText: content,
+      usage: response.usage,
+    } as WorkerIncomingMessage);
+  } catch (error) {
+    const err = error as Error;
+    const code = mapErrorToCode(err);
+    sendError(messageId, `Verification failed: ${err.message}`, code, err);
   } finally {
     image.close();
   }
