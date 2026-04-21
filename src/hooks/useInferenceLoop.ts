@@ -57,32 +57,32 @@ export function useInferenceLoop({
           return;
         }
 
-        const inferenceStartTime = performance.now();
-        const result = await runInference(frame, prompt);
+        let transferred = false;
+        
+        try {
+          const inferenceStartTime = performance.now();
+          const result = await runInference(frame, prompt);
+          transferred = true;
 
-        const inferenceEndTime = performance.now();
-        const processingTime = inferenceEndTime - loopStartTime;
+          const inferenceEndTime = performance.now();
+          const processingTime = inferenceEndTime - loopStartTime;
 
-        if (result?.objects && result.objects.length > 0) {
-          onObjectsDetected(result.objects);
-        }
-
-        // Analytics
-        recordMetrics({
-          captureTime: inferenceStartTime - captureStartTime,
-          inferenceTime: inferenceEndTime - inferenceStartTime,
-          processingTime,
-        });
-
-      } catch (error) {
-        logger.error('[useInferenceLoop] Inference error:', error);
-      } finally {
-        if (frame) {
-          try {
-            frame.close();
-          } catch {
-            // Frame might have been transferred
+          if (result?.objects && result.objects.length > 0) {
+            onObjectsDetected(result.objects);
           }
+
+          recordMetrics({
+            captureTime: inferenceStartTime - captureStartTime,
+            inferenceTime: inferenceEndTime - inferenceStartTime,
+            processingTime,
+          });
+        } catch (error) {
+          logger.error('[useInferenceLoop] Inference error:', error);
+          transferred = true;
+        }
+      } finally {
+        if (frame && !transferred) {
+          frame.close();
         }
         isRunningRef.current = false;
         acknowledgedRef.current = true;

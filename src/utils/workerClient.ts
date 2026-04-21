@@ -205,10 +205,6 @@ export class WorkerClient {
           if (pending) {
             clearTimeout(pending.timeoutId);
             this.pendingRequests.delete(messageId);
-            if (pending.bitmapHandle) {
-              try { pending.bitmapHandle.close(); } catch {}
-              pending.bitmapHandle = null;
-            }
           }
         }
         this.options.onError(
@@ -277,10 +273,6 @@ export class WorkerClient {
   private rejectAllPending(reason: string): void {
     this.pendingRequests.forEach((pending) => {
       clearTimeout(pending.timeoutId);
-      if (pending.bitmapHandle) {
-        try { pending.bitmapHandle.close(); } catch {}
-        pending.bitmapHandle = null;
-      }
       pending.reject(new Error(reason));
     });
     this.pendingRequests.clear();
@@ -317,19 +309,12 @@ export class WorkerClient {
 
       this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);
 
-      const closeBitmap = () => {
-        if (bitmapHandle) {
-          try { bitmapHandle.close(); } catch {}
-        }
-      };
-
       const cleanup = () => {
         clearTimeout(timeoutId);
         this.pendingRequests.delete(messageId);
       };
 
       const abortHandler = () => {
-        closeBitmap();
         cleanup();
         reject(new Error('Request aborted'));
       };
@@ -349,7 +334,9 @@ export class WorkerClient {
           req.bitmapHandle = null;
         }
       } catch (err) {
-        closeBitmap();
+        if (bitmapHandle) {
+          try { bitmapHandle.close(); } catch {}
+        }
         cleanup();
         reject(err);
       }

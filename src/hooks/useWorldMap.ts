@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { CONFIG, logger } from '@/config';
-import { createOneEuroFilter } from '@/utils/spatial';
+import { createSpatialFilter } from '@/utils/spatial';
 import { categorizeObject, generateObjectId, type ObjectCategory } from '@/utils/objectProcessing';
 
 export interface WorldObject {
@@ -33,7 +33,11 @@ type WorldMapAction =
 const DEFAULT_DAMPENING = CONFIG.SPATIAL.DAMPENING_FACTOR;
 const STORAGE_KEY = 'viza_world_map';
 
-const { ONE_EURO } = CONFIG.SPATIAL;
+const FILTER_OPTIONS = {
+  minCutoff: CONFIG.SPATIAL.ONE_EURO.MIN_CUTOFF,
+  beta: CONFIG.SPATIAL.ONE_EURO.BETA,
+  dCutoff: CONFIG.SPATIAL.ONE_EURO.DCUTOFF,
+};
 
 function findExistingObject(
   objects: WorldObject[],
@@ -253,16 +257,10 @@ export function useWorldMap(): UseWorldMapReturn {
 
     let filter = filtersRef.current.get(key);
     if (!filter) {
-      filter = createOneEuroFilter(
-        new THREE.Vector3(),
-        ONE_EURO.MIN_CUTOFF,
-        ONE_EURO.BETA,
-        ONE_EURO.DCUTOFF
-      );
+      filter = createSpatialFilter(new THREE.Vector3(), FILTER_OPTIONS);
       filtersRef.current.set(key, filter);
     }
 
-    filter(position.clone(), timestamp);
     const smoothedPosition = filter(position.clone(), timestamp);
 
     dispatch({

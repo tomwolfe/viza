@@ -48,6 +48,10 @@ describe('useARStateMachine', () => {
       result.current.dispatch({ type: 'MODEL_PROGRESS', progress: 50 });
     });
 
+    act(() => {
+      result.current.dispatch({ type: 'MODEL_READY', progress: 50 });
+    });
+
     const state = result.current.state as ARState;
     if (state.type === 'ready') {
       expect(state.modelProgress).toBe(50);

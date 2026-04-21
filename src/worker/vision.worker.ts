@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { WorkerOutgoingMessage, WorkerIncomingMessage, VizaErrorCode } from '@/types/worker';
 import { CONFIG, logger } from '@/config';
 import { extractJsonFromText, parseJsonResponse } from '@/utils/responseParser';
-import { TASK_CONFIGS, buildChatMessages, buildPlanningMessages, buildCategoryMessages, type TaskRunnerConfig } from '@/services/promptManager';
+import { TASK_CONFIGS, PromptFactory, type TaskRunnerConfig } from '@/services/promptManager';
 import { VisionResponseSchema, PlanningResponseSchema } from '@/schemas/vision';
 
 function hasImage(msg: WorkerOutgoingMessage): msg is Extract<WorkerOutgoingMessage, { image: ImageBitmap }> {
@@ -120,15 +120,13 @@ async function runTask(
     return;
   }
 
-  let messages: webllm.ChatCompletionMessageParam[];
-  
-  if (config.responseType === 'planning_complete') {
-    messages = buildPlanningMessages(image, userInput, workerState.systemPrompt) as webllm.ChatCompletionMessageParam[];
-  } else if (config.responseType === 'inference_complete' && config.maxTokens === 1024) {
-    messages = buildCategoryMessages(image, userInput, workerState.systemPrompt) as webllm.ChatCompletionMessageParam[];
-  } else {
-    messages = buildChatMessages(image, userInput, workerState.systemPrompt) as webllm.ChatCompletionMessageParam[];
-  }
+  const messages = PromptFactory.buildMessages(
+    image,
+    userInput,
+    undefined,
+    workerState.systemPrompt,
+    config
+  ) as webllm.ChatCompletionMessageParam[];
 
   try {
     postMessage({ type: 'inference_start' });
@@ -168,11 +166,7 @@ async function runTask(
     const code = mapErrorToCode(err);
     sendError(messageId, `Inference failed: ${err.message}`, code, err);
   } finally {
-    try {
-      image.close();
-    } catch (e) {
-      logger.debug('[Worker] ImageBitmap already closed or invalid:', e);
-    }
+    image.close();
   }
 }
 

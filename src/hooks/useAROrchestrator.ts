@@ -1,48 +1,16 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useWebLLM } from '@/contexts/WebLLMContext';
 import { useARSessionManager } from './useARSessionManager';
 import { useARStateMachine, type ARState } from './useARStateMachine';
 import { useTaskOrchestrator } from './useTaskOrchestrator';
-import { useWorldMap, type WorldObject } from './useWorldMap';
 import { useVizaError } from '@/contexts/VizaErrorContext';
-import type { DetectedObject, VisionResponse } from '@/schemas/vision';
-import type { TaskStep } from '@/hooks/useTaskState';
+import type { VisionResponse } from '@/schemas/vision';
 import type { VizaErrorCode } from '@/types/worker';
-import { logger } from '@/config';
-
-type ARStateType = ARState['type'];
 
 interface UseAROrchestratorResult {
   arState: ARState;
-  isARActive: boolean;
-  isModelLoading: boolean;
-  modelProgress: number;
-  isModelReady: boolean;
-  isInferring: boolean;
-  isDeviceCompatible: boolean;
-  runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
-  taskState: {
-    isActive: boolean;
-    completed: boolean;
-    currentStepIndex: number;
-    steps: TaskStep[];
-  };
-  isPlanning: boolean;
-  checkTargetFound: (detectedObjects: DetectedObject[]) => void;
-  isListening: boolean;
-  isSpeaking: boolean;
-  transcript: string;
-  speak: (text: string) => void;
-  voiceError: string | null;
-  llmError: string | null;
-  error: string | null;
-  errorCode: VizaErrorCode | null;
-  handleStartAR: () => Promise<void>;
-  handleVoiceInput: () => void;
-  handleObjectsDetected: (objects: DetectedObject[]) => void;
-  currentInstruction: string | null;
   dispatchActions: {
     initModel: () => void;
     startInferencing: () => void;
@@ -53,19 +21,21 @@ interface UseAROrchestratorResult {
     handleError: (error: string, errorCode: string | null) => void;
     reset: () => void;
   };
-  detectedObjects: DetectedObject[];
-  worldMap: WorldObject[];
-  addOrUpdateObject: (obj: DetectedObject, position: import('three').Vector3) => void;
-  clearWorldMap: () => void;
-  voiceCommandRef: { current: string | null };
-  sceneImageRef: { current: ImageBitmap | null };
+  isARActive: boolean;
   isXRMode: boolean;
   xrSession: XRSession | null;
+  isModelReady: boolean;
+  isInferring: boolean;
+  isDeviceCompatible: boolean;
+  runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
+  error: string | null;
+  errorCode: VizaErrorCode | null;
+  llmError: string | null;
+  sceneImageRef: React.MutableRefObject<ImageBitmap | null>;
+  handleStartAR: () => Promise<void>;
 }
 
 export function useAROrchestrator(): UseAROrchestratorResult {
-  const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
-  const { worldMap, addOrUpdateObject, clearWorldMap } = useWorldMap();
   const { 
     unifiedError, 
     unifiedErrorCode, 
@@ -73,8 +43,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   } = useVizaError();
 
   const {
-    isModelLoading,
-    modelProgress,
     isModelReady,
     isInferring,
     isDeviceCompatible,
@@ -116,10 +84,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     }
   }, [taskOrchestrator]);
 
-  const handleObjectsDetected = useCallback((objects: DetectedObject[]) => {
-    setDetectedObjects(objects);
-  }, []);
-
   useEffect(() => {
     return () => {
       if (sceneImageRef.current) {
@@ -128,12 +92,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (lastCompleted && taskOrchestrator.taskState.isActive && !taskOrchestrator.taskState.completed) {
-      dispatchActions.completeStep();
-    }
-  }, [lastCompleted, taskOrchestrator.taskState, dispatchActions]);
 
   useEffect(() => {
     if (llmError && llmErrorCode) {
@@ -165,36 +123,18 @@ export function useAROrchestrator(): UseAROrchestratorResult {
 
   return {
     arState,
+    dispatchActions,
     isARActive,
-    isModelLoading,
-    modelProgress,
+    isXRMode,
+    xrSession,
     isModelReady,
     isInferring,
     isDeviceCompatible,
     runInference,
-    taskState: taskOrchestrator.taskState,
-    isPlanning: taskOrchestrator.isPlanning,
-    checkTargetFound: taskOrchestrator.checkTargetFound,
-    isListening: taskOrchestrator.isListening,
-    isSpeaking: taskOrchestrator.isSpeaking,
-    transcript: taskOrchestrator.transcript,
-    speak: taskOrchestrator.speak,
-    voiceError: taskOrchestrator.voiceError,
-    llmError,
     error: unifiedError,
     errorCode: unifiedErrorCode,
-    handleStartAR,
-    handleVoiceInput,
-    handleObjectsDetected,
-    currentInstruction: taskOrchestrator.currentInstruction,
-    dispatchActions,
-    detectedObjects,
-    worldMap,
-    addOrUpdateObject,
-    clearWorldMap,
-    voiceCommandRef: { current: null }, // Mocked as it seems unused in provided snippet
+    llmError,
     sceneImageRef,
-    isXRMode,
-    xrSession,
+    handleStartAR,
   };
 }

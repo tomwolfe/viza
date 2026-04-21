@@ -216,9 +216,52 @@ export const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
   },
 };
 
+export function buildMessages(
+  image: ImageBitmap,
+  userInput: string | undefined,
+  goal: string | undefined,
+  systemPrompt: string,
+  config: TaskRunnerConfig
+): webllm.ChatCompletionMessageParam[] {
+  const messages: webllm.ChatCompletionMessageParam[] = [];
+  messages.push({ role: 'system', content: systemPrompt });
+
+  if (config.responseType === 'planning_complete') {
+    const prompt = buildPlanningPrompt(goal || '');
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: image } },
+        { type: 'text', text: prompt },
+      ],
+    });
+  } else if (config.responseType === 'inference_complete' && config.maxTokens === 1024) {
+    const prompt = buildCategoryPrompt(goal || '');
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: image } },
+        { type: 'text', text: prompt },
+      ],
+    });
+  } else {
+    const prompt = (userInput || buildVisionPrompt());
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: image } },
+        { type: 'text', text: prompt },
+      ],
+    });
+  }
+
+  return messages;
+}
+
 export const PromptFactory = {
   vision: buildVisionPrompt,
   planning: buildPlanningPrompt,
   category: buildCategoryPrompt,
   system: buildSystemPrompt,
+  buildMessages,
 };

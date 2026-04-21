@@ -43,11 +43,9 @@ describe('useWebLLMWorker', () => {
   it('should initialize with correct default state', async () => {
     const { result } = renderHook(() => useWebLLMWorker({ modelId: 'test-model' }), { wrapper });
 
-    expect(result.current.isModelLoading).toBe(false);
-    expect(result.current.modelProgress).toBe(0);
-    expect(result.current.isModelReady).toBe(false);
     expect(result.current.isInferring).toBe(false);
     expect(result.current.isDeviceCompatible).toBe(true);
+    expect(result.current.isModelReady).toBe(false);
     expect(result.current.error).toBe(null);
     expect(result.current.errorCode).toBe(null);
   });
@@ -83,7 +81,6 @@ describe('useWebLLMWorker', () => {
     
     await waitFor(() => {
       expect(result.current.isModelReady).toBe(true);
-      expect(result.current.modelProgress).toBe(100);
     }, { timeout: 2000 });
   });
 

@@ -13,8 +13,6 @@ type InferenceResult = VisionResponse | null | TaskStep[];
 type InferenceType = 'chat' | 'planning' | 'category';
 
 export interface WebLLMContextValue {
-  isModelLoading: boolean;
-  modelProgress: number;
   isModelReady: boolean;
   isInferring: boolean;
   isDeviceCompatible: boolean;
@@ -38,15 +36,12 @@ interface WebLLMProviderProps {
 export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   const { setError: setVizaError } = useVizaError();
   const {
-    isModelLoading,
-    modelProgress,
-    isModelReady,
     isInferring,
     isDeviceCompatible,
     error,
     errorCode,
     workerClient,
-    isModelReadyRef,
+    isModelReady,
     initModel,
     dispose,
     setIsInferring,
@@ -61,7 +56,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
       inferenceType: InferenceType,
       signal?: AbortSignal
     ): Promise<InferenceResult> => {
-      if (!isModelReadyRef.current) {
+      if (!isModelReady) {
         setVizaError('MODEL_NOT_READY', 'Model not ready. Call initModel first.');
         return inferenceType === 'planning' ? [] : null;
       }
@@ -107,7 +102,7 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
         setIsInferring(false);
       }
     },
-    [isModelReadyRef, workerClient, setIsInferring, setVizaError]
+    [isModelReady, workerClient, setIsInferring, setVizaError]
   );
 
   const runInference = useCallback(
@@ -137,8 +132,6 @@ export function WebLLMProvider({ children, modelId }: WebLLMProviderProps) {
   return (
     <WebLLMContext.Provider
       value={{
-        isModelLoading,
-        modelProgress,
         isModelReady,
         isInferring,
         isDeviceCompatible,

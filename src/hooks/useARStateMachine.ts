@@ -3,7 +3,7 @@ import { logger } from '@/config';
 
 export type ARState = 
   | { type: 'idle' }
-  | { type: 'initializing' }
+  | { type: 'initializing'; progress: number }
   | { type: 'ready'; modelProgress?: number }
   | { type: 'running' }
   | { type: 'planning' }
@@ -28,7 +28,7 @@ function arReducer(state: ARState, action: ARAction): ARState {
     case 'idle':
       switch (action.type) {
         case 'INIT_MODEL':
-          return { type: 'initializing' };
+          return { type: 'initializing', progress: 0 };
         case 'ERROR':
           return { type: 'error', error: action.error, errorCode: action.errorCode };
       }
@@ -37,7 +37,7 @@ function arReducer(state: ARState, action: ARAction): ARState {
     case 'initializing':
       switch (action.type) {
         case 'MODEL_PROGRESS':
-          return { type: 'ready', modelProgress: action.progress };
+          return { type: 'initializing', progress: action.progress };
         case 'MODEL_READY':
           return { type: 'ready', modelProgress: action.progress ?? 100 };
         case 'ERROR':

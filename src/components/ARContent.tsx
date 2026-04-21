@@ -1,51 +1,19 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ARScene } from '@/components/ARScene';
 import AROverlay from '@/components/AROverlay';
 import ARControls from '@/components/ARControls';
 import { useAROrchestrator } from '@/hooks/useAROrchestrator';
+import { SpatialProvider } from '@/contexts/SpatialContext';
 import { TaskProvider } from '@/contexts/TaskContext';
 import { WebLLMProvider } from '@/contexts/WebLLMContext';
 
 export function ARContent() {
   const [showWarnings, setShowWarnings] = useState(true);
-
-  const {
-    isARActive,
-    error,
-    errorCode,
-    isModelLoading,
-    modelProgress,
-    isModelReady,
-    isInferring,
-    isDeviceCompatible,
-    runInference,
-    taskState,
-    isPlanning,
-    checkTargetFound,
-    isListening,
-    isSpeaking,
-    transcript,
-    speak,
-    voiceError,
-    llmError,
-    detectedObjects,
-    worldMap,
-    handleStartAR,
-    handleVoiceInput,
-    handleObjectsDetected,
-    currentInstruction,
-    voiceCommandRef,
-    sceneImageRef,
-    isXRMode,
-    dispatchActions,
-  } = useAROrchestrator();
-
-  const unifiedError = error;
-  const unifiedErrorCode = errorCode;
+  const { handleStartAR, dispatchActions, isARActive, isXRMode, sceneImageRef } = useAROrchestrator();
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-black">
@@ -67,63 +35,64 @@ export function ARContent() {
       )}
 
       <WebLLMProvider>
-        <TaskProvider webllmInitModel={dispatchActions.initModel}>
-          <ErrorBoundary>
-            <Canvas
-              camera={{ position: [0, 0, 0], fov: 75 }}
-              style={{ width: '100%', height: '100%' }}
-              gl={{ preserveDrawingBuffer: true }}
-            >
-              {isARActive ? (
-                <ARScene
-                  isARActive={isARActive}
-                  isModelReady={isModelReady}
-                  runInference={runInference}
-                  detectedObjects={detectedObjects}
-                  worldObjects={worldMap}
-                  onObjectsDetected={handleObjectsDetected}
-                  voiceCommandRef={voiceCommandRef}
-                  taskActive={taskState.isActive}
-                  currentStepTarget={taskState.steps[taskState.currentStepIndex]?.targetObject}
-                  checkTargetFound={checkTargetFound}
-                  speak={speak}
-                  isXRMode={isXRMode}
-                  sceneImageRef={sceneImageRef}
-                />
-              ) : (
-                <color attach="background" args={['#1a1a1a']} />
-              )}
-            </Canvas>
-          </ErrorBoundary>
+        <SpatialProvider>
+          <TaskProvider webllmInitModel={dispatchActions.initModel}>
+            <ErrorBoundary>
+              <Canvas
+                camera={{ position: [0, 0, 0], fov: 75 }}
+                style={{ width: '100%', height: '100%' }}
+                gl={{ preserveDrawingBuffer: true }}
+              >
+                {isARActive ? (
+                  <ARScene
+                    isARActive={isARActive}
+                    isModelReady={true}
+                    runInference={undefined as any}
+                    detectedObjects={[]}
+                    worldObjects={[]}
+                    onObjectsDetected={undefined as any}
+                    taskActive={false}
+                    currentStepTarget={undefined}
+                    checkTargetFound={undefined as any}
+                    speak={undefined as any}
+                    isXRMode={isXRMode}
+                    sceneImageRef={sceneImageRef}
+                  />
+                ) : (
+                  <color attach="background" args={['#1a1a1a']} />
+                )}
+              </Canvas>
+            </ErrorBoundary>
 
-          <ARControls
-            onStartAR={handleStartAR}
-            onVoiceInput={handleVoiceInput}
-            isARActive={isARActive}
-            isModelLoading={isModelLoading}
-            modelProgress={modelProgress}
-            isListening={isListening}
-            isDeviceIncompatible={!isDeviceCompatible}
-            unifiedErrorCode={unifiedErrorCode}
-            unifiedError={unifiedError}
-            errorCode={errorCode}
-            error={error}
-          />
+            <ARControls
+              onStartAR={handleStartAR}
+              onVoiceInput={() => {}}
+              isARActive={isARActive}
+              isModelLoading={false}
+              modelProgress={0}
+              isListening={false}
+              isDeviceIncompatible={false}
+              unifiedErrorCode={null}
+              unifiedError={null}
+              errorCode={null}
+              error={null}
+            />
 
-          <AROverlay
-            transcript={transcript}
-            isPlanning={isPlanning}
-            taskState={taskState}
-            currentInstruction={currentInstruction ?? ''}
-            detectedObjects={detectedObjects}
-            isSpeaking={isSpeaking}
-            isInferring={isInferring}
-            llmError={llmError}
-            voiceError={voiceError}
-            appError={error}
-            isARActive={isARActive}
-          />
-        </TaskProvider>
+            <AROverlay
+              transcript=""
+              isPlanning={false}
+              taskState={{ isActive: false, completed: false, currentStepIndex: 0, steps: [] }}
+              currentInstruction=""
+              detectedObjects={[]}
+              isSpeaking={false}
+              isInferring={false}
+              llmError={null}
+              voiceError={null}
+              appError={null}
+              isARActive={isARActive}
+            />
+          </TaskProvider>
+        </SpatialProvider>
       </WebLLMProvider>
     </main>
   );

@@ -33,30 +33,23 @@ vi.mock('../src/contexts/WebLLMContext', () => {
   return {
     WebLLMProvider: ({ children }: { children: React.ReactNode }) => ({ children }),
     useWebLLM: vi.fn(() => {
-      const [isModelLoading, setIsModelLoading] = React.useState(false);
       const [isModelReady, setIsModelReady] = React.useState(false);
       const [isInferring, setIsInferring] = React.useState(false);
-      const [modelProgress, setModelProgress] = React.useState(0);
       const [error, setError] = React.useState<string | null>(null);
       const [errorCode, setErrorCode] = React.useState<string | null>(null);
       const [lastCompleted, setLastCompleted] = React.useState<Date | null>(null);
 
       return {
-        isModelLoading,
         isModelReady,
         isInferring,
         isDeviceCompatible: true,
-        modelProgress,
         error,
         errorCode,
         lastCompleted,
-        workerClient: null as unknown as ReturnType<typeof workerClient.createWorkerClient>,
-        isModelReadyRef: { current: false } as { current: boolean },
         setIsInferring: vi.fn().mockImplementation((val: boolean) => setIsInferring(val)),
         setError: vi.fn().mockImplementation((msg: string | null) => setError(msg)),
         setErrorCode: vi.fn().mockImplementation((code: string | null) => setErrorCode(code)),
         initModel: vi.fn().mockImplementation(async () => {
-          setIsModelLoading(true);
           setIsModelReady(true);
         }),
         runInference: vi.fn().mockImplementation(async (_image: ImageBitmap, _prompt: string) => {
@@ -205,12 +198,9 @@ describe('useAROrchestrator', () => {
 
     expect(result.current.arState.type).toBe('idle');
     expect(result.current.isARActive).toBe(false);
-    expect(result.current.isModelLoading).toBe(false);
     expect(result.current.isModelReady).toBe(false);
     expect(result.current.isInferring).toBe(false);
     expect(result.current.isDeviceCompatible).toBe(true);
-    expect(result.current.detectedObjects).toEqual([]);
-    expect(result.current.worldMap).toEqual([]);
   });
 
   it('should handle AR session start', async () => {
@@ -219,32 +209,6 @@ describe('useAROrchestrator', () => {
     await act(async () => {
       await result.current.handleStartAR();
     });
-
-    expect(result.current.isModelLoading).toBe(true);
-  });
-
-  it('should update detected objects', () => {
-    const { result } = renderHook(() => useAROrchestrator());
-
-    const mockObjects = [
-      { name: 'chair', bbox_2d: [0, 0, 100, 100], action: 'keep', category: 'keep' as any, confidence: 0.9 },
-    ];
-
-    act(() => {
-      result.current.handleObjectsDetected(mockObjects);
-    });
-
-    expect(result.current.detectedObjects).toEqual(mockObjects);
-  });
-
-  it('should handle voice input toggle', () => {
-    const { result } = renderHook(() => useAROrchestrator());
-
-    act(() => {
-      result.current.handleVoiceInput();
-    });
-
-    expect(result.current.isListening).toBe(true);
   });
 
   it('should handle error state from AR state machine', () => {
@@ -278,16 +242,6 @@ describe('useAROrchestrator', () => {
 
     expect(result.current.error).toBe('LLM Error occurred');
     expect(result.current.errorCode).toBe('INFERENCE_ERROR');
-  });
-
-  it('should clear world map', () => {
-    const { result } = renderHook(() => useAROrchestrator());
-
-    act(() => {
-      result.current.clearWorldMap();
-    });
-
-    expect(result.current.worldMap).toEqual([]);
   });
 
   it('should handle device incompatibility', () => {

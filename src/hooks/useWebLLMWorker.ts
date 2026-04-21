@@ -12,9 +12,6 @@ interface UseWebLLMWorkerOptions {
 }
 
 export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
-  const [isModelLoading, setIsModelLoading] = useState(false);
-  const [modelProgress, setModelProgress] = useState(0);
-  const [isModelReady, setIsModelReady] = useState(false);
   const [isInferring, setIsInferring] = useState(false);
   const { setError: setVizaError, clearError: clearVizaError, error: vizaErrorState } = useVizaError();
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
@@ -25,7 +22,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
   const workerClientRef = useRef<WorkerClient | null>(null);
   const isInitializedRef = useRef(false);
-  const isModelReadyRef = useRef(false);
+  const [isModelReady, setIsModelReady] = useState(false);
 
   const initWorker = useCallback(async () => {
     if (isInitializedRef.current) return;
@@ -42,16 +39,10 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       onReady: () => {
         logger.info('[WebLLM] Worker ready');
       },
-      onProgress: (progress) => {
-        setModelProgress(progress);
-        if (progress > 0 && progress < 100) {
-          setIsModelLoading(true);
-        }
-      },
+      onProgress: () => {},
       onError: (message, code) => {
         logger.error('[WebLLM] Error:', message);
         setVizaError(code, message);
-        setIsModelLoading(false);
         setIsInferring(false);
       },
       onWarning: (message) => {
@@ -62,7 +53,6 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
         logger.warn('[WebLLM] Worker unresponsive');
         setVizaError('WORKER_CRASHED', 'AI Engine Lost - Restarting...');
         setIsModelReady(false);
-        isModelReadyRef.current = false;
       },
       inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
       planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
@@ -89,22 +79,14 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       return;
     }
 
-    setIsModelReady(false);
-    setModelProgress(0);
-    setIsModelLoading(true);
-
     try {
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
-      isModelReadyRef.current = true;
-      setIsModelLoading(false);
       setIsModelReady(true);
-      setModelProgress(100);
       client.startHeartbeat(() => {
         logger.info('[WebLLM] Heartbeat reconnected');
       });
     } catch (err) {
       setVizaError('WORKER_INIT_FAILED', (err as Error).message);
-      setIsModelLoading(false);
     }
   }, [initWorker, isDeviceCompatible, setVizaError]);
 
@@ -116,9 +98,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       workerClientRef.current = null;
     }
     isInitializedRef.current = false;
-    isModelReadyRef.current = false;
     setIsModelReady(false);
-    setIsModelLoading(false);
     setIsInferring(false);
     clearVizaError();
   }, [clearVizaError]);
@@ -130,15 +110,13 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   }, [dispose]);
 
   return {
-    isModelLoading,
-    modelProgress,
-    isModelReady,
     isInferring,
     isDeviceCompatible,
     error,
     errorCode,
     workerClient: workerClientRef.current,
-    isModelReadyRef,
+    isModelReady: isModelReady,
+    setIsModelReady,
     initModel,
     dispose,
     setIsInferring,

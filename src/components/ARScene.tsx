@@ -28,7 +28,6 @@ interface ARSceneProps {
   detectedObjects: DetectedObject[];
   worldObjects: WorldObject[];
   onObjectsDetected: (objects: DetectedObject[]) => void;
-  voiceCommandRef?: React.RefObject<string | null>;
   taskActive?: boolean;
   currentStepTarget?: string;
   checkTargetFound?: (objects: DetectedObject[]) => void;
@@ -44,7 +43,6 @@ export function ARScene({
   detectedObjects,
   worldObjects,
   onObjectsDetected,
-  voiceCommandRef,
   taskActive,
   currentStepTarget,
   checkTargetFound,

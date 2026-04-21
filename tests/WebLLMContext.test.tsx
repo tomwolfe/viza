@@ -127,9 +127,9 @@ describe('WebLLMContext', () => {
       wrapper: AllProviders,
     });
 
-    expect(result.current.isModelLoading).toBe(false);
-    expect(result.current.isModelReady).toBe(false);
     expect(result.current.isInferring).toBe(false);
+    expect(result.current.isModelReady).toBe(false);
+    expect(result.current.isDeviceCompatible).toBe(true);
     expect(result.current.error).toBe(null);
   });
 

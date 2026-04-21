@@ -1,6 +1,20 @@
 import * as THREE from 'three';
 import { CONFIG } from '@/config';
 
+export interface SpatialFilterOptions {
+  minCutoff?: number;
+  beta?: number;
+  dCutoff?: number;
+}
+
+export function createSpatialFilter(
+  initialValue: THREE.Vector3 = new THREE.Vector3(),
+  options: SpatialFilterOptions = {}
+): (value: THREE.Vector3, timestamp: number) => THREE.Vector3 {
+  const { minCutoff = CONFIG.SPATIAL.ONE_EURO.MIN_CUTOFF, beta = CONFIG.SPATIAL.ONE_EURO.BETA, dCutoff = CONFIG.SPATIAL.ONE_EURO.DCUTOFF } = options;
+  return createOneEuroFilter(initialValue, minCutoff, beta, dCutoff);
+}
+
 export interface BoundingBox2D {
   x: number;
   y: number;
