@@ -6,6 +6,10 @@ const mockXrSession = {
   addEventListener: vi.fn(),
   end: vi.fn().mockResolvedValue(undefined),
   enabledFeatures: [],
+  requestReferenceSpace: vi.fn().mockResolvedValue({}),
+  requestAnimationFrame: vi.fn().mockReturnValue(1),
+  cancelAnimationFrame: vi.fn(),
+  requestHitTestSource: vi.fn().mockResolvedValue({}),
 };
 
 describe('useWebXR', () => {
