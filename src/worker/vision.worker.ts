@@ -57,19 +57,19 @@ self.onmessage = async (event: MessageEvent) => {
 
     case 'chat':
       if (validateImage(msg)) {
-        await runTask(msg.image!, msg.prompt, msg.messageId, TASK_CONFIGS['chat']);
+        await runTask(msg.image!, msg.prompt, msg.messageId, TASK_CONFIGS['chat'], msg.worldMapContext);
       }
       break;
 
     case 'planning':
       if (validateImage(msg)) {
-        await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['planning']);
+        await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['planning'], msg.worldMapContext);
       }
       break;
 
     case 'category':
       if (validateImage(msg)) {
-        await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['category']);
+        await runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['category'], msg.worldMapContext);
       }
       break;
 
@@ -102,6 +102,114 @@ interface WorkerState {
   systemPrompt: string;
 }
 
+interface DetectionMemory {
+  objects: {
+    name: string;
+    position: { x: number; y: number; z: number };
+    timestamp: number;
+    category: string;
+  }[];
+  lastUpdate: number;
+}
+
+const DETECTION_MEMORY_SIZE = 10;
+const MEMORY_RETENTION_MS = 60000;
+
+const detectionMemory: DetectionMemory = {
+  objects: [],
+  lastUpdate: 0,
+};
+
+function updateDetectionMemory(
+  objects: { name: string; position: { x: number; y: number; z: number }; category?: string }[]
+): void {
+  const now = performance.now();
+
+  for (const obj of objects) {
+    const existingIndex = detectionMemory.objects.findIndex(
+      m => m.name.toLowerCase() === obj.name.toLowerCase()
+    );
+
+    if (existingIndex >= 0) {
+      detectionMemory.objects[existingIndex] = {
+        name: obj.name,
+        position: obj.position,
+        timestamp: now,
+        category: obj.category || 'unknown',
+      };
+    } else {
+      detectionMemory.objects.unshift({
+        name: obj.name,
+        position: obj.position,
+        timestamp: now,
+        category: obj.category || 'unknown',
+      });
+    }
+  }
+
+  if (detectionMemory.objects.length > DETECTION_MEMORY_SIZE) {
+    detectionMemory.objects = detectionMemory.objects.slice(0, DETECTION_MEMORY_SIZE);
+  }
+
+  detectionMemory.lastUpdate = now;
+}
+
+function getSpatialContext(): string {
+  const now = performance.now();
+  const recentObjects = detectionMemory.objects.filter(
+    obj => now - obj.timestamp < MEMORY_RETENTION_MS
+  );
+
+  if (recentObjects.length === 0) {
+    return '';
+  }
+
+  const contextParts: string[] = ['Recent detections for spatial reference:'];
+
+  for (let i = 0; i < Math.min(3, recentObjects.length); i++) {
+    const obj = recentObjects[i];
+    const refs: string[] = [];
+
+    for (let j = 0; j < recentObjects.length; j++) {
+      if (i === j) continue;
+      const other = recentObjects[j];
+      const dx = obj.position.x - other.position.x;
+      const dy = obj.position.y - other.position.y;
+      const dz = obj.position.z - other.position.z;
+
+      const direction =
+        Math.abs(dx) > Math.abs(dz)
+          ? dx > 0 ? 'right of' : 'left of'
+          : dz > 0 ? 'behind' : 'in front of';
+
+      refs.push(`${other.name} (${direction})`);
+    }
+
+    contextParts.push(`- ${obj.name}: at [${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)}], relative to: ${refs.join(', ') || 'self'}`);
+  }
+
+  return contextParts.join('\n');
+}
+
+function isContextualQuery(userInput: string): boolean {
+  const contextualPatterns = [
+    /where (is|was|does)/i,
+    /where.*now/i,
+    /did.*see/i,
+    /remember/i,
+    /previously/i,
+    /last.*seen/i,
+    /next to/i,
+    /near/i,
+    /between/i,
+    /to the (left|right)/i,
+    /behind/i,
+    /in front/i,
+  ];
+
+  return contextualPatterns.some(pattern => pattern.test(userInput));
+}
+
 const workerState: WorkerState = {
   engine: null,
   isInitialized: false,
@@ -113,16 +221,30 @@ async function runTask(
   image: ImageBitmap,
   userInput: string,
   messageId: string,
-  config: TaskRunnerConfig
+  config: TaskRunnerConfig,
+  worldMapContext?: { name: string; x: number; y: number; z: number }[]
 ): Promise<void> {
   if (!workerState.engine || !workerState.isInitialized) {
     sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY');
     return;
   }
 
+  let enhancedUserInput = userInput;
+  const isContextQuery = isContextualQuery(userInput);
+
+  if (isContextQuery) {
+    const spatialContext = worldMapContext && worldMapContext.length > 0
+      ? worldMapContext.map(obj => `${obj.name} at [${obj.x.toFixed(2)}, ${obj.y.toFixed(2)}, ${obj.z.toFixed(2)}]`).join('; ')
+      : getSpatialContext();
+
+    if (spatialContext) {
+      enhancedUserInput = `${userInput}\n\nKnown objects in environment: ${spatialContext}\n\nUse this spatial context to provide relative directions.`;
+    }
+  }
+
   const messages = PromptFactory.buildMessages(
     image,
-    userInput,
+    enhancedUserInput,
     undefined,
     workerState.systemPrompt,
     config
@@ -149,9 +271,23 @@ async function runTask(
         rawResponse: content,
       });
     }
-    const completed = parseResult.data && typeof parseResult.data === 'object' && parseResult.data !== null
-      ? (parseResult.data as { completed?: boolean }).completed
+
+    const parsedData = parseResult.data as Record<string, unknown> | null;
+    const completed = parsedData && typeof parsedData === 'object' && parsedData !== null
+      ? (parsedData as { completed?: boolean }).completed
       : false;
+
+    const detectedObjects = normalized && typeof normalized === 'object' && 'objects' in normalized
+      ? (normalized as { objects: { name: string; category?: string }[] }).objects
+      : [];
+
+    if (detectedObjects.length > 0) {
+      updateDetectionMemory(detectedObjects.map(obj => ({
+        name: obj.name,
+        category: obj.category || 'unknown',
+        position: { x: 0, y: 0, z: 0 },
+      })));
+    }
 
     postMessage({
       type: config.responseType,
@@ -160,6 +296,7 @@ async function runTask(
       completed,
       rawText: content,
       usage: response.usage,
+      spatialContext: isContextQuery ? getSpatialContext() : undefined,
     } as WorkerIncomingMessage);
   } catch (error) {
     const err = error as Error;

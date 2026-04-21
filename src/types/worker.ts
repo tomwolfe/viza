@@ -4,9 +4,9 @@
 
 export type WorkerOutgoingMessage =
   | { type: 'init'; model: string; systemPrompt?: string }
-  | { type: 'chat'; image: ImageBitmap; prompt: string; messageId: string }
-  | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string }
-  | { type: 'category'; image: ImageBitmap; goal: string; messageId: string }
+  | { type: 'chat'; image: ImageBitmap; prompt: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+  | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+  | { type: 'category'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
   | { type: 'reload' }
   | { type: 'soft_reload'; model: string; systemPrompt?: string }
   | { type: 'ping' }
@@ -17,7 +17,7 @@ export type WorkerIncomingMessage =
   | { type: 'init_progress'; progress: number; status: string; details?: unknown }
   | { type: 'init_complete'; model: string; progress: number; cacheStatus?: 'cache' | 'indexeddb' | 'already_loaded' }
   | { type: 'inference_start' }
-  | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown }
+  | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown; spatialContext?: string }
   | { type: 'planning_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
   | { type: 'error'; message: string; messageId?: string; error?: string; errorCode: VizaErrorCode }
   | { type: 'warning'; message: string; rawResponse?: string }
