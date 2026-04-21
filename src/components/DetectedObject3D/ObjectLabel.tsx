@@ -10,9 +10,10 @@ interface ObjectLabelProps {
   width: number;
   height: number;
   color: string;
+  isSearching?: boolean;
 }
 
-export function ObjectLabel({ name, action, width, height, color }: ObjectLabelProps) {
+export function ObjectLabel({ name, action, width, height, color, isSearching = false }: ObjectLabelProps) {
   const { SPATIAL } = CONFIG;
   const labelWidth = Math.max(width * 0.9, 0.5);
   const labelScale: [number, number, number] = [labelWidth, 0.25, 1];
@@ -33,7 +34,7 @@ export function ObjectLabel({ name, action, width, height, color }: ObjectLabelP
         outlineWidth={SPATIAL.OUTLINE_WIDTH}
         outlineColor={SPATIAL.LABEL_BG_COLOR}
       >
-        {name}
+        {isSearching ? `🔍 ${name}` : name}
       </Text>
 
       {action && (

@@ -28,6 +28,17 @@ export interface HitTestResult {
   orientation: THREE.Quaternion;
 }
 
+export function useGroundPlaneFallback(
+  cameraPosition: THREE.Vector3,
+  cameraDirection: THREE.Vector3
+): THREE.Vector3 {
+  const result = new THREE.Vector3();
+  result.copy(cameraPosition);
+  result.add(cameraDirection.multiplyScalar(-Math.abs(cameraPosition.y) / Math.abs(cameraDirection.y)));
+  result.y = CONFIG.SPATIAL.GROUND_PLANE_Y;
+  return result;
+}
+
 export interface SpatialEngineParams {
   x: number;
   y: number;
@@ -72,10 +83,30 @@ export class SpatialEngine {
     const relX = ((x / targetSize) - offsetX) / scale * viewportWidth;
     const relY = -(((y / targetSize) - offsetY) / scale * viewportHeight);
 
+    const defaultZ = cameraPosition.z + depth;
+    
+    if (depth === CONFIG.SPATIAL.DEFAULT_DEPTH) {
+      const cameraDirection = new THREE.Vector3(0, 0, -1);
+      const cameraQuaternion = new THREE.Quaternion();
+      cameraQuaternion.setFromEuler(new THREE.Euler(0, 0, 0));
+      cameraDirection.applyQuaternion(cameraQuaternion);
+      
+      const t = Math.abs(cameraPosition.y - CONFIG.SPATIAL.GROUND_PLANE_Y) / Math.abs(cameraDirection.y || 1);
+      const groundX = cameraPosition.x + cameraDirection.x * t;
+      const groundY = CONFIG.SPATIAL.GROUND_PLANE_Y;
+      const groundZ = cameraPosition.z + cameraDirection.z * t;
+      
+      return result.set(
+        groundX + relX * 0.3,
+        groundY,
+        groundZ + relY * 0.3
+      );
+    }
+
     return result.set(
       cameraPosition.x + relX,
       cameraPosition.y + relY,
-      cameraPosition.z + depth
+      defaultZ
     );
   }
 

@@ -17,18 +17,22 @@ export interface WorldObject {
   lastSeen: number;
   detectionCount: number;
   smoothedPosition: THREE.Vector3;
+  isOccluded?: boolean;
 }
 
 interface WorldMapState {
   objects: WorldObject[];
   dampeningFactor: number;
+  frameCount: number;
 }
 
 type WorldMapAction =
   | { type: 'ADD_OR_UPDATE'; payload: { obj: DetectedObject; position: THREE.Vector3; smoothedPosition: THREE.Vector3; timestamp: number } }
   | { type: 'CLEAR' }
   | { type: 'SET_DAMPENING'; payload: number }
-  | { type: 'LOAD'; payload: WorldObject[] };
+  | { type: 'LOAD'; payload: WorldObject[] }
+  | { type: 'TICK_FRAME' }
+  | { type: 'UPDATE_OCCLUSION'; payload: { visibleIds: Set<string> } };
 
 const DEFAULT_DAMPENING = CONFIG.SPATIAL.DAMPENING_FACTOR;
 const STORAGE_KEY = 'viza_world_map';
@@ -147,6 +151,7 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
           confidence: obj.confidence ?? 1,
           lastSeen: timestamp,
           detectionCount: 1,
+          isOccluded: false,
         };
 
         const newObjects = addNewObject(newObj, state.objects);
@@ -159,13 +164,27 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
     }
 
     case 'CLEAR':
-      return { ...state, objects: [] };
+      return { ...state, objects: [], frameCount: 0 };
 
     case 'SET_DAMPENING':
       return { ...state, dampeningFactor: Math.max(0, Math.min(1, action.payload)) };
 
     case 'LOAD':
       return { ...state, objects: action.payload };
+
+    case 'TICK_FRAME':
+      return { ...state, frameCount: state.frameCount + 1 };
+
+    case 'UPDATE_OCCLUSION': {
+      const visibleIds = action.payload.visibleIds;
+      return {
+        ...state,
+        objects: state.objects.map((obj) => ({
+          ...obj,
+          isOccluded: !visibleIds.has(obj.id),
+        })),
+      };
+    }
 
     default:
       return state;
@@ -216,12 +235,15 @@ export interface UseWorldMapReturn {
   getAllObjects: () => WorldObject[];
   clearWorldMap: () => void;
   setDampeningFactor: (factor: number) => void;
+  tickFrame: () => void;
+  updateOcclusion: (visibleIds: Set<string>) => void;
 }
 
 export function useWorldMap(): UseWorldMapReturn {
   const [state, dispatch] = useReducer(worldMapReducer, {
     objects: [],
     dampeningFactor: DEFAULT_DAMPENING,
+    frameCount: 0,
   });
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -289,6 +311,14 @@ export function useWorldMap(): UseWorldMapReturn {
     dispatch({ type: 'SET_DAMPENING', payload: factor });
   }, []);
 
+  const tickFrame = useCallback(() => {
+    dispatch({ type: 'TICK_FRAME' });
+  }, []);
+
+  const updateOcclusion = useCallback((visibleIds: Set<string>) => {
+    dispatch({ type: 'UPDATE_OCCLUSION', payload: { visibleIds } });
+  }, []);
+
   useEffect(() => {
     if (state.objects.length > 0) {
       scheduleSave(state.objects);
@@ -302,5 +332,7 @@ export function useWorldMap(): UseWorldMapReturn {
     getAllObjects,
     clearWorldMap,
     setDampeningFactor,
+    tickFrame,
+    updateOcclusion,
   };
 }

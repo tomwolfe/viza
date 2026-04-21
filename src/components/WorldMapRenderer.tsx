@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import { DetectedObject3D } from './DetectedObject3D';
@@ -63,6 +63,15 @@ export function WorldMapRenderer({
   const resolvedWorldObjects = useMemo(() => worldObjects ?? [], [worldObjects]);
   const useInstancedRendering = shouldUsePooling(resolvedWorldObjects.length);
 
+  const visibleObjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    detectedObjects.forEach((obj) => {
+      const key = `${obj.name.toLowerCase()}-${Math.floor(obj.bbox_2d[0] / 50)}-${Math.floor(obj.bbox_2d[1] / 50)}`;
+      ids.add(key);
+    });
+    return ids;
+  }, [detectedObjects]);
+
   const pooledBoxData = useMemo(() => {
     if (!useInstancedRendering) return null;
 
@@ -90,6 +99,11 @@ export function WorldMapRenderer({
       category: obj.category,
     }));
   }, [resolvedWorldObjects]);
+
+  const isRelevantObject = useCallback((obj: WorldObject): boolean => {
+    if (!taskActive || !currentStepTarget) return false;
+    return obj.name.toLowerCase().includes(currentStepTarget.toLowerCase());
+  }, [taskActive, currentStepTarget]);
 
   return (
     <XR store={xrStore}>
@@ -123,6 +137,10 @@ export function WorldMapRenderer({
       ) : (
         resolvedWorldObjects.map((obj) => {
           const categoryColor = getCategoryColor(obj.category);
+          const isTarget = !!(taskActive && currentStepTarget && obj.name.toLowerCase().includes(currentStepTarget.toLowerCase()));
+          const isGhost = !!(taskActive && !isTarget);
+          const isSearching = obj.isOccluded ?? false;
+          
           return (
             <DetectedObject3D
               key={`world-${obj.id}`}
@@ -134,9 +152,11 @@ export function WorldMapRenderer({
               }}
               index={0}
               position={obj.smoothedPosition}
-              isTarget={false}
+              isTarget={isTarget}
               useCategoryColor
               categoryColor={categoryColor}
+              isGhost={isGhost}
+              isSearching={isSearching}
             />
           );
         })

@@ -19,9 +19,21 @@ interface DetectedObject3DProps {
   useCategoryColor?: boolean;
   categoryColor?: string;
   position?: THREE.Vector3;
+  isGhost?: boolean;
+  isSearching?: boolean;
 }
 
-export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isTarget, targetName, useCategoryColor, categoryColor, position }: DetectedObject3DProps) {
+export const DetectedObject3D = memo(function DetectedObject3D({ 
+  obj, 
+  index, 
+  isTarget, 
+  targetName, 
+  useCategoryColor, 
+  categoryColor, 
+  position,
+  isGhost = false,
+  isSearching = false,
+}: DetectedObject3DProps) {
   const groupRef = useRef<THREE.Group>(null);
   const { x, y, worldDepth, targetSize, boxWidth, boxHeight } = useObject3DTransform({ obj, index, position });
 
@@ -56,6 +68,7 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
         height={boxHeight}
         color={displayColor}
         opacity={isCurrentTarget ? CONFIG.SPATIAL.HIGHLIGHT_OPACITY : CONFIG.SPATIAL.BOX_OPACITY}
+        isGhost={isGhost}
       />
 
       {isCurrentTarget && <TargetHighlighter height={boxHeight} />}
@@ -66,6 +79,7 @@ export const DetectedObject3D = memo(function DetectedObject3D({ obj, index, isT
         width={boxWidth}
         height={boxHeight}
         color={displayColor}
+        isSearching={isSearching}
       />
     </group>
   );

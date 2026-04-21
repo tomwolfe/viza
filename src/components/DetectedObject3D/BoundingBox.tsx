@@ -9,9 +9,10 @@ interface BoundingBoxProps {
   height: number;
   color: string;
   opacity?: number;
+  isGhost?: boolean;
 }
 
-export const BoundingBox = memo(function BoundingBox({ width, height, color, opacity = CONFIG.SPATIAL.BOX_OPACITY }: BoundingBoxProps) {
+export const BoundingBox = memo(function BoundingBox({ width, height, color, opacity = CONFIG.SPATIAL.BOX_OPACITY, isGhost = false }: BoundingBoxProps) {
   const boxWidth = Math.max(width, CONFIG.SPATIAL.MIN_BOX_SIZE);
   const boxHeight = Math.max(height, CONFIG.SPATIAL.MIN_BOX_SIZE);
   const boxScale: [number, number, number] = [boxWidth, boxHeight, 1];
@@ -22,16 +23,16 @@ export const BoundingBox = memo(function BoundingBox({ width, height, color, opa
       new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity,
+        opacity: isGhost ? CONFIG.SPATIAL.GHOST_OPACITY : opacity,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
-    [color, opacity]
+    [color, opacity, isGhost]
   );
 
   const lineMaterial = useMemo(
-    () => new THREE.LineBasicMaterial({ color, linewidth: 2 }),
-    [color]
+    () => new THREE.LineBasicMaterial({ color, linewidth: 2, transparent: true, opacity: isGhost ? CONFIG.SPATIAL.GHOST_OPACITY : 1 }),
+    [color, isGhost]
   );
 
   const edgesGeometry = useMemo(
@@ -50,10 +51,12 @@ export const BoundingBox = memo(function BoundingBox({ width, height, color, opa
 
   return (
     <group>
-      <mesh scale={boxScale}>
-        <planeGeometry args={[1, 1]} />
-        <primitive object={material} attach="material" />
-      </mesh>
+      {!isGhost && (
+        <mesh scale={boxScale}>
+          <planeGeometry args={[1, 1]} />
+          <primitive object={material} attach="material" />
+        </mesh>
+      )}
 
       <lineSegments scale={boxScale}>
         <primitive object={edgesGeometry} attach="geometry" />
