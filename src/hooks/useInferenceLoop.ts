@@ -45,6 +45,7 @@ export function useInferenceLoop({
       acknowledgedRef.current = false;
 
       let frame: ImageBitmap | null = null;
+      let transferred = false;
       
       try {
         const captureStartTime = performance.now();
@@ -56,8 +57,6 @@ export function useInferenceLoop({
           acknowledgedRef.current = true;
           return;
         }
-
-        let transferred = false;
         
         try {
           const inferenceStartTime = performance.now();

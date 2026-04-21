@@ -24,14 +24,14 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const isInitializedRef = useRef(false);
   const [isModelReady, setIsModelReady] = useState(false);
 
-  const initWorker = useCallback(async () => {
-    if (isInitializedRef.current) return;
+  const initWorker = useCallback(async (): Promise<boolean> => {
+    if (isInitializedRef.current) return true;
 
     const gpuCheck = await checkWebGPU();
     if (!gpuCheck.supported || gpuCheck.memoryGB < 8) {
       setIsDeviceCompatible(false);
       setVizaError('WEBGPU_NOT_SUPPORTED', `WebGPU not supported or insufficient memory (requires ${gpuCheck.recommendedGB}GB+).`);
-      return;
+      return false;
     }
     setIsDeviceCompatible(true);
 
@@ -61,11 +61,13 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     client.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
     workerClientRef.current = client;
     isInitializedRef.current = true;
+    return true;
   }, [setVizaError]);
 
   const initModel = useCallback(async () => {
     if (!isInitializedRef.current) {
-      await initWorker();
+      const success = await initWorker();
+      if (!success) return;
     }
 
     if (!isDeviceCompatible) {
