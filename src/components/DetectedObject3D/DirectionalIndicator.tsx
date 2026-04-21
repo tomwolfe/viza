@@ -13,6 +13,7 @@ interface DirectionalIndicatorsProps {
   viewportRef: React.MutableRefObject<THREE.Vector3>;
   breadcrumbs?: boolean;
   showGhostTrail?: boolean;
+  anchors?: Map<string, { position: THREE.Vector3; orientation?: THREE.Quaternion }>;
 }
 
 interface IndicatorPosition {
@@ -35,6 +36,16 @@ const MAX_BREADCRUMBS = 10;
 const BREADCRUMB_INTERVAL_MS = 2000;
 const GHOST_OPACITY = 0.3;
 
+function resolvePosition(
+  obj: WorldObject,
+  anchors?: Map<string, { position: THREE.Vector3; orientation?: THREE.Quaternion }>
+): THREE.Vector3 {
+  if (obj.anchorId && anchors?.has(obj.anchorId)) {
+    return anchors.get(obj.anchorId)!.position.clone();
+  }
+  return obj.smoothedPosition.clone();
+}
+
 export function DirectionalIndicators({
   targets,
   currentTarget,
@@ -42,6 +53,7 @@ export function DirectionalIndicators({
   viewportRef,
   breadcrumbs = true,
   showGhostTrail = true,
+  anchors,
 }: DirectionalIndicatorsProps) {
   const { camera, size } = useThree();
   const tempVector = useMemo(() => new THREE.Vector3(), []);
@@ -60,7 +72,8 @@ export function DirectionalIndicators({
         continue;
       }
 
-      tempVector.copy(obj.smoothedPosition);
+      const effectivePos = resolvePosition(obj, anchors);
+      tempVector.copy(effectivePos);
       tempScreenPos.copy(tempVector).project(cam);
 
       const isOnScreen =

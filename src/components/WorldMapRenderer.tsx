@@ -22,6 +22,17 @@ interface WorldMapRendererProps {
   videoElement?: HTMLVideoElement | null;
   cameraRef?: React.MutableRefObject<THREE.Camera | null>;
   viewportRef?: React.MutableRefObject<THREE.Vector3>;
+  anchors?: Map<string, { position: THREE.Vector3; orientation?: THREE.Quaternion }>;
+}
+
+function resolveObjectPosition(
+  obj: WorldObject,
+  anchors?: Map<string, { position: THREE.Vector3; orientation?: THREE.Quaternion }>
+): THREE.Vector3 {
+  if (obj.anchorId && anchors?.has(obj.anchorId)) {
+    return anchors.get(obj.anchorId)!.position.clone();
+  }
+  return obj.smoothedPosition.clone();
 }
 
 export function WorldMapRenderer({
@@ -32,6 +43,7 @@ export function WorldMapRenderer({
   videoElement,
   cameraRef,
   viewportRef,
+  anchors,
 }: WorldMapRendererProps) {
   const [isVideoReady, setIsVideoReady] = useState(false);
 
@@ -63,6 +75,8 @@ export function WorldMapRenderer({
 
   const resolvedWorldObjects = useMemo(() => worldObjects ?? [], [worldObjects]);
   const useInstancedRendering = shouldUsePooling(resolvedWorldObjects.length);
+  
+  const resolvedAnchors = useMemo(() => anchors, [anchors]);
 
   const visibleObjectIds = useMemo(() => {
     const ids = new Set<string>();
@@ -84,13 +98,14 @@ export function WorldMapRenderer({
       const height = 0.5;
       boxSizes.push({ width, height });
 
+      const effectivePos = resolveObjectPosition(obj, resolvedAnchors);
       const matrix = new THREE.Matrix4();
-      matrix.setPosition(obj.smoothedPosition.x, obj.smoothedPosition.y, obj.smoothedPosition.z);
+      matrix.setPosition(effectivePos.x, effectivePos.y, effectivePos.z);
       positions.push(matrix);
     });
 
     return { boxSizes, positions };
-  }, [resolvedWorldObjects, useInstancedRendering]);
+  }, [resolvedWorldObjects, useInstancedRendering, resolvedAnchors]);
 
   const worldObjectObjects: DetectedObject[] = useMemo(() => {
     return resolvedWorldObjects.map((obj) => ({
@@ -124,6 +139,7 @@ export function WorldMapRenderer({
           currentTarget={currentStepTarget}
           cameraRef={localCameraRef}
           viewportRef={localViewportRef}
+          anchors={resolvedAnchors}
         />
       )}
 
@@ -153,6 +169,7 @@ export function WorldMapRenderer({
           const isTarget = !!(taskActive && currentStepTarget && obj.name.toLowerCase().includes(currentStepTarget.toLowerCase()));
           const isGhost = !!(taskActive && !isTarget);
           const isSearching = obj.isOccluded ?? false;
+          const effectivePos = resolveObjectPosition(obj, resolvedAnchors);
           
           return (
             <DetectedObject3D
@@ -164,7 +181,7 @@ export function WorldMapRenderer({
                 category: obj.category,
               }}
               index={0}
-              position={obj.smoothedPosition}
+              position={effectivePos}
               isTarget={isTarget}
               useCategoryColor
               categoryColor={categoryColor}
@@ -177,4 +194,3 @@ export function WorldMapRenderer({
     </XR>
   );
 }
-

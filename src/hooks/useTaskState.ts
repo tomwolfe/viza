@@ -15,6 +15,8 @@ export interface TaskStep {
   requiredConsecutiveDetections?: number;
   confidenceThreshold?: number;
   verificationTimeout?: number;
+  isCorrection?: boolean;
+  originalStepIndex?: number;
 }
 
 interface DetectionRecord {
@@ -52,6 +54,11 @@ export interface UseTaskStateReturn {
   triggerHint: (worldMapObjects: { name: string; position?: { x: number; y: number; z: number } }[]) => void;
   verifyState: () => Promise<VerificationResult>;
   clearDetectionHistory: () => void;
+  triggerCorrectionFlow: (
+    analysis: string,
+    image: ImageBitmap,
+    generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
+  ) => Promise<boolean>;
 }
 
 export interface VerificationResult {
@@ -103,6 +110,8 @@ const DEFAULT_CONSECUTIVE_DETECTIONS = 3;
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const DETECTION_HISTORY_SIZE = 10;
 const VERIFICATION_COOLDOWN_MS = 2000;
+const CORRECTION_FAILURE_THRESHOLD_MS = 30000;
+const MAX_CORRECTION_ATTEMPTS = 2;
 
 export function useTaskState(): UseTaskStateReturn {
   const [taskState, setTaskState] = useSyncedStorage<TaskState>(STORAGE_KEY, {
@@ -116,6 +125,8 @@ export function useTaskState(): UseTaskStateReturn {
   const detectionHistoryRef = useRef<DetectionRecord[]>([]);
   const consecutiveMatchCountRef = useRef<number>(0);
   const lastVerificationTimeRef = useRef<number>(0);
+  const correctionAttemptCountRef = useRef<number>(0);
+  const lastCorrectionTimeRef = useRef<number>(0);
 
   useEffect(() => {
     return () => {
@@ -466,6 +477,83 @@ export function useTaskState(): UseTaskStateReturn {
     }));
   }, [taskState, setTaskState]);
 
+  const triggerCorrectionFlow = useCallback(async (
+    analysis: string,
+    image: ImageBitmap,
+    generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
+  ): Promise<boolean> => {
+    if (!taskState.isActive || taskState.completed) {
+      return false;
+    }
+
+    if (correctionAttemptCountRef.current >= MAX_CORRECTION_ATTEMPTS) {
+      logger.debug('[TaskState] Max correction attempts reached');
+      return false;
+    }
+
+    const currentStep = taskState.steps[taskState.currentStepIndex];
+    if (!currentStep) {
+      return false;
+    }
+
+    const timeOnStep = performance.now() - taskState.stepStartTime;
+    if (timeOnStep < CORRECTION_FAILURE_THRESHOLD_MS) {
+      return false;
+    }
+
+    if (consecutiveMatchCountRef.current > 0) {
+      return false;
+    }
+
+    correctionAttemptCountRef.current += 1;
+    lastCorrectionTimeRef.current = performance.now();
+
+    abortPlanning();
+    setIsPlanning(true);
+
+    try {
+      const correctionSteps = await generateCorrectionFn(
+        analysis,
+        image,
+        taskState.currentStepIndex,
+        abortControllerRef.current?.signal
+      );
+
+      if (correctionSteps.length > 0) {
+        const insertedSteps = correctionSteps.map((step) => ({
+          ...step,
+          isCorrection: true,
+          originalStepIndex: taskState.currentStepIndex,
+        }));
+
+        const newSteps = [...taskState.steps];
+        newSteps.splice(taskState.currentStepIndex + 1, 0, ...insertedSteps);
+
+        setTaskState(prev => ({
+          ...prev,
+          steps: newSteps,
+        }));
+
+        if (speakRef.current) {
+          speakRef.current(`Let's try something different. ${insertedSteps[0].instruction}`);
+        }
+
+        consecutiveMatchCountRef.current = 0;
+        return true;
+      }
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        logger.debug('[TaskState] Correction generation aborted');
+        return false;
+      }
+      logger.error('[TaskState] Failed to generate correction:', error);
+    } finally {
+      setIsPlanning(false);
+    }
+
+    return false;
+  }, [taskState, setTaskState, abortPlanning]);
+
   return {
     taskState,
     startTask,
@@ -483,5 +571,6 @@ export function useTaskState(): UseTaskStateReturn {
     triggerHint,
     verifyState,
     clearDetectionHistory,
+    triggerCorrectionFlow,
   };
 }

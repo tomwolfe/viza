@@ -6,6 +6,7 @@ export type WorkerMessageType =
   | 'init'
   | 'chat'
   | 'planning'
+  | 'correction'
   | 'category'
   | 'reload'
   | 'soft_reload'
@@ -17,7 +18,7 @@ export interface PendingRequest<T> {
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   bitmapHandle: ImageBitmap | null;
-  type: 'chat' | 'planning' | 'category';
+  type: 'chat' | 'planning' | 'correction' | 'category';
 }
 
 export interface WorkerClientOptions {
@@ -198,6 +199,22 @@ export class WorkerClient {
         break;
       }
 
+      case 'correction_complete': {
+        const messageId = data.messageId as string;
+        const pending = this.pendingRequests.get(messageId);
+        
+        if (pending) {
+          clearTimeout(pending.timeoutId);
+          this.pendingRequests.delete(messageId);
+          pending.resolve({
+            correctionSteps: data.response,
+            analysis: (data as { analysis?: string }).analysis || '',
+            rawText: (data as { rawText?: string }).rawText,
+          });
+        }
+        break;
+      }
+
       case 'error': {
         const messageId = (data as { messageId?: string }).messageId;
         if (messageId) {
@@ -233,15 +250,15 @@ export class WorkerClient {
     return crypto.randomUUID();
   }
 
-  private createTimeout(type: 'chat' | 'planning' | 'category', messageId: string): ReturnType<typeof setTimeout> {
-    const timeoutMs = type === 'planning' 
+  private createTimeout(type: 'chat' | 'planning' | 'correction' | 'category', messageId: string): ReturnType<typeof setTimeout> {
+    const timeoutMs = type === 'planning' || type === 'correction'
       ? this.options.planningTimeoutMs 
       : this.options.inferenceTimeoutMs;
     
     return setTimeout(() => {
       this.pendingRequests.delete(messageId);
       this.options.onError(
-        `${type === 'planning' ? 'Planning' : type === 'category' ? 'Category' : 'Inference'} timeout after ${timeoutMs / 1000}s`,
+        `${type === 'planning' ? 'Planning' : type === 'correction' ? 'Correction' : type === 'category' ? 'Category' : 'Inference'} timeout after ${timeoutMs / 1000}s`,
         'INFERENCE_TIMEOUT',
         messageId
       );
@@ -251,7 +268,7 @@ export class WorkerClient {
   private createPendingRequest(
     type: WorkerMessageType,
     messageId: string,
-    inferenceType: 'chat' | 'planning' | 'category',
+    inferenceType: 'chat' | 'planning' | 'correction' | 'category',
     transfer?: Transferable[]
   ): PendingRequest<unknown> {
     const timeoutId = this.createTimeout(inferenceType, messageId);
@@ -353,6 +370,10 @@ export class WorkerClient {
 
   planning(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
     return this.sendMessage('planning', { image, goal, messageId }, [image], signal);
+  }
+
+  correction(image: ImageBitmap, analysis: string, originalStepIndex: number, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('correction', { image, analysis, originalStepIndex, messageId }, [image], signal);
   }
 
   category(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {

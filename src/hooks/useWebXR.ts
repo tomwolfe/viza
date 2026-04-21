@@ -15,6 +15,8 @@ export interface XRAnchor {
   position: THREE.Vector3;
   orientation: THREE.Quaternion;
   timestamp: number;
+  isNative?: boolean;
+  nativeAnchor?: XRAnchor;
 }
 
 export interface UseWebXROptions {
@@ -182,18 +184,63 @@ export function useWebXR({
     position: THREE.Vector3,
     orientation?: THREE.Quaternion
   ): Promise<XRAnchor | null> => {
+    if (!sessionRef.current || !refSpaceRef.current) {
+      const id = `anchor-fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const anchor: XRAnchor = {
+        id,
+        position: position.clone(),
+        orientation: orientation?.clone() ?? new THREE.Quaternion(),
+        timestamp: performance.now(),
+        isNative: false,
+      };
+
+      anchorsRef.current.set(id, anchor);
+      setAnchors(new Map(anchorsRef.current));
+      return anchor;
+    }
+
+    try {
+      if ('createAnchor' in sessionRef.current && typeof sessionRef.current.createAnchor === 'function') {
+        const anchorPose = new XRRigidTransform(
+          { x: position.x, y: position.y, z: position.z },
+          orientation ? { x: orientation.x, y: orientation.y, z: orientation.z, w: orientation.w } : { x: 0, y: 0, z: 0, w: 1 }
+        );
+        const nativeAnchor = await sessionRef.current.createAnchor(anchorPose, refSpaceRef.current);
+        
+        if (nativeAnchor) {
+          const id = nativeAnchor.id;
+          const anchor: XRAnchor = {
+            id,
+            position: position.clone(),
+            orientation: orientation?.clone() ?? new THREE.Quaternion(),
+            timestamp: performance.now(),
+            isNative: true,
+            nativeAnchor,
+          };
+
+          anchorsRef.current.set(id, anchor);
+          setAnchors(new Map(anchorsRef.current));
+          logger.debug('[WebXR] Created native anchor:', id, position);
+          return anchor;
+        }
+      }
+    } catch (e) {
+      logger.debug('[WebXR] Native anchor creation failed, using fallback:', e);
+    }
+
     const id = `anchor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const anchor: XRAnchor = {
       id,
       position: position.clone(),
       orientation: orientation?.clone() ?? new THREE.Quaternion(),
       timestamp: performance.now(),
+      isNative: false,
     };
 
     anchorsRef.current.set(id, anchor);
     setAnchors(new Map(anchorsRef.current));
 
-    logger.debug('[WebXR] Created anchor:', id, position);
+    logger.debug('[WebXR] Created fallback anchor:', id, position);
     return anchor;
   }, []);
 

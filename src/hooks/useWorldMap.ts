@@ -17,6 +17,7 @@ export interface WorldObject {
   lastSeen: number;
   detectionCount: number;
   smoothedPosition: THREE.Vector3;
+  anchorId?: string;
   isOccluded?: boolean;
   potentiallyMoved?: boolean;
   lastKnownValid?: boolean;
@@ -38,7 +39,7 @@ interface WorldMapState {
 }
 
 type WorldMapAction =
-  | { type: 'ADD_OR_UPDATE'; payload: { obj: DetectedObject; position: THREE.Vector3; smoothedPosition: THREE.Vector3; timestamp: number } }
+  | { type: 'ADD_OR_UPDATE'; payload: { obj: DetectedObject; position: THREE.Vector3; smoothedPosition: THREE.Vector3; timestamp: number; anchorId?: string } }
   | { type: 'CLEAR' }
   | { type: 'SET_DAMPENING'; payload: number }
   | { type: 'LOAD'; payload: WorldObject[] }
@@ -280,7 +281,7 @@ export function findExistingObjectKey(
 function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMapState {
   switch (action.type) {
     case 'ADD_OR_UPDATE': {
-      const { obj, position, smoothedPosition, timestamp } = action.payload;
+      const { obj, position, smoothedPosition, timestamp, anchorId } = action.payload;
       const category = categorizeObject(obj.name, obj.action);
 
       const existing = findExistingObject(
@@ -320,6 +321,7 @@ function worldMapReducer(state: WorldMapState, action: WorldMapAction): WorldMap
           lastSeen: timestamp,
           detectionCount: 1,
           isOccluded: false,
+          anchorId: anchorId,
         };
 
         const newObjects = addNewObject(newObj, state.objects);
@@ -441,11 +443,11 @@ export function saveWorldMapToStorage(objects: WorldObject[]): void {
 
 export interface UseWorldMapReturn {
   worldMap: WorldObject[];
-  addOrUpdateObject: (obj: DetectedObject, position: THREE.Vector3) => void;
+  addOrUpdateObject: (obj: DetectedObject, position: THREE.Vector3, anchorId?: string) => void;
   getObjectAtPosition: (position: THREE.Vector3, threshold: number, name?: string) => WorldObject | null;
   getObjectWithConfidence: (position: THREE.Vector3, threshold: number, name?: string) => WorldObject | null;
   getAllObjects: () => WorldObject[];
-  getAllObjectsWithPosition: () => Map<string, { x: number; y: number; z: number; name: string }>;
+  getAllObjectsWithPosition: () => Map<string, { x: number; y: number; z: number; name: string; anchorId?: string }>;
   clearWorldMap: () => void;
   setDampeningFactor: (factor: number) => void;
   tickFrame: () => void;
@@ -488,7 +490,7 @@ export function useWorldMap(): UseWorldMapReturn {
     };
   }, []);
 
-  const addOrUpdateObject = useCallback((obj: DetectedObject, position: THREE.Vector3) => {
+  const addOrUpdateObject = useCallback((obj: DetectedObject, position: THREE.Vector3, anchorId?: string) => {
     const timestamp = performance.now();
     const key = generateObjectId(obj.name, position);
 
@@ -502,7 +504,7 @@ export function useWorldMap(): UseWorldMapReturn {
 
     dispatch({
       type: 'ADD_OR_UPDATE',
-      payload: { obj, position, smoothedPosition, timestamp }
+      payload: { obj, position, smoothedPosition, timestamp, anchorId }
     });
   }, []);
 
@@ -524,14 +526,15 @@ export function useWorldMap(): UseWorldMapReturn {
     return state.objects;
   }, [state.objects]);
 
-  const getAllObjectsWithPosition = useCallback((): Map<string, { x: number; y: number; z: number; name: string }> => {
-    const map = new Map<string, { x: number; y: number; z: number; name: string }>();
+  const getAllObjectsWithPosition = useCallback((): Map<string, { x: number; y: number; z: number; name: string; anchorId?: string }> => {
+    const map = new Map<string, { x: number; y: number; z: number; name: string; anchorId?: string }>();
     for (const obj of state.objects) {
       map.set(obj.name.toLowerCase(), {
         x: obj.smoothedPosition.x,
         y: obj.smoothedPosition.y,
         z: obj.smoothedPosition.z,
         name: obj.name,
+        anchorId: obj.anchorId,
       });
     }
     return map;
