@@ -126,12 +126,12 @@ async function runTask(
     undefined,
     workerState.systemPrompt,
     config
-  ) as webllm.ChatCompletionMessageParam[];
+  );
 
   try {
     postMessage({ type: 'inference_start' });
 
-    const response = await workerState.engine!.chat.completions.create({
+    const response = await (workerState.engine!.chat.completions as any).create({
       messages,
       temperature: 0.1,
       max_tokens: config.maxTokens,

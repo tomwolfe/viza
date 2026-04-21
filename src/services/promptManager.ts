@@ -43,48 +43,6 @@ export interface MessageWithImage {
   }>;
 }
 
-export function buildChatMessages(image: ImageBitmap, userInput: string, systemPrompt: string): MessageWithImage[] {
-  const prompt = userInput || buildVisionPrompt();
-  return [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    },
-  ];
-}
-
-export function buildPlanningMessages(image: ImageBitmap, goal: string, systemPrompt: string): MessageWithImage[] {
-  const prompt = buildPlanningPrompt(goal);
-  return [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    },
-  ];
-}
-
-export function buildCategoryMessages(image: ImageBitmap, goal: string, systemPrompt: string): MessageWithImage[] {
-  const prompt = buildCategoryPrompt(goal);
-  return [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    },
-  ];
-}
-
 export function buildVisionPrompt(): string {
   return `Analyze this scene and identify objects of interest. Return ONLY a valid JSON object with the structure:
 {
@@ -222,8 +180,10 @@ export function buildMessages(
   goal: string | undefined,
   systemPrompt: string,
   config: TaskRunnerConfig
-): webllm.ChatCompletionMessageParam[] {
-  const messages: webllm.ChatCompletionMessageParam[] = [];
+) {
+  type MessageContent = string | Array<{ type: string; image_url?: { url: ImageBitmap }; text?: string }>;
+  type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: MessageContent };
+  const messages: ChatMessage[] = [];
   messages.push({ role: 'system', content: systemPrompt });
 
   if (config.responseType === 'planning_complete') {

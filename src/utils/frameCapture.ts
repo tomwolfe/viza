@@ -69,9 +69,9 @@ function isValidSource(source: CanvasImageSource): boolean {
   }
   const isVideoLike = 'videoWidth' in source && 'videoHeight' in source;
   if (isVideoLike) {
-    return (source as HTMLVideoElement).videoWidth > 0 && (source as HTMLVideoElement).videoHeight > 0;
+    return (source as unknown as HTMLVideoElement).videoWidth > 0 && (source as unknown as HTMLVideoElement).videoHeight > 0;
   }
-  return (source as HTMLCanvasElement | OffscreenCanvas).width > 0 && (source as HTMLCanvasElement | OffscreenCanvas).height > 0;
+  return (source as unknown as HTMLCanvasElement | OffscreenCanvas).width > 0 && (source as unknown as HTMLCanvasElement | OffscreenCanvas).height > 0;
 }
 
 async function downsampleToBitmap(

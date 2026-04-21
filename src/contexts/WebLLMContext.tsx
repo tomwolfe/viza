@@ -16,6 +16,7 @@ export interface WebLLMContextValue {
   isModelReady: boolean;
   isInferring: boolean;
   isDeviceCompatible: boolean;
+  isARActive?: boolean;
   initModel: () => Promise<void>;
   runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
   runPlanningInference: (image: ImageBitmap, goal: string, signal?: AbortSignal) => Promise<TaskStep[]>;

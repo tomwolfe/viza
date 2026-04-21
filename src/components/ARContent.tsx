@@ -10,6 +10,9 @@ import { useAROrchestrator } from '@/hooks/useAROrchestrator';
 import { SpatialProvider } from '@/contexts/SpatialContext';
 import { TaskProvider } from '@/contexts/TaskContext';
 import { WebLLMProvider } from '@/contexts/WebLLMContext';
+import { useWebLLM } from '@/contexts/WebLLMContext';
+import { useSpatial } from '@/contexts/SpatialContext';
+import { useTaskContext } from '@/contexts/TaskContext';
 
 export function ARContent() {
   const [showWarnings, setShowWarnings] = useState(true);
@@ -44,17 +47,7 @@ export function ARContent() {
                 gl={{ preserveDrawingBuffer: true }}
               >
                 {isARActive ? (
-                  <ARScene
-                    isARActive={isARActive}
-                    isModelReady={true}
-                    runInference={undefined as any}
-                    detectedObjects={[]}
-                    worldObjects={[]}
-                    onObjectsDetected={undefined as any}
-                    taskActive={false}
-                    currentStepTarget={undefined}
-                    checkTargetFound={undefined as any}
-                    speak={undefined as any}
+                  <ARContentCanvas
                     isXRMode={isXRMode}
                     sceneImageRef={sceneImageRef}
                   />
@@ -64,36 +57,68 @@ export function ARContent() {
               </Canvas>
             </ErrorBoundary>
 
-            <ARControls
-              onStartAR={handleStartAR}
-              onVoiceInput={() => {}}
-              isARActive={isARActive}
-              isModelLoading={false}
-              modelProgress={0}
-              isListening={false}
-              isDeviceIncompatible={false}
-              unifiedErrorCode={null}
-              unifiedError={null}
-              errorCode={null}
-              error={null}
-            />
-
-            <AROverlay
-              transcript=""
-              isPlanning={false}
-              taskState={{ isActive: false, completed: false, currentStepIndex: 0, steps: [] }}
-              currentInstruction=""
-              detectedObjects={[]}
-              isSpeaking={false}
-              isInferring={false}
-              llmError={null}
-              voiceError={null}
-              appError={null}
-              isARActive={isARActive}
-            />
+            <ARControlsWrapper onStartAR={handleStartAR} />
+            <AROverlayWrapper isARActive={isARActive} />
           </TaskProvider>
         </SpatialProvider>
       </WebLLMProvider>
     </main>
+  );
+}
+
+function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; sceneImageRef: React.MutableRefObject<ImageBitmap | null> }) {
+  const { isModelReady } = useWebLLM();
+  const { detectedObjects, worldObjects } = useSpatial();
+
+  return (
+    <ARScene
+      isARActive={true}
+      isModelReady={isModelReady}
+      detectedObjects={detectedObjects || []}
+      worldObjects={worldObjects || []}
+      isXRMode={isXRMode}
+      sceneImageRef={sceneImageRef}
+    />
+  );
+}
+
+function ARControlsWrapper({ onStartAR }: { onStartAR: () => void }) {
+  const { isInferring, isModelReady, isDeviceCompatible } = useWebLLM();
+  const { isARActive } = useAROrchestrator();
+  const modelProgress = 0;
+  const isIncompatible = isDeviceCompatible === false;
+
+  return (
+    <ARControls
+      onStartAR={onStartAR}
+      onVoiceInput={() => {}}
+      isARActive={isARActive}
+      isModelLoading={!isModelReady && isInferring}
+      modelProgress={modelProgress}
+      isListening={false}
+      isDeviceIncompatible={isIncompatible}
+    />
+  );
+}
+
+function AROverlayWrapper({ isARActive }: { isARActive: boolean }) {
+  const { detectedObjects } = useSpatial();
+  const { isInferring, error: llmError } = useWebLLM();
+  const { transcript, isPlanning, taskState, currentInstruction, isSpeaking, voiceError, voiceErrorCode } = useTaskContext();
+
+  return (
+    <AROverlay
+      transcript={transcript}
+      isPlanning={isPlanning}
+      taskState={taskState}
+      currentInstruction={currentInstruction || ''}
+      detectedObjects={detectedObjects}
+      isSpeaking={isSpeaking}
+      isInferring={isInferring}
+      llmError={llmError}
+      voiceError={voiceError}
+      appError={null}
+      isARActive={isARActive}
+    />
   );
 }

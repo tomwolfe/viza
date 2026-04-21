@@ -4,10 +4,11 @@ import { createContext, useContext, useRef, useCallback, useState } from 'react'
 import * as THREE from 'three';
 import type { DetectedObject } from '@/schemas/vision';
 import type { WorldObject } from '@/hooks/useWorldMap';
-import { useWorldMap } from './useWorldMap';
+import { useWorldMap } from '@/hooks/useWorldMap';
 
 export interface SpatialContextValue {
   worldMap: WorldObject[];
+  worldObjects: WorldObject[];
   detectedObjects: DetectedObject[];
   addOrUpdateObject: (obj: DetectedObject, position: THREE.Vector3) => void;
   clearWorldMap: () => void;
@@ -35,6 +36,7 @@ export function SpatialProvider({ children }: { children: React.ReactNode }) {
     <SpatialContext.Provider
       value={{
         worldMap,
+        worldObjects: worldMap,
         detectedObjects,
         addOrUpdateObject,
         clearWorldMap,

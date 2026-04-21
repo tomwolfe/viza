@@ -19,13 +19,13 @@ export function ObjectLabel({ name, action, width, height, color }: ObjectLabelP
 
   return (
     <group>
-      <mesh position={[0, -height / 2 - SPATIAL.LABEL_OFFSET, 0.01]} scale={labelScale}>
+      <mesh position={[0, -height / 2 - SPATIAL.LABEL_OFFSET, SPATIAL.LABEL_ZDEPTH]} scale={labelScale}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial color={SPATIAL.LABEL_BG_COLOR} transparent opacity={SPATIAL.LABEL_BG_OPACITY} />
       </mesh>
 
       <Text
-        position={[0, -height / 2 - SPATIAL.LABEL_OFFSET, 0.02]}
+        position={[0, -height / 2 - SPATIAL.LABEL_OFFSET, SPATIAL.LABEL_TEXT_ZDEPTH]}
         fontSize={SPATIAL.FONT_SIZE}
         color={color}
         anchorX="center"
@@ -38,7 +38,7 @@ export function ObjectLabel({ name, action, width, height, color }: ObjectLabelP
 
       {action && (
         <Text
-          position={[0, -height / 2 - SPATIAL.ACTION_OFFSET, 0.02]}
+          position={[0, -height / 2 - SPATIAL.ACTION_OFFSET, SPATIAL.LABEL_TEXT_ZDEPTH]}
           fontSize={SPATIAL.ACTION_FONT_SIZE}
           color="#ffffff"
           anchorX="center"
