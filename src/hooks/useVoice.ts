@@ -69,38 +69,38 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     /point.*to.*(\w+)/i,
   ], []);
 
-  useEffect(() => {
+ useEffect(() => {
     onCommandRef.current = onCommand;
   }, [onCommand]);
 
-  const handleResult = useCallback((event: SpeechRecognitionEvent) => {
-    let finalTranscript = '';
-    let interimTranscript = '';
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i];
-      if (result.isFinal) {
-        finalTranscript += result[0].transcript;
-      } else {
-        interimTranscript += result[0].transcript;
-      }
-    }
-
-    const transcriptText = (finalTranscript || interimTranscript).trim();
-    setTranscript(transcriptText);
-
-    if (!finalTranscript) return;
-
-    if (spatialQueryHandlerRef.current && transcriptText) {
-      spatialQueryHandlerRef.current(transcriptText);
-      setLastQueryType('spatial_query');
+  const speak = useCallback((text: string): void => {
+    if (!window.speechSynthesis) {
+      logger.warn('[Voice] Speech synthesis not supported.');
       return;
     }
 
-    setLastQueryType('command');
-    if (onCommandRef.current) {
-      onCommandRef.current(transcriptText);
-    }
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+
+    utterance.onerror = () => {
+      logger.error('[Voice] Speech synthesis error');
+      setIsSpeaking(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
   }, []);
 
   const handleSpatialQuery = useCallback((query: string) => {
@@ -157,8 +157,8 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
     if (obj.position) {
       const dirX = obj.position.x > 0.5 ? 'to your right' : 
-                obj.position.x < -0.5 ? 'to your left' : 
-                'straight ahead';
+                  obj.position.x < -0.5 ? 'to your left' : 
+                  'straight ahead';
       const dirY = obj.position.y > 0.5 ? 'above you' : 
                    obj.position.y < -0.5 ? 'below you' : '';
       const dirZ = obj.position.z > 0 ? 'behind you' : 'in front';
@@ -172,6 +172,36 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       handler.highlightObject(targetName);
     }
   }, [SPATIAL_QUERY_PATTERNS, speak]);
+
+  const handleResult = useCallback((event: SpeechRecognitionEvent) => {
+    let finalTranscript = '';
+    let interimTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const result = event.results[i];
+      if (result.isFinal) {
+        finalTranscript += result[0].transcript;
+      } else {
+        interimTranscript += result[0].transcript;
+      }
+    }
+
+    const transcriptText = (finalTranscript || interimTranscript).trim();
+    setTranscript(transcriptText);
+
+    if (!finalTranscript) return;
+
+    if (spatialQueryHandlerRef.current && transcriptText) {
+      handleSpatialQuery(transcriptText);
+      setLastQueryType('spatial_query');
+      return;
+    }
+
+    setLastQueryType('command');
+    if (onCommandRef.current) {
+      onCommandRef.current(transcriptText);
+    }
+  }, [handleSpatialQuery]);
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
     logger.error('[Voice] Speech recognition error:', event.error);
@@ -295,36 +325,6 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     }
     setStatus('idle');
   }, [status]);
-
-  const speak = useCallback((text: string): void => {
-    if (!window.speechSynthesis) {
-      logger.warn('[Voice] Speech synthesis not supported.');
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-    };
-
-    utterance.onerror = () => {
-      logger.error('[Voice] Speech synthesis error');
-      setIsSpeaking(false);
-    };
-
-    window.speechSynthesis.speak(utterance);
-  }, []);
 
   const stopSpeaking = useCallback((): void => {
     if (window.speechSynthesis) {

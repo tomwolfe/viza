@@ -107,6 +107,37 @@ export function useWebXR({
     return 'CAMERA_XR_UNAVAILABLE';
   };
 
+  const onSelect = useCallback(() => {
+  }, []);
+
+  const onXRFrame = useCallback(async (time: number, frame: XRFrame) => {
+    if (!sessionRef.current || !hitTestSourceRef.current || !refSpaceRef.current) return;
+
+    const pose = frame.getViewerPose(refSpaceRef.current);
+    if (!pose) return;
+
+    const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
+    if (hitTestResults.length === 0) {
+      if (isMountedRef.current) {
+        setHitTestResult(null);
+      }
+      return;
+    }
+
+    const hit = hitTestResults[0];
+    const hitPose = hit.getPose(refSpaceRef.current);
+    
+    if (hitPose && isMountedRef.current) {
+      const pos = hitPose.transform.position;
+      const orient = hitPose.transform.orientation;
+      
+      setHitTestResult({
+        position: new THREE.Vector3(pos.x, pos.y, pos.z),
+        orientation: new THREE.Quaternion(orient.x, orient.y, orient.z, orient.w),
+      });
+    }
+  }, []);
+
   const startSession = useCallback(async (): Promise<boolean> => {
     if (!navigator.xr || cancelledRef.current) return false;
 
@@ -176,9 +207,6 @@ export function useWebXR({
       return false;
     }
   }, [sessionMode, requiredFeatures, optionalFeatures, enableAnchors, onSelect, onXRFrame]);
-
-  const onSelect = useCallback(() => {
-  }, []);
 
   const createAnchor = useCallback(async (
     position: THREE.Vector3,
@@ -266,34 +294,6 @@ export function useWebXR({
     anchorsRef.current.delete(id);
     setAnchors(new Map(anchorsRef.current));
     logger.debug('[WebXR] Removed anchor:', id);
-  }, []);
-
-  const onXRFrame = useCallback(async (time: number, frame: XRFrame) => {
-    if (!sessionRef.current || !hitTestSourceRef.current || !refSpaceRef.current) return;
-
-    const pose = frame.getViewerPose(refSpaceRef.current);
-    if (!pose) return;
-
-    const hitTestResults = frame.getHitTestResults(hitTestSourceRef.current);
-    if (hitTestResults.length === 0) {
-      if (isMountedRef.current) {
-        setHitTestResult(null);
-      }
-      return;
-    }
-
-    const hit = hitTestResults[0];
-    const hitPose = hit.getPose(refSpaceRef.current);
-    
-    if (hitPose && isMountedRef.current) {
-      const pos = hitPose.transform.position;
-      const orient = hitPose.transform.orientation;
-      
-      setHitTestResult({
-        position: new THREE.Vector3(pos.x, pos.y, pos.z),
-        orientation: new THREE.Quaternion(orient.x, orient.y, orient.z, orient.w),
-      });
-    }
   }, []);
 
   useEffect(() => {
