@@ -12,9 +12,7 @@ export function safeTransfer<T>(
     const result = fn();
     return { transferred: true, data: result };
   } catch (error) {
-    try {
-      bitmap.close();
-    } catch {}
+    bitmap.close();
     throw error;
   }
 }
@@ -28,29 +26,23 @@ export async function safeTransferAsync<T>(
     const result = await fn();
     return { transferred: true, data: result };
   } catch (error) {
-    try {
-      bitmap.close();
-    } catch {}
+    bitmap.close();
     throw error;
   }
 }
 
 export function ensureBitmapClosed(bitmap: ImageBitmap | null | undefined): void {
   if (bitmap && bitmap.width > 0 && bitmap.height > 0) {
-    try {
-      bitmap.close();
-    } catch {}
+    bitmap.close();
   }
 }
 
 export function tryCloseBitmap(bitmap: ImageBitmap | null): boolean {
   if (!bitmap) return false;
-  try {
-    if (bitmap.width > 0 && bitmap.height > 0) {
-      bitmap.close();
-      return true;
-    }
-  } catch {}
+  if (bitmap.width > 0 && bitmap.height > 0) {
+    bitmap.close();
+    return true;
+  }
   return false;
 }
 

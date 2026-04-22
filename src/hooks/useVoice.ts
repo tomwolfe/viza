@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { logger } from '@/config';
 import type { VizaErrorCode } from '@/types/worker';
 import type { 
@@ -58,7 +58,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
   const spatialQueryHandlerRef = useRef<SpatialQueryHandler | null>(null);
   const [lastQueryType, setLastQueryType] = useState<'command' | 'spatial_query' | 'none'>('none');
 
-  const SPATIAL_QUERY_PATTERNS = [
+  const SPATIAL_QUERY_PATTERNS = useMemo(() => [
     /where.*(is|was|are|were)\s+(the\s+)?(\w+)/i,
     /where.*did.*see\s+(the\s+)?(\w+)/i,
     /where.*(\w+)\s+located/i,
@@ -67,7 +67,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     /direction.*(\w+)/i,
     /where.*should.*look/i,
     /point.*to.*(\w+)/i,
-  ];
+  ], []);
 
   useEffect(() => {
     onCommandRef.current = onCommand;
@@ -92,13 +92,9 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     if (!finalTranscript) return;
 
     if (spatialQueryHandlerRef.current && transcriptText) {
-      const isSpatialQuery = SPATIAL_QUERY_PATTERNS.some(pattern => pattern.test(transcriptText));
-      
-      if (isSpatialQuery) {
-        setLastQueryType('spatial_query');
-        handleSpatialQuery(transcriptText);
-        return;
-      }
+      spatialQueryHandlerRef.current(transcriptText);
+      setLastQueryType('spatial_query');
+      return;
     }
 
     setLastQueryType('command');
@@ -175,7 +171,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       speak(`I saw the ${obj.name} earlier, but I don't have its exact position. Try looking around.`);
       handler.highlightObject(targetName);
     }
-  }, []);
+  }, [SPATIAL_QUERY_PATTERNS, speak]);
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
     logger.error('[Voice] Speech recognition error:', event.error);

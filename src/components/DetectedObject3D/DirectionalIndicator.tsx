@@ -102,7 +102,7 @@ export function DirectionalIndicators({
   const breadcrumbLines = useMemo(() => {
     if (!breadcrumbs) return [];
     return computeBreadcrumbLines(breadcrumbsRef);
-  }, [breadcrumbs, indicators]);
+  }, [breadcrumbs]);
 
   const ghostTargets = useMemo(() => {
     if (!showGhostTrail || !cameraRef.current) return [];

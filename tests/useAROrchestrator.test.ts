@@ -92,8 +92,8 @@ vi.mock('../src/utils/workerClient', () => ({
 }));
 
 vi.mock('../src/hooks/useARSessionManager', () => {
-  let startARMock = vi.fn().mockResolvedValue(undefined);
-  let stopARMock = vi.fn().mockResolvedValue(undefined);
+  const startARMock = vi.fn().mockResolvedValue(undefined);
+  const stopARMock = vi.fn().mockResolvedValue(undefined);
 
   return {
     useARSessionManager: vi.fn(() => ({

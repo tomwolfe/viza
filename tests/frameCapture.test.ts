@@ -41,7 +41,7 @@ describe('Frame Capture Utilities', () => {
   });
 
   it('should return null if source is invalid', async () => {
-    // @ts-ignore
+    // @ts-expect-error - intentionally testing null input handling
     await expect(captureFrame(null)).resolves.toBeNull();
   });
 

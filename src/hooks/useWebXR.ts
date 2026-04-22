@@ -175,7 +175,7 @@ export function useWebXR({
       setErrorMessage((err as Error).message || 'Failed to start XR session');
       return false;
     }
-  }, [sessionMode, requiredFeatures, optionalFeatures]);
+  }, [sessionMode, requiredFeatures, optionalFeatures, enableAnchors, onSelect, onXRFrame]);
 
   const onSelect = useCallback(() => {
   }, []);

@@ -43,11 +43,9 @@ class BitmapPool {
 
   dispose(): void {
     for (const c of this.canvasPool) {
-      try {
-        if (c instanceof OffscreenCanvas) {
-          (c as unknown as { close(): void }).close();
-        }
-      } catch {}
+      if (c instanceof OffscreenCanvas) {
+        (c as unknown as { close(): void }).close();
+      }
     }
     this.canvasPool = [];
     this.canvas = null;

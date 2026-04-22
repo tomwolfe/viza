@@ -66,8 +66,6 @@ export function useUserMedia({
 
   const startSingleAttempt = useCallback(async (): Promise<boolean> => {
     if (cancelledRef.current) return false;
-
-    try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facingMode },
@@ -107,9 +105,6 @@ export function useUserMedia({
       setError(null);
 
       return true;
-    } catch (err) {
-      throw err;
-    }
   }, [facingMode, width, height]);
 
   const start = useCallback(async (): Promise<boolean> => {

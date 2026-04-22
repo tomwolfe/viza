@@ -240,7 +240,7 @@ export function useTaskState(): UseTaskStateReturn {
     const currentStep = getCurrentStep();
     
     if (!currentStep || !taskState.isActive) {
-      if (image) try { image.close(); } catch {}
+      if (image) image.close();
       return {
         verified: false,
         confidence: 0,
@@ -252,7 +252,7 @@ export function useTaskState(): UseTaskStateReturn {
     }
 
     if (!image || !runVerificationInference) {
-      if (image) try { image.close(); } catch {}
+      if (image) image.close();
       return {
         verified: false,
         confidence: 0,
@@ -400,30 +400,30 @@ export function useTaskState(): UseTaskStateReturn {
     generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
   ): Promise<boolean> => {
     if (!taskState.isActive || taskState.completed) {
-      try { image.close(); } catch {}
-      return false;
-    }
+       image.close();
+       return false;
+     }
 
-    if (correctionAttemptCountRef.current >= MAX_CORRECTION_ATTEMPTS) {
-      try { image.close(); } catch {}
-      logger.debug('[TaskState] Max correction attempts reached');
+   if (correctionAttemptCountRef.current >= MAX_CORRECTION_ATTEMPTS) {
+       image.close();
+       logger.debug('[TaskState] Max correction attempts reached');
       return false;
     }
 
     const currentStep = taskState.steps[taskState.currentStepIndex];
     if (!currentStep) {
-      try { image.close(); } catch {}
+      image.close();
       return false;
     }
 
     const timeOnStep = performance.now() - taskState.stepStartTime;
-    if (timeOnStep < CORRECTION_FAILURE_THRESHOLD_MS) {
-      try { image.close(); } catch {}
-      return false;
-    }
+  if (timeOnStep < CORRECTION_FAILURE_THRESHOLD_MS) {
+       image.close();
+       return false;
+     }
 
     if (verificationEngineRef.current.getStats().consecutiveMatchCount > 0) {
-      try { image.close(); } catch {}
+      image.close();
       return false;
     }
 
