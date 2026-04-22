@@ -124,7 +124,13 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
     result.isMobile = isMobile;
 
-    const device = await adapter.requestDevice();
+    const device = await adapter.requestDevice({
+      requiredLimits: {
+        maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
+        maxUniformBufferBindingSize: adapter.limits.maxUniformBufferBindingSize,
+        maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize,
+      }
+    });
 
     const maxStorageBuffer = device.limits.maxStorageBufferBindingSize;
     const maxUniformBuffer = device.limits.maxUniformBufferBindingSize;
@@ -134,7 +140,7 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
       result.issues.push('Storage buffer binding size below minimum requirement');
     }
 
-    if (maxUniformBuffer < 64 * 1024 * 1024) {
+    if (maxUniformBuffer < 16 * 1024 * 1024) {
       result.issues.push('Uniform buffer size below recommendation');
     }
 
@@ -145,6 +151,8 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     if (result.issues.length === 0) {
       result.supported = true;
     }
+
+    device.destroy();
 
     return result;
   } catch (error) {
