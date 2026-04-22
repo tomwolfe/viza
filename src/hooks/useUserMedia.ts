@@ -34,6 +34,7 @@ export function useUserMedia({
   height = 1080,
   isActive = false,
 }: UseUserMediaOptions = {}): UseUserMediaResult {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [status, setStatus] = useState<'idle' | 'requesting' | 'active' | 'error'>('idle');
@@ -48,13 +49,15 @@ export function useUserMedia({
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    if (videoElement) {
-      videoElement.srcObject = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      document.body.removeChild(videoRef.current);
+      videoRef.current = null;
     }
     setVideoElement(null);
     setStream(null);
     setStatus('idle');
-  }, [videoElement]);
+  }, []);
 
   const resetError = useCallback(() => {
     setError(null);
@@ -79,13 +82,23 @@ export function useUserMedia({
         return false;
       }
 
-      const video = document.createElement('video');
-      video.srcObject = mediaStream;
-      video.autoplay = true;
-      video.playsInline = true;
-      video.muted = true;
+      let video = videoRef.current;
+      if (!video) {
+        video = document.createElement('video');
+        video.className = 'viza-video-elt';
+        video.setAttribute('autoplay', '');
+        video.setAttribute('playsinline', '');
+        video.setAttribute('muted', '');
+        video.style.setProperty('position', 'fixed');
+        video.style.setProperty('left', '-9999px');
+        video.style.setProperty('top', '-9999px');
+        video.style.setProperty('width', '1px');
+        video.style.setProperty('height', '1px');
+        document.body.appendChild(video);
+        videoRef.current = video;
+      }
 
-      await video.play();
+      video.srcObject = mediaStream;
 
       streamRef.current = mediaStream;
       setStream(mediaStream);

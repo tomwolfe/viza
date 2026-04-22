@@ -28,9 +28,11 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     if (isInitializedRef.current) return true;
 
     const gpuCheck = await checkWebGPU();
-    if (!gpuCheck.supported || gpuCheck.memoryGB < 8) {
+    if (!gpuCheck.supported) {
       setIsDeviceCompatible(false);
-      setVizaError('WEBGPU_NOT_SUPPORTED', `WebGPU not supported or insufficient memory (requires ${gpuCheck.recommendedGB}GB+).`);
+      if (vizaErrorState.code !== 'WEBGPU_NOT_SUPPORTED') {
+        setVizaError('WEBGPU_NOT_SUPPORTED', `WebGPU not supported: ${gpuCheck.issues.join('; ')}`);
+      }
       return false;
     }
     setIsDeviceCompatible(true);

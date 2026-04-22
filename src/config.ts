@@ -130,23 +130,16 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     const maxUniformBuffer = device.limits.maxUniformBufferBindingSize;
     const maxComputeWorkgroupStorage = device.limits.maxComputeWorkgroupStorageSize;
 
-    result.memoryGB = Math.floor(maxStorageBuffer / (1024 * 1024 * 1024));
-
-    if (isMobile) {
-      if (maxStorageBuffer < 256 * 1024 * 1024) {
-        result.issues.push('Mobile GPU has insufficient storage buffer size (min 256MB required)');
-      }
-      if (maxComputeWorkgroupStorage < 16 * 1024) {
-        result.issues.push('Mobile GPU has insufficient compute shader memory');
-      }
-    }
-
     if (maxStorageBuffer < 256 * 1024 * 1024) {
       result.issues.push('Storage buffer binding size below minimum requirement');
     }
 
     if (maxUniformBuffer < 64 * 1024 * 1024) {
       result.issues.push('Uniform buffer size below recommendation');
+    }
+
+    if (maxComputeWorkgroupStorage < 16 * 1024) {
+      result.issues.push('Compute shader memory below minimum requirement');
     }
 
     if (result.issues.length === 0) {

@@ -1,7 +1,6 @@
 const CACHE_NAME = 'viza-v2';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
   '/manifest.json',
 ];
 
@@ -65,7 +64,7 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch(() => {
         if (event.request.destination === 'document') {
-          return caches.match('/index.html');
+          return caches.match('/');
         }
         return new Response('Offline', { status: 503 });
       });
@@ -95,7 +94,7 @@ self.addEventListener('message', (event) => {
       caches.open(CACHE_NAME).then((cache) => {
         return Promise.all([
           cache.match('/'),
-          cache.match('/index.html'),
+          cache.match('/'),
           cache.match('/manifest.json'),
         ]).then((results) => {
           const allReady = results.every((response) => response !== undefined);
