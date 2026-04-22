@@ -6,7 +6,7 @@ import { Html, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { WorldObject } from '@/hooks/useWorldMap';
 import { CONFIG } from '@/config';
-import { projectPositionToScreen, calculateIndicatorScreenPosition, updateBreadcrumbs, computeBreadcrumbLines } from '@/utils/indicatorUtils';
+import { projectPositionToScreen, calculateIndicatorScreenPosition, updateBreadcrumbs, computeBreadcrumbLines, calculateOffScreenIndicator } from '@/utils/indicatorUtils';
 
 const INDICATOR_CONFIG = CONFIG.DIRECTIONAL_INDICATOR;
 
@@ -223,72 +223,3 @@ export function getOffScreenIndicator(
   );
 }
 
-function calculateOffScreenIndicator(
-  targetPos: THREE.Vector3,
-  camera: THREE.Camera,
-  screenWidth: number,
-  screenHeight: number,
-  edgeMargin: number,
-  breadcrumbs?: THREE.Vector3[]
-): { x: number; y: number; angle: number; distance: number; pathPoints: { x: number; y: number }[] } | null {
-  const projected = targetPos.clone().project(camera);
-
-  if (projected.z < 0 || projected.z > 1) {
-    return null;
-  }
-
-  const screenX = (projected.x + 1) / 2 * screenWidth;
-  const screenY = (-projected.y + 1) / 2 * screenHeight;
-
-  const isOnScreen =
-    screenX >= 0 && screenX <= screenWidth && screenY >= 0 && screenY <= screenHeight;
-
-  if (isOnScreen) return null;
-
-  const centerX = screenWidth / 2;
-  const centerY = screenHeight / 2;
-
-  const dx = screenX - centerX;
-  const dy = screenY - centerY;
-
-  const edgeX =
-    dx > 0
-      ? Math.min(screenX, screenWidth - edgeMargin)
-      : Math.max(screenX, edgeMargin);
-  const edgeY =
-    dy > 0
-      ? Math.min(screenY, screenHeight - edgeMargin)
-      : Math.max(screenY, edgeMargin);
-
-  const clampedEdgeX = Math.abs(dx) > Math.abs(dy)
-    ? edgeX
-    : dx === 0
-    ? centerX
-    : centerX + (edgeX - centerX) * Math.abs(dy / dx);
-  const clampedEdgeY = Math.abs(dy) > Math.abs(dx)
-    ? edgeY
-    : dy === 0
-    ? centerY
-    : centerY + (edgeY - centerY) * Math.abs(dx / dy);
-
-  const pathPoints: { x: number; y: number }[] = [];
-  if (breadcrumbs && breadcrumbs.length > 1) {
-    for (const breadcrumb of breadcrumbs) {
-      const breadcrumbProjected = breadcrumb.clone().project(camera);
-      if (breadcrumbProjected.z >= 0 && breadcrumbProjected.z <= 1) {
-        pathPoints.push({
-          x: (breadcrumbProjected.x + 1) / 2 * screenWidth,
-          y: (-breadcrumbProjected.y + 1) / 2 * screenHeight,
-        });
-      }
-    }
-  }
-
-  return {
-    x: clampedEdgeX,
-    y: clampedEdgeY,
-    angle: Math.atan2(screenY - centerY, screenX - centerX),
-    distance: targetPos.distanceTo(camera.position),
-    pathPoints,
-  };
-}

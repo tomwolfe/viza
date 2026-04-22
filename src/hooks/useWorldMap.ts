@@ -35,13 +35,13 @@ export interface ObjectMatchScore {
   recencyScore: number;
 }
 
-interface WorldMapState {
+export interface WorldMapState {
   objects: WorldObject[];
   dampeningFactor: number;
   frameCount: number;
 }
 
-type WorldMapAction =
+export type WorldMapAction =
   | { type: 'ADD_OR_UPDATE'; payload: { obj: DetectedObject; position: THREE.Vector3; smoothedPosition: THREE.Vector3; timestamp: number; anchorId?: string } }
   | { type: 'CLEAR' }
   | { type: 'SET_DAMPENING'; payload: number }

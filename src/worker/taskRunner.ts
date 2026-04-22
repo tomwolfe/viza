@@ -30,7 +30,7 @@ export function createTaskRunner(deps: TaskRunnerDeps) {
     worldMapContext?: { name: string; x: number; y: number; z: number }[]
   ): Promise<void> {
     if (!workerState.engine || !workerState.isInitialized) {
-      sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', postMessage);
+      sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, postMessage);
       return;
     }
 
@@ -120,7 +120,7 @@ export function createTaskRunner(deps: TaskRunnerDeps) {
     worldMapContext?: { name: string; x: number; y: number; z: number }[]
   ): Promise<void> {
     if (!workerState.engine || !workerState.isInitialized) {
-      sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', postMessage);
+      sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, postMessage);
       return;
     }
 
@@ -136,8 +136,10 @@ export function createTaskRunner(deps: TaskRunnerDeps) {
         responseType: 'verification_complete',
         normalizeFn: (data: unknown) => data as { isCompleted: boolean; confidence: number },
         defaultValue: { isCompleted: false, confidence: 0 },
-        systemPrompt: '',
-        userPromptTemplate: '',
+        promptBuilder: (input: string) => {
+          const [validationPrompt, targetObject] = input.split('|||');
+          return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.\n\nTarget Object: "${targetObject || ''}"\nValidation Question: "${validationPrompt || ''}"\n\nReturn ONLY a valid JSON object with this structure:\n{\n  "isCompleted": boolean,\n  "confidence": number,\n  "reasoning": "string"\n}`;
+        },
       }
     );
 

@@ -10,6 +10,7 @@ export interface EngineState {
   engine: webllm.MLCEngine | null;
   isInitialized: boolean;
   currentModel: string | null;
+  systemPrompt: string;
 }
 
 export function createEngineHandler(deps: EngineHandlerDeps) {

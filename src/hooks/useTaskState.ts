@@ -5,7 +5,8 @@ import { safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
 import { useSyncedStorage } from './useSyncedStorage';
-import { checkTargetFound, type VerificationResult, type DetectionRecord, VLM_VERIFICATION_CONFIDENCE_THRESHOLD, VLM_FAILED_VERIFICATION_THRESHOLD } from '@/utils/taskVerification';
+import { checkTargetFound as checkTargetFoundUtil, VLM_VERIFICATION_CONFIDENCE_THRESHOLD, VLM_FAILED_VERIFICATION_THRESHOLD, type CheckTargetFoundResult } from '@/utils/taskVerification';
+import type { DetectionRecord, VerificationResult } from '@/utils/taskVerification';
 
 export interface TaskStep {
   id: string;
@@ -18,12 +19,6 @@ export interface TaskStep {
   verificationTimeout?: number;
   isCorrection?: boolean;
   originalStepIndex?: number;
-}
-
-interface DetectionRecord {
-  objectName: string;
-  timestamp: number;
-  wasPresent: boolean;
 }
 
 export interface TaskState {
@@ -62,15 +57,6 @@ export interface UseTaskStateReturn {
   ) => Promise<boolean>;
   getVlmVerificationFailureCount: () => number;
   resetVlmVerificationFailureCount: () => void;
-}
-
-export interface VerificationResult {
-  verified: boolean;
-  confidence: number;
-  mode: 'presence' | 'removal' | 'placement' | 'none';
-  consecutiveMatches: number;
-  missingCount: number;
-  message: string;
 }
 
 const STORAGE_KEY = 'viza_task_state';
@@ -365,7 +351,7 @@ export function useTaskState(): UseTaskStateReturn {
       detectionHistory: detectionHistoryRef.current,
     };
 
-    const result = checkTargetFound(params);
+    const result = checkTargetFoundUtil(params) as CheckTargetFoundResult;
 
     if (result.newConsecutiveMatchCount !== consecutiveMatchCountRef.current) {
       consecutiveMatchCountRef.current = result.newConsecutiveMatchCount;

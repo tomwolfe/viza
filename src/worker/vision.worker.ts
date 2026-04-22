@@ -3,10 +3,11 @@ import { CONFIG } from '@/config';
 import { TASK_CONFIGS } from '@/services/promptManager';
 import { validateImage } from './messageUtils';
 import { createEngineHandler, type EngineState } from './engineHandler';
+import type { WorkerState } from './taskRunner';
 import { createTaskRunner, type TaskRunnerDeps } from './taskRunner';
 import { createDetectionMemory } from './detectionMemory';
 
-const workerState: EngineState = {
+const workerState: WorkerState = {
   engine: null,
   isInitialized: false,
   currentModel: null,
