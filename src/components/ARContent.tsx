@@ -7,9 +7,7 @@ import { ARScene } from '@/components/ARScene';
 import AROverlay from '@/components/AROverlay';
 import ARControls from '@/components/ARControls';
 import { useAROrchestrator } from '@/hooks/useAROrchestrator';
-import { SpatialProvider } from '@/contexts/SpatialContext';
 import { TaskProvider } from '@/contexts/TaskContext';
-import { WebLLMProvider } from '@/contexts/WebLLMContext';
 import { useWebLLM } from '@/contexts/WebLLMContext';
 import { useSpatial } from '@/contexts/SpatialContext';
 import { useTaskContext } from '@/contexts/TaskContext';
@@ -37,31 +35,27 @@ export function ARContent() {
         </div>
       )}
 
-      <WebLLMProvider>
-        <SpatialProvider>
-          <TaskProvider webllmInitModel={dispatchActions.initModel}>
-            <ErrorBoundary>
-              <Canvas
-                camera={{ position: [0, 0, 0], fov: 75 }}
-                style={{ width: '100%', height: '100%' }}
-                gl={{ preserveDrawingBuffer: true }}
-              >
-                {isARActive ? (
-                  <ARContentCanvas
-                    isXRMode={isXRMode}
-                    sceneImageRef={sceneImageRef}
-                  />
-                ) : (
-                  <color attach="background" args={['#1a1a1a']} />
-                )}
-              </Canvas>
-            </ErrorBoundary>
+      <TaskProvider webllmInitModel={dispatchActions.initModel}>
+        <ErrorBoundary>
+          <Canvas
+            camera={{ position: [0, 0, 0], fov: 75 }}
+            style={{ width: '100%', height: '100%' }}
+            gl={{ preserveDrawingBuffer: true }}
+          >
+            {isARActive ? (
+              <ARContentCanvas
+                isXRMode={isXRMode}
+                sceneImageRef={sceneImageRef}
+              />
+            ) : (
+              <color attach="background" args={['#1a1a1a']} />
+            )}
+          </Canvas>
+        </ErrorBoundary>
 
-            <ARControlsWrapper onStartAR={handleStartAR} />
-            <AROverlayWrapper isARActive={isARActive} />
-          </TaskProvider>
-        </SpatialProvider>
-      </WebLLMProvider>
+        <ARControlsWrapper onStartAR={handleStartAR} />
+        <AROverlayWrapper isARActive={isARActive} />
+      </TaskProvider>
     </main>
   );
 }

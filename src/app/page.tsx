@@ -1,15 +1,15 @@
 'use client';
 
-import { WebLLMProvider } from '@/contexts/WebLLMContext';
+import { VizaOrchestratorProvider } from '@/contexts/VizaOrchestratorContext';
 import { VizaErrorProvider } from '@/contexts/VizaErrorContext';
 import { ARContent } from '@/components/ARContent';
 
 export default function Home() {
   return (
     <VizaErrorProvider>
-      <WebLLMProvider>
+      <VizaOrchestratorProvider>
         <ARContent />
-      </WebLLMProvider>
+      </VizaOrchestratorProvider>
     </VizaErrorProvider>
   );
 }

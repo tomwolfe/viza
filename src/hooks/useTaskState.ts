@@ -5,8 +5,7 @@ import { safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
 import { useSyncedStorage } from './useSyncedStorage';
-import { checkTargetFound as checkTargetFoundUtil, VLM_VERIFICATION_CONFIDENCE_THRESHOLD, VLM_FAILED_VERIFICATION_THRESHOLD, type CheckTargetFoundResult } from '@/utils/taskVerification';
-import type { DetectionRecord, VerificationResult } from '@/utils/taskVerification';
+import { VerificationEngine, VLM_FAILED_VERIFICATION_THRESHOLD, type VerificationResult } from '@/utils/taskVerification';
 
 export interface TaskStep {
   id: string;
@@ -107,12 +106,9 @@ export function useTaskState(): UseTaskStateReturn {
   const [isPlanning, setIsPlanning] = useState(false);
   const speakRef = useRef<((text: string) => void) | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const detectionHistoryRef = useRef<DetectionRecord[]>([]);
-  const consecutiveMatchCountRef = useRef<number>(0);
-  const lastVerificationTimeRef = useRef<number>(0);
+  const verificationEngineRef = useRef<VerificationEngine>(new VerificationEngine());
   const correctionAttemptCountRef = useRef<number>(0);
   const lastCorrectionTimeRef = useRef<number>(0);
-  const vlmVerificationFailureCountRef = useRef<number>(0);
 
   useEffect(() => {
     return () => {
@@ -167,10 +163,12 @@ export function useTaskState(): UseTaskStateReturn {
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         logger.debug('[TaskState] Plan generation aborted');
-        return;
+      } else {
+        logger.error('[TaskState] Failed to generate task plan:', error);
+        startTask('Assembly Task', DEFAULT_ASSEMBLY_TASK);
       }
-      logger.error('[TaskState] Failed to generate task plan:', error);
-      startTask('Assembly Task', DEFAULT_ASSEMBLY_TASK);
+      // If it failed before transferring, we should try to close it, 
+      // but generatePlanFn (dispatchInference) takes ownership.
     } finally {
       setIsPlanning(false);
     }
@@ -232,7 +230,7 @@ export function useTaskState(): UseTaskStateReturn {
   const resetTask = useCallback(() => {
     setTaskState(INITIAL_TASK_STATE);
     safeRemove({ key: STORAGE_KEY });
-    clearDetectionHistory();
+    verificationEngineRef.current.reset();
   }, [setTaskState]);
 
   const verifyState = useCallback(async (
@@ -242,126 +240,71 @@ export function useTaskState(): UseTaskStateReturn {
     const currentStep = getCurrentStep();
     
     if (!currentStep || !taskState.isActive) {
+      if (image) try { image.close(); } catch {}
       return {
         verified: false,
         confidence: 0,
         mode: 'none',
-        consecutiveMatches: consecutiveMatchCountRef.current,
+        consecutiveMatches: 0,
         missingCount: 0,
         message: 'No active task step',
       };
     }
 
     if (!image || !runVerificationInference) {
+      if (image) try { image.close(); } catch {}
       return {
         verified: false,
         confidence: 0,
         mode: 'none',
-        consecutiveMatches: consecutiveMatchCountRef.current,
+        consecutiveMatches: 0,
         missingCount: 0,
         message: 'VLM verification requires image and inference function',
       };
     }
 
-    try {
-      const result = await runVerificationInference(
-        image,
-        currentStep.validationPrompt,
-        currentStep.targetObject || ''
-      );
+    const result = await verificationEngineRef.current.verifyVLM(
+      image,
+      {
+        isActive: taskState.isActive,
+        currentStepIndex: taskState.currentStepIndex,
+        steps: taskState.steps,
+      },
+      runVerificationInference
+    );
 
-      if (!result) {
-        return {
-          verified: false,
-          confidence: 0,
-          mode: 'none',
-          consecutiveMatches: consecutiveMatchCountRef.current,
-          missingCount: 0,
-          message: 'VLM verification inference failed',
-        };
-      }
-
-      if (result.isCompleted && result.confidence >= VLM_VERIFICATION_CONFIDENCE_THRESHOLD) {
-        vlmVerificationFailureCountRef.current = 0;
-        consecutiveMatchCountRef.current += 1;
-        
-        const resultMessage: VerificationResult = {
-          verified: true,
-          confidence: result.confidence,
-          mode: currentStep.verificationMode || 'presence',
-          consecutiveMatches: consecutiveMatchCountRef.current,
-          missingCount: 0,
-          message: `VLM Verified: Task completed with ${(result.confidence * 100).toFixed(0)}% confidence`,
-        };
-        
-        nextStep();
-        return resultMessage;
-      } else {
-        vlmVerificationFailureCountRef.current += 1;
-        consecutiveMatchCountRef.current = 0;
-        
-        const resultMessage: VerificationResult = {
-          verified: false,
-          confidence: result.confidence,
-          mode: currentStep.verificationMode || 'presence',
-          consecutiveMatches: consecutiveMatchCountRef.current,
-          missingCount: vlmVerificationFailureCountRef.current,
-          message: `VLM Verification failed: ${result.confidence < VLM_VERIFICATION_CONFIDENCE_THRESHOLD ? 'Low confidence' : 'Task not completed'}. Attempts: ${vlmVerificationFailureCountRef.current}/${VLM_FAILED_VERIFICATION_THRESHOLD}`,
-        };
-
-        if (vlmVerificationFailureCountRef.current >= VLM_FAILED_VERIFICATION_THRESHOLD) {
-          resultMessage.message += ' - Correction flow triggered';
-        }
-        
-        return resultMessage;
-      }
-    } catch (error) {
-      logger.error('[TaskState] VLM verification error:', error);
-      return {
-        verified: false,
-        confidence: 0,
-        mode: 'none',
-        consecutiveMatches: consecutiveMatchCountRef.current,
-        missingCount: 0,
-        message: 'VLM verification error',
-      };
+    if (result.shouldAdvanceStep) {
+      nextStep();
     }
-  }, [taskState.isActive, getCurrentStep, nextStep]);
+
+    return {
+      verified: result.verified,
+      confidence: result.confidence,
+      mode: result.mode,
+      consecutiveMatches: result.consecutiveMatches,
+      missingCount: result.missingCount,
+      message: result.message + (result.shouldTriggerCorrection ? ' - Correction flow triggered' : ''),
+    };
+  }, [taskState, getCurrentStep, nextStep]);
 
   const clearDetectionHistory = useCallback(() => {
-    detectionHistoryRef.current = [];
-    consecutiveMatchCountRef.current = 0;
-    lastVerificationTimeRef.current = 0;
+    verificationEngineRef.current.reset();
   }, []);
 
   const checkTargetFound = useCallback((
     detectedObjects: DetectedObject[],
     worldMapPositions?: Map<string, { x: number; y: number; z: number }>
   ): VerificationResult => {
-    const params = {
+    const result = verificationEngineRef.current.checkHeuristic(
       detectedObjects,
-      worldMapPositions,
-      taskState: {
+      {
         isActive: taskState.isActive,
         currentStepIndex: taskState.currentStepIndex,
         steps: taskState.steps,
       },
-      consecutiveMatchCount: consecutiveMatchCountRef.current,
-      lastVerificationTime: lastVerificationTimeRef.current,
-      detectionHistory: detectionHistoryRef.current,
-    };
+      worldMapPositions
+    );
 
-    const result = checkTargetFoundUtil(params) as CheckTargetFoundResult;
-
-    if (result.newConsecutiveMatchCount !== consecutiveMatchCountRef.current) {
-      consecutiveMatchCountRef.current = result.newConsecutiveMatchCount;
-    }
-    if (result.newLastVerificationTime !== lastVerificationTimeRef.current) {
-      lastVerificationTimeRef.current = result.newLastVerificationTime;
-    }
-    if (result.newDetectionHistory !== detectionHistoryRef.current) {
-      detectionHistoryRef.current = result.newDetectionHistory;
-    }
     if (result.shouldAdvanceStep) {
       nextStep();
     }
@@ -457,25 +400,30 @@ export function useTaskState(): UseTaskStateReturn {
     generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
   ): Promise<boolean> => {
     if (!taskState.isActive || taskState.completed) {
+      try { image.close(); } catch {}
       return false;
     }
 
     if (correctionAttemptCountRef.current >= MAX_CORRECTION_ATTEMPTS) {
+      try { image.close(); } catch {}
       logger.debug('[TaskState] Max correction attempts reached');
       return false;
     }
 
     const currentStep = taskState.steps[taskState.currentStepIndex];
     if (!currentStep) {
+      try { image.close(); } catch {}
       return false;
     }
 
     const timeOnStep = performance.now() - taskState.stepStartTime;
     if (timeOnStep < CORRECTION_FAILURE_THRESHOLD_MS) {
+      try { image.close(); } catch {}
       return false;
     }
 
-    if (consecutiveMatchCountRef.current > 0) {
+    if (verificationEngineRef.current.getStats().consecutiveMatchCount > 0) {
+      try { image.close(); } catch {}
       return false;
     }
 
@@ -512,7 +460,7 @@ export function useTaskState(): UseTaskStateReturn {
           speakRef.current(`Let's try something different. ${insertedSteps[0].instruction}`);
         }
 
-        consecutiveMatchCountRef.current = 0;
+        verificationEngineRef.current.setConsecutiveMatchCount(0);
         return true;
       }
     } catch (error) {
@@ -529,11 +477,11 @@ export function useTaskState(): UseTaskStateReturn {
   }, [taskState, setTaskState, abortPlanning]);
 
   const getVlmVerificationFailureCount = useCallback(() => {
-    return vlmVerificationFailureCountRef.current;
+    return verificationEngineRef.current.getStats().vlmFailureCount;
   }, []);
 
   const resetVlmVerificationFailureCount = useCallback(() => {
-    vlmVerificationFailureCountRef.current = 0;
+    verificationEngineRef.current.resetVlmFailureCount();
   }, []);
 
   return {

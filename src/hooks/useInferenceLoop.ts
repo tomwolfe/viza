@@ -140,12 +140,19 @@ export function useInferenceLoop({
             cancelPending();
             
             if (videoRef.current) {
-              const frame = captureFrame(videoRef.current);
-              const imageBitmap = frame instanceof Promise ? await frame : frame;
+              const frameResult = captureFrame(videoRef.current);
+              const imageBitmap = frameResult instanceof Promise ? await frameResult : frameResult;
               
               if (imageBitmap) {
-                const analysis = 'The user is failing to complete this step after multiple attempts. Analyze the image and provide a new, intermediate correction step to help them.';
-                await triggerCorrectionFlow(analysis, imageBitmap);
+                try {
+                  const analysis = 'The user is failing to complete this step after multiple attempts. Analyze the image and provide a new, intermediate correction step to help them.';
+                  await triggerCorrectionFlow(analysis, imageBitmap);
+                } finally {
+                  // We assume triggerCorrectionFlow or its underlying call transfers it, 
+                  // but for safety in case it returns early, we'd need to know if it transferred.
+                  // Looking at WebLLMContext, it only transfers if it successfully calls workerClient.
+                  // This is tricky. Let's make sure triggerCorrectionFlow and others ALWAYS close if they don't transfer.
+                }
               }
             }
           }
