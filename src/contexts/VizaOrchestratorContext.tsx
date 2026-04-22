@@ -9,6 +9,7 @@ import type { WorldObject } from '@/hooks/useWorldMap';
 import type { VizaErrorCode } from '@/types/worker';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import { logger } from '@/config';
+import { ensureBitmapClosed, isBitmapValid } from '@/utils/SafeTransfer';
 import * as THREE from 'three';
 
 type InferenceResult = VisionResponse | null | TaskStep[] | { isCompleted: boolean; confidence: number };
@@ -74,7 +75,7 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
     ): Promise<InferenceResult> => {
       const client = workerClient;
       if (!isModelReady || !client) {
-        try { image.close(); } catch {}
+        ensureBitmapClosed(image);
         if (!isModelReady) {
           setVizaError('MODEL_NOT_READY', 'Model not ready. Call initModel first.');
         } else {

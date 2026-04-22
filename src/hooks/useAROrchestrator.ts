@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useEffect } from 'react';
-import { useWebLLM } from '@/contexts/WebLLMContext';
+import { useVizaOrchestrator } from '@/contexts/VizaOrchestratorContext';
 import { useARSessionManager } from './useARSessionManager';
 import { useARStateMachine, type ARState } from './useARStateMachine';
 import { useTaskOrchestrator } from './useTaskOrchestrator';
@@ -51,7 +51,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     error: llmError,
     errorCode: llmErrorCode,
     lastCompleted,
-  } = useWebLLM();
+  } = useVizaOrchestrator();
 
   const {
     isARActive,

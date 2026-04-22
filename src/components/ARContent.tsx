@@ -8,8 +8,7 @@ import AROverlay from '@/components/AROverlay';
 import ARControls from '@/components/ARControls';
 import { useAROrchestrator } from '@/hooks/useAROrchestrator';
 import { TaskProvider } from '@/contexts/TaskContext';
-import { useWebLLM } from '@/contexts/WebLLMContext';
-import { useSpatial } from '@/contexts/SpatialContext';
+import { useVizaOrchestrator } from '@/contexts/VizaOrchestratorContext';
 import { useTaskContext } from '@/contexts/TaskContext';
 
 export function ARContent() {
@@ -61,15 +60,15 @@ export function ARContent() {
 }
 
 function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; sceneImageRef: React.MutableRefObject<ImageBitmap | null> }) {
-  const { isModelReady } = useWebLLM();
-  const { detectedObjects, worldObjects } = useSpatial();
+  const { isModelReady, detectedObjects, worldMap, runInference } = useVizaOrchestrator();
 
   return (
     <ARScene
       isARActive={true}
       isModelReady={isModelReady}
+      runInference={runInference}
       detectedObjects={detectedObjects || []}
-      worldObjects={worldObjects || []}
+      worldObjects={worldMap || []}
       isXRMode={isXRMode}
       sceneImageRef={sceneImageRef}
     />
@@ -77,7 +76,7 @@ function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; scene
 }
 
 function ARControlsWrapper({ onStartAR }: { onStartAR: () => void }) {
-  const { isInferring, isModelReady, isDeviceCompatible } = useWebLLM();
+  const { isInferring, isModelReady, isDeviceCompatible } = useVizaOrchestrator();
   const { isARActive } = useAROrchestrator();
   const modelProgress = 0;
   const isIncompatible = isDeviceCompatible === false;
@@ -96,8 +95,7 @@ function ARControlsWrapper({ onStartAR }: { onStartAR: () => void }) {
 }
 
 function AROverlayWrapper({ isARActive }: { isARActive: boolean }) {
-  const { detectedObjects } = useSpatial();
-  const { isInferring, error: llmError } = useWebLLM();
+  const { detectedObjects, isInferring, error: llmError } = useVizaOrchestrator();
   const { transcript, isPlanning, taskState, currentInstruction, isSpeaking, voiceError, voiceErrorCode } = useTaskContext();
 
   return (

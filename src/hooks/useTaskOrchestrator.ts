@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useWebLLM } from '@/contexts/WebLLMContext';
+import { useVizaOrchestrator } from '@/contexts/VizaOrchestratorContext';
 import { useVoice } from '@/hooks/useVoice';
 import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
 import { useVoiceIntent } from '@/hooks/useVoiceIntent';
@@ -35,7 +35,7 @@ export function useTaskOrchestrator(
   const {
     isModelReady,
     runPlanningInference,
-  } = useWebLLM();
+  } = useVizaOrchestrator();
 
   const taskStateResult = useTaskState();
 

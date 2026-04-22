@@ -67,11 +67,11 @@ export class VerificationEngine {
     detectedObjects: DetectedObject[],
     taskState: TaskStateContext,
     worldMapPositions?: Map<string, { x: number; y: number; z: number }>
-  ): VerificationResult & { shouldAdvanceStep: boolean } {
-    const result = {
+): VerificationResult & { shouldAdvanceStep: boolean } {
+    const result: VerificationResult & { shouldAdvanceStep: boolean } = {
       verified: false,
       confidence: 0,
-      mode: 'none' as const,
+      mode: 'none',
       consecutiveMatches: this.consecutiveMatchCount,
       missingCount: 0,
       message: '',
@@ -174,10 +174,10 @@ export class VerificationEngine {
     taskState: TaskStateContext,
     runInference: (image: ImageBitmap, prompt: string, target: string) => Promise<{ isCompleted: boolean; confidence: number } | null>
   ): Promise<VerificationResult & { shouldAdvanceStep: boolean; shouldTriggerCorrection: boolean }> {
-    const result = {
+    const result: VerificationResult & { shouldAdvanceStep: boolean; shouldTriggerCorrection: boolean } = {
       verified: false,
       confidence: 0,
-      mode: 'none' as const,
+      mode: 'none',
       consecutiveMatches: this.consecutiveMatchCount,
       missingCount: this.vlmFailureCount,
       message: '',
@@ -243,10 +243,4 @@ export class VerificationEngine {
       this.detectionHistory.shift();
     }
   }
-}
-
-// Legacy exports for compatibility during transition
-export function checkTargetFound(params: any): any {
-  // This is a placeholder to prevent immediate breakages
-  return {};
 }

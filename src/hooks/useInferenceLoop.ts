@@ -4,6 +4,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import type { DetectedObject } from '@/schemas/vision';
 import { CONFIG, logger } from '@/config';
 import { useInferenceAnalytics } from './useInferenceAnalytics';
+import { ensureBitmapClosed, isBitmapValid } from '@/utils/SafeTransfer';
 
 interface UseInferenceLoopOptions {
   runInference: (
@@ -59,7 +60,6 @@ export function useInferenceLoop({
       acknowledgedRef.current = false;
 
       let frame: ImageBitmap | null = null;
-      let transferred = false;
       
       try {
         const captureStartTime = performance.now();
@@ -75,7 +75,6 @@ export function useInferenceLoop({
         try {
           const inferenceStartTime = performance.now();
           const result = await runInference(frame, prompt);
-          transferred = true;
 
           const inferenceEndTime = performance.now();
           const processingTime = inferenceEndTime - loopStartTime;
@@ -91,11 +90,10 @@ export function useInferenceLoop({
           });
         } catch (error) {
           logger.error('[useInferenceLoop] Inference error:', error);
-          transferred = true;
         }
       } finally {
-        if (frame && !transferred) {
-          frame.close();
+        if (isBitmapValid(frame)) {
+          ensureBitmapClosed(frame);
         }
         isRunningRef.current = false;
         acknowledgedRef.current = true;
@@ -144,14 +142,10 @@ export function useInferenceLoop({
               const imageBitmap = frameResult instanceof Promise ? await frameResult : frameResult;
               
               if (imageBitmap) {
-                try {
-                  const analysis = 'The user is failing to complete this step after multiple attempts. Analyze the image and provide a new, intermediate correction step to help them.';
-                  await triggerCorrectionFlow(analysis, imageBitmap);
-                } finally {
-                  // We assume triggerCorrectionFlow or its underlying call transfers it, 
-                  // but for safety in case it returns early, we'd need to know if it transferred.
-                  // Looking at WebLLMContext, it only transfers if it successfully calls workerClient.
-                  // This is tricky. Let's make sure triggerCorrectionFlow and others ALWAYS close if they don't transfer.
+                const analysis = 'The user is failing to complete this step after multiple attempts. Analyze the image and provide a new, intermediate correction step to help them.';
+                const success = await triggerCorrectionFlow(analysis, imageBitmap);
+                if (!success && isBitmapValid(imageBitmap)) {
+                  ensureBitmapClosed(imageBitmap);
                 }
               }
             }

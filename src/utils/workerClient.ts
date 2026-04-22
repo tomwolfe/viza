@@ -1,6 +1,7 @@
 'use client';
 
 import type { VizaErrorCode, WorkerIncomingMessage } from '@/types/worker';
+import { ensureBitmapClosed, isBitmapValid } from '@/utils/SafeTransfer';
 
 export type WorkerMessageType =
   | 'init'
@@ -307,6 +308,9 @@ export class WorkerClient {
   private rejectAllPending(reason: string): void {
     this.pendingRequests.forEach((pending) => {
       clearTimeout(pending.timeoutId);
+      if (isBitmapValid(pending.bitmapHandle)) {
+        ensureBitmapClosed(pending.bitmapHandle);
+      }
       pending.reject(new Error(reason));
     });
     this.pendingRequests.clear();
@@ -349,6 +353,9 @@ export class WorkerClient {
       };
 
       const abortHandler = () => {
+        if (isBitmapValid(bitmapHandle)) {
+          ensureBitmapClosed(bitmapHandle);
+        }
         cleanup();
         reject(new Error('Request aborted'));
       };
@@ -368,8 +375,8 @@ export class WorkerClient {
           req.bitmapHandle = null;
         }
       } catch (err) {
-        if (bitmapHandle) {
-          try { bitmapHandle.close(); } catch {}
+        if (isBitmapValid(bitmapHandle)) {
+          ensureBitmapClosed(bitmapHandle);
         }
         cleanup();
         reject(err);

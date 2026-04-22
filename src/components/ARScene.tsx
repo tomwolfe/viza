@@ -1,25 +1,13 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import { WorldMapRenderer } from './WorldMapRenderer';
-import { useInferenceLoop } from '@/hooks/useInferenceLoop';
-import { useFrameCapture } from '@/hooks/useFrameCapture';
-import { useUserMedia } from '@/hooks/useUserMedia';
-import { useWebLLM } from '@/contexts/WebLLMContext';
-import { useSpatial } from '@/contexts/SpatialContext';
+import { useSceneInference } from '@/hooks/useSceneInference';
 import { useTaskContext } from '@/contexts/TaskContext';
 import type { DetectedObject } from '@/schemas/vision';
 import type { WorldObject } from '@/hooks/useWorldMap';
-import { CONFIG } from '@/config';
 import * as THREE from 'three';
-
-function actionStrings(objects: DetectedObject[]): string {
-  return objects
-    .filter(obj => obj.action)
-    .map(obj => `${obj.name}: ${obj.action}`)
-    .join('. ');
-}
 
 interface ARSceneProps {
   isARActive: boolean;
@@ -53,9 +41,8 @@ export function ARScene({
   isXRMode = false,
   sceneImageRef,
 }: ARSceneProps) {
-  const lastVoiceCommandRef = useRef<string | null>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
-  const viewportRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 1, 1));
+  const viewportRef = useRef(new THREE.Vector3(1, 1, 1));
 
   const { camera, size } = useThree();
 
@@ -64,55 +51,20 @@ export function ARScene({
     viewportRef.current = new THREE.Vector3(size.width, size.height, 1);
   }, [camera, size]);
 
-  const { videoElement } = useUserMedia({ isActive: isARActive && !isXRMode });
-  const { isInferring, runInference: contextRunInference } = useWebLLM();
-  const { setDetectedObjects: setDetected } = useSpatial();
   const { checkTargetFound: contextCheckTargetFound, speak: contextSpeak } = useTaskContext();
 
-  const runInferenceFn = runInference ?? contextRunInference;
-  const handleObjectsDetectedFn = onObjectsDetected ?? setDetected;
-  const checkTargetFoundFn = checkTargetFound ?? contextCheckTargetFound;
-  const speakFn = speak ?? contextSpeak;
+  const setDetectedObjects = onObjectsDetected || (() => {});
 
-  const handleObjectsDetected = useCallback(
-    (objects: DetectedObject[]) => {
-      handleObjectsDetectedFn(objects);
-      
-      if (checkTargetFoundFn) {
-        checkTargetFoundFn(objects);
-      }
-
-      const actions = actionStrings(objects);
- 
-      if (actions && speakFn) {
-        speakFn(actions);
-      }
-    },
-    [handleObjectsDetectedFn, checkTargetFoundFn, speakFn]
-  );
-
-  const { captureFrame } = useFrameCapture();
-
-const handleCaptureFrame = useCallback(async (video: HTMLVideoElement | null) => {
-    const frame = await captureFrame(video);
-    if (frame && sceneImageRef) {
-      if (sceneImageRef.current) {
-        try {
-          sceneImageRef.current.close();
-        } catch {}
-      }
-      sceneImageRef.current = await createImageBitmap(frame);
-    }
-    return frame;
-  }, [captureFrame, sceneImageRef]);
-
-  const { setVideoSource, run, cancelPending } = useInferenceLoop({
-    runInference: runInferenceFn,
-    captureFrame: handleCaptureFrame,
-    onObjectsDetected: handleObjectsDetected,
-    isInferring,
-    intervalMs: CONFIG.INFERENCE_INTERVAL,
-    isActive: isARActive && isModelReady,
+  const { videoElement, setVideoSource, run, cancelPending } = useSceneInference({
+    isARActive,
+    isModelReady,
+    runInference: runInference!,
+    setDetectedObjects,
+    checkTargetFound: checkTargetFound ?? contextCheckTargetFound,
+    speak: speak ?? contextSpeak,
+    isXRMode,
+    sceneImageRef,
+    isInferring: false,
   });
 
   useEffect(() => {
@@ -120,14 +72,6 @@ const handleCaptureFrame = useCallback(async (video: HTMLVideoElement | null) =>
       setVideoSource(videoElement);
     }
   }, [videoElement, setVideoSource]);
-
-  useEffect(() => {
-    if (lastVoiceCommandRef?.current && isModelReady) {
-      cancelPending();
-      run(lastVoiceCommandRef.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isModelReady, run, cancelPending]);
 
   if (!isARActive) return null;
 
@@ -138,7 +82,6 @@ const handleCaptureFrame = useCallback(async (video: HTMLVideoElement | null) =>
         worldObjects={worldObjects || []}
         taskActive={taskActive ?? false}
         currentStepTarget={currentStepTarget}
-        videoElement={videoElement}
         cameraRef={cameraRef}
         viewportRef={viewportRef}
       />
