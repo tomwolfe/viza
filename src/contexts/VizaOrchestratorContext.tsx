@@ -9,7 +9,7 @@ import type { WorldObject } from '@/hooks/useWorldMap';
 import type { VizaErrorCode } from '@/types/worker';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import { logger } from '@/config';
-import { ensureBitmapClosed, isBitmapValid } from '@/utils/SafeTransfer';
+import { ensureBitmapClosed } from '@/utils/SafeTransfer';
 import * as THREE from 'three';
 
 type InferenceResult = VisionResponse | null | TaskStep[] | { isCompleted: boolean; confidence: number };
@@ -26,13 +26,13 @@ export interface VizaOrchestratorContextValue {
   detectedObjects: DetectedObject[];
   initModel: () => Promise<void>;
   dispose: () => void;
-  runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
-  runPlanningInference: (image: ImageBitmap, goal: string, signal?: AbortSignal) => Promise<TaskStep[]>;
-  runCategoryInference: (image: ImageBitmap, goal: string) => Promise<VisionResponse | null>;
-  runVerificationInference: (image: ImageBitmap, validationPrompt: string, targetObject: string) => Promise<{ isCompleted: boolean; confidence: number } | null>;
-  addOrUpdateObject: (obj: DetectedObject, position: THREE.Vector3) => void;
+  runInference: (_image: ImageBitmap, _prompt: string) => Promise<VisionResponse | null>;
+  runPlanningInference: (_image: ImageBitmap, _goal: string, _signal?: AbortSignal) => Promise<TaskStep[]>;
+  runCategoryInference: (_image: ImageBitmap, _goal: string) => Promise<VisionResponse | null>;
+  runVerificationInference: (_image: ImageBitmap, _validationPrompt: string, _targetObject: string) => Promise<{ isCompleted: boolean; confidence: number } | null>;
+  addOrUpdateObject: (_obj: DetectedObject, _position: THREE.Vector3) => void;
   clearWorldMap: () => void;
-  setDetectedObjects: (objects: DetectedObject[]) => void;
+  setDetectedObjects: (_objects: DetectedObject[]) => void;
   getDetectedObjects: () => DetectedObject[];
 }
 
@@ -149,8 +149,8 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
   );
 
   const runVerificationInference = useCallback(
-    async (image: ImageBitmap, validationPrompt: string, targetObject: string): Promise<{ isCompleted: boolean; confidence: number } | null> => {
-      const result = await dispatchInference(image, validationPrompt, 'verification');
+    async (_image: ImageBitmap, _validationPrompt: string, _targetObject: string): Promise<{ isCompleted: boolean; confidence: number } | null> => {
+      const result = await dispatchInference(_image, _validationPrompt, 'verification');
       return result as { isCompleted: boolean; confidence: number } | null;
     },
     [dispatchInference]

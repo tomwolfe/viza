@@ -235,7 +235,7 @@ export function createOneEuroFilter(
     const rawVelocityZ = (value.z - lastValue.z) / dt;
     
     velocity.set(rawVelocityX, rawVelocityY, rawVelocityZ);
-    const speed = velocity.length();
+    const _speed = velocity.length();
 
     const smoothedDt = Math.min(dt, 0.1);
     velocity.lerp(

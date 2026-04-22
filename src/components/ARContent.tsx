@@ -96,7 +96,7 @@ function ARControlsWrapper({ onStartAR }: { onStartAR: () => void }) {
 
 function AROverlayWrapper({ isARActive }: { isARActive: boolean }) {
   const { detectedObjects, isInferring, error: llmError } = useVizaOrchestrator();
-  const { transcript, isPlanning, taskState, currentInstruction, isSpeaking, voiceError, voiceErrorCode } = useTaskContext();
+  const { transcript, isPlanning, taskState, currentInstruction, isSpeaking, voiceError } = useTaskContext();
 
   return (
     <AROverlay

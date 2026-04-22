@@ -5,7 +5,7 @@ import { DEFAULT_SYSTEM_PROMPT } from '@/services/promptManager';
 import { logger, CONFIG, checkWebGPU } from '@/config';
 import { WorkerClient, createWorkerClient } from '@/utils/workerClient';
 import { useVizaError } from '@/contexts/VizaErrorContext';
-import type { VizaErrorCode } from '@/types/worker';
+
 
 interface UseWebLLMWorkerOptions {
   modelId?: string;

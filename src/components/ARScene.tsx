@@ -13,16 +13,16 @@ interface ARSceneProps {
   isARActive: boolean;
   isModelReady: boolean;
   runInference?: (
-    image: ImageBitmap,
-    prompt: string
+    _image: ImageBitmap,
+    _prompt: string
   ) => Promise<{ objects: DetectedObject[]; rawText?: string } | null>;
   detectedObjects?: DetectedObject[];
   worldObjects?: WorldObject[];
-  onObjectsDetected?: (objects: DetectedObject[]) => void;
+  onObjectsDetected?: (_objects: DetectedObject[]) => void;
   taskActive?: boolean;
   currentStepTarget?: string;
-  checkTargetFound?: (objects: DetectedObject[]) => void;
-  speak?: (text: string) => void;
+  checkTargetFound?: (_objects: DetectedObject[]) => void;
+  speak?: (_text: string) => void;
   isXRMode?: boolean;
   sceneImageRef?: React.MutableRefObject<ImageBitmap | null>;
 }
@@ -55,7 +55,7 @@ export function ARScene({
 
   const setDetectedObjects = onObjectsDetected || (() => {});
 
-  const { videoElement, setVideoSource, run, cancelPending } = useSceneInference({
+  const { videoElement, setVideoSource } = useSceneInference({
     isARActive,
     isModelReady,
     runInference: runInference!,

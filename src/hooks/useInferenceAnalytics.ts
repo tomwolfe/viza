@@ -24,7 +24,7 @@ interface UseInferenceAnalyticsOptions {
   maxBufferSize?: number;
   adjustmentThreshold?: number;
   adjustmentStepMs?: number;
-  minInterval?: number;
+  _minInterval?: number;
   maxInterval?: number;
 }
 
@@ -33,7 +33,7 @@ export function useInferenceAnalytics({
   maxBufferSize = CONFIG.INFERENCE.MAX_BUFFER_SIZE,
   adjustmentThreshold = CONFIG.INFERENCE.ADJUSTMENT_THRESHOLD,
   adjustmentStepMs = CONFIG.INFERENCE.ADJUSTMENT_STEP_MS,
-  minInterval = CONFIG.INFERENCE.MIN_INTERVAL,
+  _minInterval = CONFIG.INFERENCE.MIN_INTERVAL,
   maxInterval = CONFIG.INFERENCE.MAX_INTERVAL,
 }: UseInferenceAnalyticsOptions) {
   const [adjustedInterval, setAdjustedInterval] = useState(intervalMs);

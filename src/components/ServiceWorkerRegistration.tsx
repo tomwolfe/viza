@@ -2,10 +2,7 @@
 
 import { useEffect, useCallback, useState } from 'react';
 
-interface OfflineReadyState {
-  isReady: boolean;
-  cacheName: string | null;
-}
+
 
 export function ServiceWorkerRegistration() {
   const checkOfflineReady = useCallback(() => {

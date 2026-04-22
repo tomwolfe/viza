@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
+import { safeRemove } from '@/utils/safeStorage';
 import { logger } from '@/config';
 import type { DetectedObject } from '@/schemas/vision';
 import { useSyncedStorage } from './useSyncedStorage';
-import { VerificationEngine, VLM_FAILED_VERIFICATION_THRESHOLD, type VerificationResult } from '@/utils/taskVerification';
+import { VerificationEngine, type VerificationResult } from '@/utils/taskVerification';
 
 export interface TaskStep {
   id: string;

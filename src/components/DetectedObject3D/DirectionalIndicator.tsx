@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { WorldObject } from '@/hooks/useWorldMap';
@@ -48,13 +48,11 @@ export function DirectionalIndicators({
   targets,
   currentTarget,
   cameraRef,
-  viewportRef,
   breadcrumbs = true,
   showGhostTrail = true,
   anchors,
 }: DirectionalIndicatorsProps) {
-  const { camera, size } = useThree();
-  const tempVector = useMemo(() => new THREE.Vector3(), []);
+  const { size } = useThree();
   const breadcrumbsRef = useRef<Map<string, BreadcrumbPoint[]>>(new Map());
 
   const indicators = useMemo<IndicatorPosition[]>(() => {

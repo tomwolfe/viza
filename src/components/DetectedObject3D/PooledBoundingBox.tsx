@@ -16,7 +16,6 @@ interface PooledBoundingBoxesProps {
 export const PooledBoundingBoxes = memo(function PooledBoundingBoxes({
   objects,
   boxSizes,
-  positions,
   color,
   opacity = CONFIG.SPATIAL.BOX_OPACITY,
 }: PooledBoundingBoxesProps) {

@@ -6,7 +6,7 @@ export interface TransferableResult<T> {
 export function safeTransfer<T>(
   bitmap: ImageBitmap,
   fn: () => T,
-  transferList: Transferable[]
+  _transferList: Transferable[]
 ): TransferableResult<T> {
   try {
     const result = fn();
@@ -20,7 +20,7 @@ export function safeTransfer<T>(
 export async function safeTransferAsync<T>(
   bitmap: ImageBitmap,
   fn: () => Promise<T>,
-  transferList: Transferable[]
+  _transferList: Transferable[]
 ): Promise<TransferableResult<T>> {
   try {
     const result = await fn();

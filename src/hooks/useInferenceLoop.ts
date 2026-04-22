@@ -48,7 +48,6 @@ export function useInferenceLoop({
   const {
     adjustedInterval,
     recordMetrics,
-    recordSkip,
   } = useInferenceAnalytics({ intervalMs });
 
   const processFrame = useCallback(

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useRef, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useRef, type ReactNode } from 'react';
 import { useTaskOrchestrator, type UseTaskOrchestratorResult } from '@/hooks/useTaskOrchestrator';
 
 export interface TaskState {
@@ -18,13 +18,13 @@ export interface TaskState {
 export interface TaskContextValue {
   taskState: TaskState;
   isPlanning: boolean;
-  checkTargetFound: (detectedObjects: Array<{name: string}>) => void;
-  triggerPlanningMode: (userGoal: string) => Promise<void>;
-  handleTranscriptReady: (transcript: string) => void;
+  checkTargetFound: (_detectedObjects: Array<{name: string}>) => void;
+  triggerPlanningMode: (_userGoal: string) => Promise<void>;
+  handleTranscriptReady: (_transcript: string) => void;
   isListening: boolean;
   isSpeaking: boolean;
   transcript: string;
-  speak: (text: string) => void;
+  speak: (_text: string) => void;
   currentInstruction: string | null;
   startListening: () => void;
   stopListening: () => void;

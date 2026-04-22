@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import type { DetectedObject } from '@/schemas/vision';
 import { categorizeObject, generateObjectId, type ObjectCategory } from '@/utils/objectProcessing';
 import { CONFIG } from '@/config';
 import type { WorldObject, ObjectMatchScore, WorldMapState, WorldMapAction } from '../hooks/useWorldMap';
-import { levenshteinDistance, computeLabelSimilarity } from './stringUtils';
+import { computeLabelSimilarity } from './stringUtils';
 
 export const LABEL_WEIGHT = 0.4;
 export const DISTANCE_WEIGHT = 0.35;
@@ -132,7 +131,7 @@ export function updateExistingObject(
   category: ObjectCategory,
   confidence: number | undefined,
   timestamp: number,
-  detectionCount: number
+  _detectionCount: number
 ): WorldObject {
   const newHistory = [...(existing.positionHistory || []), smoothedPosition.clone()];
   if (newHistory.length > POSITION_HISTORY_SIZE) {

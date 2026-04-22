@@ -28,7 +28,7 @@ export function categorizeObject(name: string, action?: string): ObjectCategory 
   return 'unknown';
 }
 
-export function generateObjectId(name: string, position: THREE.Vector3): string {
+export function generateObjectId(name: string, _position: THREE.Vector3): string {
   const normalized = `${name.toLowerCase().replace(/\s+/g, '-')}`;
   return normalized;
 }

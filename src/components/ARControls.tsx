@@ -3,7 +3,7 @@
 import { Play, Mic, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useId } from 'react';
 import { useVizaError } from '@/contexts/VizaErrorContext';
-import type { VizaErrorCode } from '@/types/worker';
+
 
 interface ARControlsProps {
   onStartAR: () => void;

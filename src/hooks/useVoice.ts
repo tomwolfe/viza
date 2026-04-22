@@ -107,9 +107,9 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     const handler = spatialQueryHandlerRef.current;
     if (!handler) return;
 
-    const queryLower = query.toLowerCase();
+    const _queryLower = query.toLowerCase();
     let targetName = '';
-    let isDirectionQuery = false;
+    let _isDirectionQuery = false;
     let isDistanceQuery = false;
 
     for (const pattern of SPATIAL_QUERY_PATTERNS) {
@@ -117,7 +117,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       if (match) {
         targetName = match[match.length - 1] || '';
         if (query.includes('direction') || query.includes('point')) {
-          isDirectionQuery = true;
+          _isDirectionQuery = true;
         }
         if (query.includes('far')) {
           isDistanceQuery = true;
@@ -143,7 +143,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     }
 
     const obj = matchingObjects[0];
-    const cameraDir = handler.getCameraDirection();
+    const _cameraDir = handler.getCameraDirection();
 
     if (isDistanceQuery && obj.position) {
       const dist = Math.sqrt(

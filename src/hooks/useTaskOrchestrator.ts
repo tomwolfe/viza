@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useVizaOrchestrator } from '@/contexts/VizaOrchestratorContext';
 import { useVoice } from '@/hooks/useVoice';
 import { useTaskState, DEFAULT_ASSEMBLY_TASK, type TaskStep } from '@/hooks/useTaskState';
@@ -28,7 +28,7 @@ export interface UseTaskOrchestratorResult {
 
 export function useTaskOrchestrator(
   sceneImageRef: React.MutableRefObject<ImageBitmap | null>,
-  initModel: () => void
+  _initModel: () => void
 ): UseTaskOrchestratorResult {
   const { isCleaningIntent } = useVoiceIntent();
 
@@ -41,9 +41,7 @@ export function useTaskOrchestrator(
 
   const {
     taskState,
-    startTask,
     generateTaskPlan,
-    completeCurrentStep,
     getCurrentInstruction,
     setSpeak,
     isPlanning,

@@ -13,7 +13,7 @@ interface VizaErrorState {
 
 interface VizaErrorContextValue {
   error: VizaErrorState;
-  setError: (code: VizaErrorCode, originalError?: unknown) => void;
+  setError: (_code: VizaErrorCode, _originalError?: unknown) => void;
   clearError: () => void;
   unifiedError: string | null;
   unifiedErrorCode: VizaErrorCode | null;

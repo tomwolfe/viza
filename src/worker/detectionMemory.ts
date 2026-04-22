@@ -75,7 +75,7 @@ export function getSpatialContext(memory: DetectionMemory): string {
       if (i === j) continue;
       const other = recentObjects[j];
       const dx = obj.position.x - other.position.x;
-      const dy = obj.position.y - other.position.y;
+      const _dy = obj.position.y - other.position.y;
       const dz = obj.position.z - other.position.z;
 
       const direction =

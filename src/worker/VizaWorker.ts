@@ -173,7 +173,7 @@ export class VizaWorker {
     validationPrompt: string,
     targetObject: string,
     messageId: string,
-    worldMapContext?: { name: string; x: number; y: number; z: number }[]
+    _worldMapContext?: { name: string; x: number; y: number; z: number }[]
   ): Promise<void> {
     if (!this.state.engine || !this.state.isInitialized) {
       sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, this.postMessageFn);

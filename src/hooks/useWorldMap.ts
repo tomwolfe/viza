@@ -6,7 +6,7 @@ import type { DetectedObject } from '@/schemas/vision';
 import { safeGet, safeSet, safeRemove, SCHEMA_VERSION } from '@/utils/safeStorage';
 import { CONFIG, logger } from '@/config';
 import { createSpatialFilter } from '@/utils/spatial';
-import { categorizeObject, generateObjectId, type ObjectCategory } from '@/utils/objectProcessing';
+import { generateObjectId, type ObjectCategory } from '@/utils/objectProcessing';
 import { worldMapReducer, findExistingObject, findExistingObjectWithConfidence, findExistingObjectKey as findExistingObjectKeyLogic } from '@/utils/worldMapLogic';
 
 export { findExistingObjectKeyLogic as findExistingObjectKey };

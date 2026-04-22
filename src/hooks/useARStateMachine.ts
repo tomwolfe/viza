@@ -101,7 +101,7 @@ export interface UseARStateMachineReturn {
     startPlanning: () => void;
     stopPlanning: () => void;
     completeStep: () => void;
-    handleError: (error: string, errorCode: string | null) => void;
+    handleError: (_error: string, _errorCode: string | null) => void;
     reset: () => void;
   };
 }

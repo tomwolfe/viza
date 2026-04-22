@@ -367,7 +367,7 @@ export class WorkerClient {
       try {
         this.worker!.postMessage(
           { type, messageId, ...payload },
-          transfer
+          transfer || []
         );
 
         const req = this.pendingRequests.get(messageId);
@@ -405,7 +405,7 @@ export class WorkerClient {
   }
 
   verification(image: ImageBitmap, validationPrompt: string, targetObject: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    const userInput = `${validationPrompt}|||${targetObject}`;
+    const _userInput = `${validationPrompt}|||${targetObject}`;
     return this.sendMessage('verification', { image, validationPrompt, targetObject, messageId }, [image], signal);
   }
 

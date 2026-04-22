@@ -13,7 +13,7 @@ interface UseObject3DTransformOptions {
   position?: THREE.Vector3;
 }
 
-export function useObject3DTransform({ obj, index, position }: UseObject3DTransformOptions) {
+export function useObject3DTransform({ obj, index, position: _position }: UseObject3DTransformOptions) {
   const { camera, viewport } = useThree();
   const [x, y, width, height] = obj.bbox_2d;
 

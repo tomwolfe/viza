@@ -4,7 +4,6 @@ import {
   VisionResponseSchemaRaw,
   PlanningResponseSchema,
   VerificationResponseSchema,
-  type VisionResponse,
   type PlanningResponse,
   type VerificationResponse,
 } from '@/schemas/vision';

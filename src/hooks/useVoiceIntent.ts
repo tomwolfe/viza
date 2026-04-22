@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 
 export type VoiceIntentType =
   | 'cleaning'
@@ -102,7 +102,7 @@ const INTENT_PATTERNS: Record<VoiceIntentType, RegExp[]> = {
 };
 
 function matchIntent(transcript: string): VoiceIntent {
-  const transcriptLower = transcript.toLowerCase();
+  const _transcriptLower = transcript.toLowerCase();
 
   for (const [intentType, patterns] of Object.entries(INTENT_PATTERNS)) {
     if (intentType === 'unknown') continue;

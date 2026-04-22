@@ -18,7 +18,7 @@ interface UseAROrchestratorResult {
     startPlanning: () => void;
     stopPlanning: () => void;
     completeStep: () => void;
-    handleError: (error: string, errorCode: string | null) => void;
+    handleError: (_error: string, _errorCode: string | null) => void;
     reset: () => void;
   };
   isARActive: boolean;
@@ -27,7 +27,7 @@ interface UseAROrchestratorResult {
   isModelReady: boolean;
   isInferring: boolean;
   isDeviceCompatible: boolean;
-  runInference: (image: ImageBitmap, prompt: string) => Promise<VisionResponse | null>;
+  runInference: (_image: ImageBitmap, _prompt: string) => Promise<VisionResponse | null>;
   error: string | null;
   errorCode: VizaErrorCode | null;
   llmError: string | null;
@@ -50,7 +50,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     runInference,
     error: llmError,
     errorCode: llmErrorCode,
-    lastCompleted,
   } = useVizaOrchestrator();
 
   const {
@@ -75,14 +74,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     webllmInitModel();
     await startAR();
   }, [startAR, dispatchActions, webllmInitModel]);
-
-  const handleVoiceInput = useCallback(() => {
-    if (taskOrchestrator.isListening) {
-      taskOrchestrator.stopListening?.();
-    } else {
-      taskOrchestrator.startListening?.();
-    }
-  }, [taskOrchestrator]);
 
   useEffect(() => {
     return () => {
