@@ -114,8 +114,13 @@ export function useInferenceLoop({
     acknowledgedRef.current = true;
   }, []);
 
+  const stateRef = useRef({ isActive, isInferring, adjustedInterval });
   useEffect(() => {
-    if (!isActive || isInferring) {
+    stateRef.current = { isActive, isInferring, adjustedInterval };
+  }, [isActive, isInferring, adjustedInterval]);
+
+  useEffect(() => {
+    if (!isActive) {
       cancelPending();
       return;
     }
@@ -123,8 +128,8 @@ export function useInferenceLoop({
     let isMounted = true;
 
     const loop = async () => {
-      if (!isMounted) return;
-      if (!isRunningRef.current && acknowledgedRef.current) {
+      if (!isMounted || !stateRef.current.isActive) return;
+      if (!isRunningRef.current && !stateRef.current.isInferring && acknowledgedRef.current) {
         if (getStallStatus && triggerHint) {
           const stallStatus = getStallStatus();
           if (stallStatus.shouldSuggestHint) {
@@ -157,17 +162,17 @@ export function useInferenceLoop({
         await processFrame('Identify objects in this scene.');
       }
       if (isMounted) {
-        intervalRef.current = setTimeout(loop, adjustedInterval);
+        intervalRef.current = setTimeout(loop, stateRef.current.adjustedInterval);
       }
     };
 
-    intervalRef.current = setTimeout(loop, intervalMs);
+    loop();
 
     return () => {
       isMounted = false;
       cancelPending();
     };
-  }, [isActive, isInferring, intervalMs, adjustedInterval, processFrame, cancelPending, getStallStatus, triggerHint, worldMapObjects, isTaskActive, getVlmVerificationFailureCount, runVerificationInference, triggerCorrectionFlow, captureFrame]);
+  }, [isActive]);
 
   const run = useCallback(
     async (prompt: string): Promise<void> => {

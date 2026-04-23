@@ -58,21 +58,16 @@ export function WorldMapRenderer({
     const checkReady = () => {
       if (video.readyState >= 2) {
         setIsVideoReady(true);
-        return;
       }
     };
     
-    const handleLoadedMetadata = () => {
-      if (video.readyState >= 2) {
-        setIsVideoReady(true);
-      }
-    };
-    
-    video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+    video.addEventListener('loadeddata', checkReady);
+    video.addEventListener('playing', checkReady);
     checkReady();
     
     return () => {
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('loadeddata', checkReady);
+      video.removeEventListener('playing', checkReady);
     };
   }, [videoElement]);
 
