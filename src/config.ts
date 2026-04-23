@@ -110,43 +110,26 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
   };
 
   if (typeof navigator === 'undefined' || !navigator.gpu) {
-    result.issues.push('WebGPU not available in browser');
+    result.issues.push('WebGPU not supported by this browser.');
     return result;
   }
 
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
-      result.issues.push('No GPU adapter found');
+      result.issues.push('No GPU adapter found.');
       return result;
     }
 
-    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-    result.isMobile = isMobile;
-
-    const device = await adapter.requestDevice();
-
-    const maxStorageBuffer = device.limits.maxStorageBufferBindingSize;
-    const maxUniformBuffer = device.limits.maxUniformBufferBindingSize;
-    const maxComputeWorkgroupStorage = device.limits.maxComputeWorkgroupStorageSize;
-
-    if (maxStorageBuffer < 128 * 1024 * 1024) {
-      logger.warn('Storage buffer binding size is lower than recommended (128MB)');
-    }
-
-    if (maxUniformBuffer < 8 * 1024 * 1024) {
-      logger.warn('Uniform buffer size is lower than recommended (8MB)');
-    }
-
-    // If we successfully created a device, we consider WebGPU supported.
-    // WebLLM will attempt to handle memory constraints internally.
+    // If we have an adapter, we consider it supported.
+    // WebLLM will request specific limits (like maxStorageBufferBindingSize)
+    // internally when it creates its own device.
     result.supported = true;
-
-    device.destroy();
-
+    result.isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    
     return result;
   } catch (error) {
-    result.issues.push(`WebGPU initialization failed: ${(error as Error).message}`);
+    result.issues.push(`WebGPU check failed: ${(error as Error).message}`);
     return result;
   }
 }

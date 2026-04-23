@@ -41,6 +41,15 @@ export class VizaWorker {
       return;
     }
 
+    if (this.state.engine) {
+      try {
+        await this.state.engine.unload();
+        this.state.engine = null;
+      } catch (e) {
+        console.error('Failed to unload previous engine', e);
+      }
+    }
+
     try {
       this.postMessageFn({ type: 'init_progress', progress: 0, status: 'loading' });
 

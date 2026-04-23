@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+// intentionally excludes vizaErrorState from initWorker deps to prevent circular dependency loop
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -25,7 +27,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const isInitializingRef = useRef(false);
   const [isModelReady, setIsModelReady] = useState(false);
 
-  const initWorker = useCallback(async (): Promise<boolean> => {
+   const initWorker = useCallback(async (): Promise<boolean> => {
     if (isInitializedRef.current) return true;
 
     const gpuCheck = await checkWebGPU();
@@ -65,7 +67,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     workerClientRef.current = client;
     isInitializedRef.current = true;
     return true;
-  }, [setVizaError, vizaErrorState]);
+  }, [setVizaError]);
 
   const initModel = useCallback(async () => {
     if (isInitializingRef.current || isModelReady) {
