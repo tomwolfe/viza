@@ -128,34 +128,50 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
 
   const runInference = useCallback(
     async (image: ImageBitmap, prompt: string): Promise<VisionResponse | null> => {
+      if (isInferring) {
+        image.close();
+        return null;
+      }
       const result = await dispatchInference(image, prompt, 'chat');
       return result as VisionResponse | null;
     },
-    [dispatchInference]
+    [dispatchInference, isInferring]
   );
 
   const runPlanningInference = useCallback(
     async (image: ImageBitmap, goal: string, signal?: AbortSignal): Promise<TaskStep[]> => {
+      if (isInferring) {
+        image.close();
+        return [];
+      }
       const result = await dispatchInference(image, goal, 'planning', signal);
       return result as TaskStep[];
     },
-    [dispatchInference]
+    [dispatchInference, isInferring]
   );
 
   const runCategoryInference = useCallback(
     async (image: ImageBitmap, goal: string): Promise<VisionResponse | null> => {
+      if (isInferring) {
+        image.close();
+        return null;
+      }
       const result = await dispatchInference(image, goal, 'category');
       return result as VisionResponse | null;
     },
-    [dispatchInference]
+    [dispatchInference, isInferring]
   );
 
   const runVerificationInference = useCallback(
-    async (_image: ImageBitmap, _validationPrompt: string, _targetObject: string): Promise<{ isCompleted: boolean; confidence: number } | null> => {
-      const result = await dispatchInference(_image, _validationPrompt, 'verification');
+    async (image: ImageBitmap, _validationPrompt: string, _targetObject: string): Promise<{ isCompleted: boolean; confidence: number } | null> => {
+      if (isInferring) {
+        image.close();
+        return { isCompleted: false, confidence: 0 };
+      }
+      const result = await dispatchInference(image, _validationPrompt, 'verification');
       return result as { isCompleted: boolean; confidence: number } | null;
     },
-    [dispatchInference]
+    [dispatchInference, isInferring]
   );
 
   return (

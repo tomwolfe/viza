@@ -45,7 +45,7 @@ export function useInferenceLoop({
   const isRunningRef = useRef(false);
   const acknowledgedRef = useRef(true);
 
-  const {
+   const {
     adjustedInterval,
     recordMetrics,
   } = useInferenceAnalytics({ intervalMs });
@@ -62,7 +62,7 @@ export function useInferenceLoop({
       
       try {
         const captureStartTime = performance.now();
-        const captureResult = captureFrame(videoRef.current);
+        const captureResult = callbacksRef.current.captureFrame(videoRef.current);
         frame = captureResult instanceof Promise ? await captureResult : captureResult;
         
         if (!frame) {
@@ -73,13 +73,13 @@ export function useInferenceLoop({
         
         try {
           const inferenceStartTime = performance.now();
-          const result = await runInference(frame, prompt);
+          const result = await callbacksRef.current.runInference(frame, prompt);
 
           const inferenceEndTime = performance.now();
           const processingTime = inferenceEndTime - loopStartTime;
 
           if (result?.objects && result.objects.length > 0) {
-            onObjectsDetected(result.objects);
+            callbacksRef.current.onObjectsDetected?.(result.objects);
           }
 
           recordMetrics({
@@ -98,8 +98,14 @@ export function useInferenceLoop({
         acknowledgedRef.current = true;
       }
     },
-    [runInference, captureFrame, onObjectsDetected, recordMetrics]
+   [recordMetrics]
   );
+
+  const callbacksRef = useRef({ captureFrame, runInference, processFrame, onObjectsDetected, getStallStatus, getVlmVerificationFailureCount, isTaskActive, runVerificationInference, triggerCorrectionFlow, triggerHint, worldMapObjects });
+
+  useEffect(() => {
+    callbacksRef.current = { captureFrame, runInference, processFrame, onObjectsDetected, getStallStatus, getVlmVerificationFailureCount, isTaskActive, runVerificationInference, triggerCorrectionFlow, triggerHint, worldMapObjects };
+  }, [captureFrame, runInference, processFrame, onObjectsDetected, getStallStatus, getVlmVerificationFailureCount, isTaskActive, runVerificationInference, triggerCorrectionFlow, triggerHint, worldMapObjects]);
 
   const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
     videoRef.current = video;
@@ -129,28 +135,31 @@ export function useInferenceLoop({
 
     const loop = async () => {
       if (!isMounted || !stateRef.current.isActive) return;
+
+      const { captureFrame: captureFrameRef, processFrame: processFrameRef, getStallStatus: getStallStatusRef, getVlmVerificationFailureCount: getVlmVerificationFailureCountRef, isTaskActive: isTaskActiveRef, runVerificationInference: runVerificationInferenceRef, triggerCorrectionFlow: triggerCorrectionFlowRef, triggerHint: triggerHintRef, worldMapObjects: worldMapObjectsRef } = callbacksRef.current;
+
       if (!isRunningRef.current && !stateRef.current.isInferring && acknowledgedRef.current) {
-        if (getStallStatus && triggerHint) {
-          const stallStatus = getStallStatus();
+        if (getStallStatusRef && triggerHintRef) {
+          const stallStatus = getStallStatusRef();
           if (stallStatus.shouldSuggestHint) {
-            triggerHint(worldMapObjects);
+            triggerHintRef(worldMapObjectsRef);
           }
         }
 
-        if (isTaskActive && getVlmVerificationFailureCount && runVerificationInference && triggerCorrectionFlow) {
-          const failureCount = getVlmVerificationFailureCount();
+        if (isTaskActiveRef && getVlmVerificationFailureCountRef && runVerificationInferenceRef && triggerCorrectionFlowRef) {
+          const failureCount = getVlmVerificationFailureCountRef();
           
           if (failureCount >= 3) {
             logger.debug('[InferenceLoop] VLM verification failed 3+ times, triggering correction flow');
             cancelPending();
             
             if (videoRef.current) {
-              const frameResult = captureFrame(videoRef.current);
+              const frameResult = captureFrameRef(videoRef.current);
               const imageBitmap = frameResult instanceof Promise ? await frameResult : frameResult;
               
               if (imageBitmap) {
                 const analysis = 'The user is failing to complete this step after multiple attempts. Analyze the image and provide a new, intermediate correction step to help them.';
-                const success = await triggerCorrectionFlow(analysis, imageBitmap);
+                const success = await triggerCorrectionFlowRef(analysis, imageBitmap);
                 if (!success && isBitmapValid(imageBitmap)) {
                   ensureBitmapClosed(imageBitmap);
                 }
@@ -159,7 +168,7 @@ export function useInferenceLoop({
           }
         }
 
-        await processFrame('Identify objects in this scene.');
+        await processFrameRef('Identify objects in this scene.');
       }
       if (isMounted) {
         intervalRef.current = setTimeout(loop, stateRef.current.adjustedInterval);
@@ -175,15 +184,7 @@ export function useInferenceLoop({
   }, [
     isActive,
     cancelPending,
-    captureFrame,
-    getStallStatus,
-    getVlmVerificationFailureCount,
-    isTaskActive,
-    processFrame,
-    runVerificationInference,
-    triggerCorrectionFlow,
-    triggerHint,
-    worldMapObjects,
+    stateRef,
   ]);
 
   const run = useCallback(
