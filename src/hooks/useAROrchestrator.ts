@@ -85,18 +85,6 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   }, []);
 
   useEffect(() => {
-    if (llmError && llmErrorCode && llmErrorCode !== unifiedErrorCode) {
-      setVizaError(llmErrorCode, llmError);
-    }
-  }, [llmError, llmErrorCode, setVizaError, unifiedErrorCode]);
-
-  useEffect(() => {
-    if (xrError && xrErrorCode && xrErrorCode !== unifiedErrorCode) {
-      setVizaError(xrErrorCode, xrError);
-    }
-  }, [xrError, xrErrorCode, setVizaError, unifiedErrorCode]);
-
-  useEffect(() => {
     if (taskOrchestrator.voiceError && taskOrchestrator.voiceErrorCode && taskOrchestrator.voiceErrorCode !== unifiedErrorCode) {
       setVizaError(taskOrchestrator.voiceErrorCode as VizaErrorCode, taskOrchestrator.voiceError);
     }

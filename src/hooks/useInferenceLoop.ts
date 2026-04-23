@@ -120,7 +120,10 @@ export function useInferenceLoop({
       return;
     }
 
+    let isMounted = true;
+
     const loop = async () => {
+      if (!isMounted) return;
       if (!isRunningRef.current && acknowledgedRef.current) {
         if (getStallStatus && triggerHint) {
           const stallStatus = getStallStatus();
@@ -153,12 +156,17 @@ export function useInferenceLoop({
 
         await processFrame('Identify objects in this scene.');
       }
-      intervalRef.current = setTimeout(loop, adjustedInterval);
+      if (isMounted) {
+        intervalRef.current = setTimeout(loop, adjustedInterval);
+      }
     };
 
     intervalRef.current = setTimeout(loop, intervalMs);
 
-    return () => cancelPending();
+    return () => {
+      isMounted = false;
+      cancelPending();
+    };
   }, [isActive, isInferring, intervalMs, adjustedInterval, processFrame, cancelPending, getStallStatus, triggerHint, worldMapObjects, isTaskActive, getVlmVerificationFailureCount, runVerificationInference, triggerCorrectionFlow, captureFrame]);
 
   const run = useCallback(
