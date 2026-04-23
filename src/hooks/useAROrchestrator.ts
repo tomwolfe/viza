@@ -85,32 +85,32 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   }, []);
 
   useEffect(() => {
-    if (llmError && llmErrorCode) {
+    if (llmError && llmErrorCode && llmErrorCode !== unifiedErrorCode) {
       setVizaError(llmErrorCode, llmError);
     }
-  }, [llmError, llmErrorCode, setVizaError]);
+  }, [llmError, llmErrorCode, setVizaError, unifiedErrorCode]);
 
   useEffect(() => {
-    if (xrError && xrErrorCode) {
+    if (xrError && xrErrorCode && xrErrorCode !== unifiedErrorCode) {
       setVizaError(xrErrorCode, xrError);
     }
-  }, [xrError, xrErrorCode, setVizaError]);
+  }, [xrError, xrErrorCode, setVizaError, unifiedErrorCode]);
 
   useEffect(() => {
-    if (taskOrchestrator.voiceError && taskOrchestrator.voiceErrorCode) {
+    if (taskOrchestrator.voiceError && taskOrchestrator.voiceErrorCode && taskOrchestrator.voiceErrorCode !== unifiedErrorCode) {
       setVizaError(taskOrchestrator.voiceErrorCode as VizaErrorCode, taskOrchestrator.voiceError);
     }
-  }, [taskOrchestrator.voiceError, taskOrchestrator.voiceErrorCode, setVizaError]);
+  }, [taskOrchestrator.voiceError, taskOrchestrator.voiceErrorCode, setVizaError, unifiedErrorCode]);
 
   useEffect(() => {
     if (arState.type === 'error') {
       const error = (arState as any).error;
       const errorCode = (arState as any).errorCode;
-      if (errorCode) {
+      if (errorCode && errorCode !== unifiedErrorCode) {
         setVizaError(errorCode, error);
       }
     }
-  }, [arState, setVizaError]);
+  }, [arState, setVizaError, unifiedErrorCode]);
 
   return {
     arState,

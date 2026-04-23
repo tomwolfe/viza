@@ -65,7 +65,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     workerClientRef.current = client;
     isInitializedRef.current = true;
     return true;
-  }, [setVizaError, vizaErrorState]);
+  }, [setVizaError]);
 
   const initModel = useCallback(async () => {
     if (isInitializingRef.current || isModelReady) {
