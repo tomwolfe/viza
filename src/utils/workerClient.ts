@@ -80,6 +80,11 @@ export class WorkerClient {
   initialize(workerUrl: string): void {
     if (this.isInitialized) return;
 
+    // If there's an existing worker, terminate it to prevent memory leaks
+    if (this.worker) {
+      this.terminate();
+    }
+
     this.workerUrl = workerUrl;
     this.worker = new Worker(workerUrl, { type: 'module' });
 

@@ -124,13 +124,7 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
     result.isMobile = isMobile;
 
-    const device = await adapter.requestDevice({
-      requiredLimits: {
-        maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
-        maxUniformBufferBindingSize: adapter.limits.maxUniformBufferBindingSize,
-        maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize,
-      }
-    });
+    const device = await adapter.requestDevice();
 
     const maxStorageBuffer = device.limits.maxStorageBufferBindingSize;
     const maxUniformBuffer = device.limits.maxUniformBufferBindingSize;

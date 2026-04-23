@@ -22,6 +22,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const modelIdRef = useRef(modelId || CONFIG.DEFAULT_MODEL);
   const workerClientRef = useRef<WorkerClient | null>(null);
   const isInitializedRef = useRef(false);
+  const isInitializingRef = useRef(false);
   const [isModelReady, setIsModelReady] = useState(false);
 
   const initWorker = useCallback(async (): Promise<boolean> => {
@@ -67,23 +68,30 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   }, [setVizaError, vizaErrorState]);
 
   const initModel = useCallback(async () => {
-    if (!isInitializedRef.current) {
-      const success = await initWorker();
-      if (!success) return;
-    }
-
-    if (!isDeviceCompatible) {
-      setVizaError('WEBGPU_NOT_SUPPORTED', 'Device not compatible with WebGPU');
+    if (isInitializingRef.current || isModelReady) {
       return;
     }
-
-    const client = workerClientRef.current;
-    if (!client) {
-      setVizaError('WORKER_INIT_FAILED', 'Worker not initialized');
-      return;
-    }
+    isInitializingRef.current = true;
 
     try {
+      if (!isInitializedRef.current) {
+        const success = await initWorker();
+        if (!success) {
+          return;
+        }
+      }
+
+      if (!isDeviceCompatible) {
+        setVizaError('WEBGPU_NOT_SUPPORTED', 'Device not compatible with WebGPU');
+        return;
+      }
+
+      const client = workerClientRef.current;
+      if (!client) {
+        setVizaError('WORKER_INIT_FAILED', 'Worker not initialized');
+        return;
+      }
+
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
       setIsModelReady(true);
       client.startHeartbeat(() => {
@@ -91,8 +99,10 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       });
     } catch (err) {
       setVizaError('WORKER_INIT_FAILED', (err as Error).message);
+    } finally {
+      isInitializingRef.current = false;
     }
-  }, [initWorker, isDeviceCompatible, setVizaError]);
+  }, [initWorker, isDeviceCompatible, isInitializedRef, setVizaError, isModelReady]);
 
   const dispose = useCallback(() => {
     const client = workerClientRef.current;
