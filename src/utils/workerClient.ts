@@ -46,7 +46,6 @@ const DEFAULT_HEARTBEAT_TIMEOUT = 60000;
 
 export class WorkerClient {
   private worker: Worker | null = null;
-  private workerUrl: string | null = null;
   private pendingRequests: Map<string, PendingRequest<unknown>> = new Map();
   private isInitialized = false;
   private options: Required<WorkerClientOptions>;
@@ -77,16 +76,10 @@ export class WorkerClient {
     };
   }
 
-  initialize(workerUrl: string): void {
+  initialize(worker: Worker): void {
     if (this.isInitialized) return;
 
-    // If there's an existing worker, terminate it to prevent memory leaks
-    if (this.worker) {
-      this.terminate();
-    }
-
-    this.workerUrl = workerUrl;
-    this.worker = new Worker(workerUrl, { type: 'module' });
+    this.worker = worker;
 
     this.worker.onmessage = (event) => {
       this.handleMessage(event.data as WorkerIncomingMessage);
@@ -137,21 +130,13 @@ export class WorkerClient {
       return;
     }
 
-    if (!this.workerUrl) {
-      this.options.onError('Worker URL lost during reconnection', 'WORKER_INIT_FAILED');
-      return;
-    }
-
     this.reconnectAttempts++;
     this.rejectAllPending('Worker unresponsive');
     this.terminate();
     this.isInitialized = false;
     
     setTimeout(() => {
-      if (this.workerUrl) {
-        this.initialize(this.workerUrl);
-        this.onReconnect?.();
-      }
+      this.onReconnect?.();
     }, 1000);
   }
 

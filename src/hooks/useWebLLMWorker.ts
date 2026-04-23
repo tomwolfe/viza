@@ -63,10 +63,20 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
     });
 
-    client.initialize(new URL('../worker/vision.worker.ts', import.meta.url).href);
-    workerClientRef.current = client;
-    isInitializedRef.current = true;
-    return true;
+    try {
+      const worker = new Worker(
+        new URL('../worker/vision.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      client.initialize(worker);
+      workerClientRef.current = client;
+      isInitializedRef.current = true;
+      return true;
+    } catch (err) {
+      logger.error('[WebLLM] Worker creation failed:', err);
+      setVizaError('WORKER_INIT_FAILED', 'Failed to create AI worker instance.');
+      return false;
+    }
   }, [setVizaError]);
 
   const initModel = useCallback(async () => {
@@ -97,7 +107,35 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
       setIsModelReady(true);
       client.startHeartbeat(() => {
-        logger.info('[WebLLM] Heartbeat reconnected');
+        const newClient = createWorkerClient({
+          onReady: () => {
+            logger.info('[WebLLM] Worker ready');
+          },
+          onProgress: () => {},
+          onError: (message, code) => {
+            logger.error('[WebLLM] Error:', message);
+            setVizaError(code, message);
+            setIsInferring(false);
+          },
+          onWarning: (message) => {
+            logger.warn('[WebLLM] Warning:', message);
+          },
+          onPong: () => {},
+          onUnresponsive: () => {
+            logger.warn('[WebLLM] Worker unresponsive');
+            setVizaError('WORKER_CRASHED', 'AI Engine Lost - Restarting...');
+            setIsModelReady(false);
+          },
+          inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
+          planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
+        });
+        const worker = new Worker(
+          new URL('../worker/vision.worker.ts', import.meta.url),
+          { type: 'module' }
+        );
+        newClient.initialize(worker);
+        workerClientRef.current = newClient;
+        newClient.startHeartbeat(() => {});
       });
     } catch (err) {
       setVizaError('WORKER_INIT_FAILED', (err as Error).message);
