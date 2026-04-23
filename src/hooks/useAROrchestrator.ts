@@ -49,15 +49,15 @@ export function useAROrchestrator(): UseAROrchestratorResult {
     initModel: webllmInitModel,
     runInference,
     error: llmError,
-    errorCode: llmErrorCode,
+    errorCode: _llmErrorCode,
   } = useVizaOrchestrator();
 
   const {
     isARActive,
     isXRMode,
     xrSession,
-    error: xrError,
-    errorCode: xrErrorCode,
+    error: _xrError,
+    errorCode: _xrErrorCode,
     startAR,
   } = useARSessionManager();
 

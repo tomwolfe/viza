@@ -172,7 +172,19 @@ export function useInferenceLoop({
       isMounted = false;
       cancelPending();
     };
-  }, [isActive]);
+  }, [
+    isActive,
+    cancelPending,
+    captureFrame,
+    getStallStatus,
+    getVlmVerificationFailureCount,
+    isTaskActive,
+    processFrame,
+    runVerificationInference,
+    triggerCorrectionFlow,
+    triggerHint,
+    worldMapObjects,
+  ]);
 
   const run = useCallback(
     async (prompt: string): Promise<void> => {
