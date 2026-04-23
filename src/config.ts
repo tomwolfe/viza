@@ -136,21 +136,18 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     const maxUniformBuffer = device.limits.maxUniformBufferBindingSize;
     const maxComputeWorkgroupStorage = device.limits.maxComputeWorkgroupStorageSize;
 
-    if (maxStorageBuffer < 256 * 1024 * 1024) {
-      result.issues.push('Storage buffer binding size below minimum requirement');
+    // Relaxed recommendations (warnings only)
+    if (maxStorageBuffer < 128 * 1024 * 1024) {
+      result.issues.push('Storage buffer binding size is lower than recommended (128MB).');
     }
 
-    if (maxUniformBuffer < 16 * 1024 * 1024) {
-      result.issues.push('Uniform buffer size below recommendation');
+    if (maxUniformBuffer < 8 * 1024 * 1024) {
+      result.issues.push('Uniform buffer size is lower than recommended (8MB).');
     }
 
-    if (maxComputeWorkgroupStorage < 16 * 1024) {
-      result.issues.push('Compute shader memory below minimum requirement');
-    }
-
-    if (result.issues.length === 0) {
-      result.supported = true;
-    }
+    // If we successfully created a device, we consider WebGPU supported.
+    // WebLLM will attempt to handle memory constraints internally.
+    result.supported = true;
 
     device.destroy();
 
