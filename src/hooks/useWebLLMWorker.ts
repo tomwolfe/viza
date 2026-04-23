@@ -28,7 +28,33 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const isInitializingRef = useRef(false);
   const [isModelReady, setIsModelReady] = useState(false);
 
-   const initWorker = useCallback(async (): Promise<boolean> => {
+   const getWorkerConfig = () => ({
+    onReady: () => {
+      logger.info('[WebLLM] Worker ready');
+    },
+    onProgress: (progress: number) => {
+      setModelProgress(progress);
+    },
+    onError: (message: string, code: string) => {
+      logger.error('[WebLLM] Error:', message);
+      setVizaError(code, message);
+      setIsInferring(false);
+    },
+    onWarning: (message: string) => {
+      logger.warn('[WebLLM] Warning:', message);
+    },
+    onPong: () => {},
+    onUnresponsive: () => {
+      logger.warn('[WebLLM] Worker unresponsive');
+      setVizaError('WORKER_CRASHED', 'AI Engine Lost - Restarting...');
+      setIsModelReady(false);
+    },
+    inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
+    planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
+    initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
+  });
+
+  const initWorker = useCallback(async (): Promise<boolean> => {
     if (isInitializedRef.current) return true;
 
     const gpuCheck = await checkWebGPU();
@@ -41,31 +67,8 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     }
     setIsDeviceCompatible(true);
 
-    const client = createWorkerClient({
-      onReady: () => {
-        logger.info('[WebLLM] Worker ready');
-      },
-      onProgress: (progress) => {
-        setModelProgress(progress);
-      },
-      onError: (message, code) => {
-        logger.error('[WebLLM] Error:', message);
-        setVizaError(code, message);
-        setIsInferring(false);
-      },
-      onWarning: (message) => {
-        logger.warn('[WebLLM] Warning:', message);
-      },
-      onPong: () => {},
-      onUnresponsive: () => {
-        logger.warn('[WebLLM] Worker unresponsive');
-        setVizaError('WORKER_CRASHED', 'AI Engine Lost - Restarting...');
-        setIsModelReady(false);
-      },
-      inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
-      planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
-      initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
-    });
+    const workerConfig = getWorkerConfig();
+    const client = createWorkerClient(workerConfig);
 
     try {
       const worker = new Worker(
@@ -111,31 +114,8 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
       setIsModelReady(true);
       client.startHeartbeat(() => {
-        const newClient = createWorkerClient({
-          onReady: () => {
-            logger.info('[WebLLM] Worker ready');
-          },
-          onProgress: (progress) => {
-            setModelProgress(progress);
-          },
-          onError: (message, code) => {
-            logger.error('[WebLLM] Error:', message);
-            setVizaError(code, message);
-            setIsInferring(false);
-          },
-          onWarning: (message) => {
-            logger.warn('[WebLLM] Warning:', message);
-          },
-          onPong: () => {},
-          onUnresponsive: () => {
-            logger.warn('[WebLLM] Worker unresponsive');
-            setVizaError('WORKER_CRASHED', 'AI Engine Lost - Restarting...');
-            setIsModelReady(false);
-          },
-          inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
-          planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
-          initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
-        });
+        const workerConfig = getWorkerConfig();
+        const newClient = createWorkerClient(workerConfig);
         const worker = new Worker(
           new URL('../worker/vision.worker.ts', import.meta.url),
           { type: 'module' }

@@ -121,13 +121,7 @@ export class VizaWorker {
     );
 
     try {
-      this.postMessageFn({ type: 'inference_start' });
-
-      const response = await (this.state.engine!.chat.completions as any).create({
-        messages,
-        temperature: 0.1,
-        max_tokens: config.maxTokens,
-      });
+      const response = await this._executeInference(messages, config.maxTokens);
 
       const content = response.choices[0]?.message?.content || '';
       const parseResult = parseJsonResponse(content, config.schema);
@@ -210,13 +204,7 @@ export class VizaWorker {
     );
 
     try {
-      this.postMessageFn({ type: 'inference_start' });
-
-      const response = await (this.state.engine!.chat.completions as any).create({
-        messages,
-        temperature: 0.1,
-        max_tokens: 512,
-      });
+      const response = await this._executeInference(messages, 512);
 
       const content = response.choices[0]?.message?.content || '';
       const parseResult = parseJsonResponse(content, VerificationResponseSchema);
@@ -244,6 +232,18 @@ export class VizaWorker {
     } finally {
       image.close();
     }
+  }
+
+  private async _executeInference(
+    messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: ImageBitmap }; text?: string }> }>,
+    maxTokens: number
+  ): Promise<webllm.ChatCompletionResponse> {
+    this.postMessageFn({ type: 'inference_start' });
+    return await (this.state.engine!.chat.completions as any).create({
+      messages,
+      temperature: 0.1,
+      max_tokens: maxTokens,
+    });
   }
 
   async reloadEngine(): Promise<void> {

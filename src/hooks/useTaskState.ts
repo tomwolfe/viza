@@ -334,54 +334,54 @@ export function useTaskState(): UseTaskStateReturn {
     return { isStalled, timeOnStep, shouldSuggestHint };
   }, [taskState]);
 
-  const triggerHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number } }[]) => {
-    if (!taskState.isActive) return;
-
+const generateHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number }[]}): string => {
     const currentStep = taskState.steps[taskState.currentStepIndex];
-    if (!currentStep) return;
+    if (!currentStep) return '';
 
     const targetObject = currentStep.targetObject;
-    let hintText = '';
+    if (!targetObject) return "Take your time. Look around the room and let me know when you find something.";
 
-    if (targetObject) {
-      const knownObjects = worldMapObjects.filter(obj => 
-        obj.name.toLowerCase().includes(targetObject.toLowerCase())
-      );
+    const knownObjects = worldMapObjects.filter(obj => 
+      obj.name.toLowerCase().includes(targetObject.toLowerCase())
+    );
 
-      if (knownObjects.length > 0) {
-        const lastSeen = knownObjects[0].position;
-        if (lastSeen) {
-          const directions = [
-            { x: 1, label: 'right' },
-            { x: -1, label: 'left' },
-            { y: 1, label: 'above' },
-            { y: -1, label: 'below' },
-            { z: 1, label: 'behind' },
-            { z: -1, label: 'in front of' },
-          ];
+    if (knownObjects.length > 0) {
+      const lastSeen = knownObjects[0].position;
+      if (lastSeen) {
+        const directions = [
+          { x: 1, label: 'right' },
+          { x: -1, label: 'left' },
+          { y: 1, label: 'above' },
+          { y: -1, label: 'below' },
+          { z: 1, label: 'behind' },
+          { z: -1, label: 'in front of' },
+        ];
 
-          const relativeDir = directions.find(d => 
-            d.x && lastSeen.x && Math.sign(lastSeen.x) === Math.sign(d.x) ||
-            d.y && lastSeen.y && Math.sign(lastSeen.y) === Math.sign(d.y) ||
-            d.z && lastSeen.z && Math.sign(lastSeen.z) === Math.sign(d.z)
-          )?.label || 'nearby';
+        const relativeDir = directions.find(d => 
+          d.x && lastSeen.x && Math.sign(lastSeen.x) === Math.sign(d.x) ||
+          d.y && lastSeen.y && Math.sign(lastSeen.y) === Math.sign(d.y) ||
+          d.z && lastSeen.z && Math.sign(lastSeen.z) === Math.sign(d.z)
+        )?.label || 'nearby';
 
-          const dist = Math.sqrt(
-            (lastSeen.x || 0) ** 2 + 
-            (lastSeen.y || 0) ** 2 + 
-            (lastSeen.z || 0) ** 2
-          );
-          
-          hintText = `I detected the ${targetObject} ${relativeDir}. It's about ${dist.toFixed(1)} meters away. Try looking around.`;
-        } else {
-          hintText = `I remember seeing the ${targetObject} earlier. Try looking around the room.`;
-        }
+        const dist = Math.sqrt(
+          (lastSeen.x || 0) ** 2 + 
+          (lastSeen.y || 0) ** 2 + 
+          (lastSeen.z || 0) ** 2
+        );
+        
+        return `I detected the ${targetObject} ${relativeDir}. It's about ${dist.toFixed(1)} meters away. Try looking around.`;
       } else {
-        hintText = `I haven't detected the ${targetObject} yet. Try scanning the room slowly or adjusting the lighting.`;
+        return `I remember seeing the ${targetObject} earlier. Try looking around the room.`;
       }
     } else {
-      hintText = "Take your time. Look around the room and let me know when you find something.";
+      return `I haven't detected the ${targetObject} yet. Try scanning the room slowly or adjusting the lighting.`;
     }
+  }, [taskState]);
+
+   const triggerHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number }[] }) => {
+    if (!taskState.isActive) return;
+
+    const hintText = generateHint(worldMapObjects);
 
     if (speakRef.current) {
       speakRef.current(hintText);
@@ -392,9 +392,9 @@ export function useTaskState(): UseTaskStateReturn {
       lastHintTime: performance.now(),
       hintCount: prev.hintCount + 1,
     }));
-  }, [taskState, setTaskState]);
+  }, [taskState, setTaskState, generateHint]);
 
-  const triggerCorrectionFlow = useCallback(async (
+ const executeCorrection = useCallback(async (
     analysis: string,
     image: ImageBitmap,
     generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
@@ -404,77 +404,85 @@ export function useTaskState(): UseTaskStateReturn {
        return false;
      }
 
-   if (correctionAttemptCountRef.current >= MAX_CORRECTION_ATTEMPTS) {
-       image.close();
-       logger.debug('[TaskState] Max correction attempts reached');
-      return false;
-    }
+    if (correctionAttemptCountRef.current >= MAX_CORRECTION_ATTEMPTS) {
+        image.close();
+        logger.debug('[TaskState] Max correction attempts reached');
+       return false;
+     }
 
-    const currentStep = taskState.steps[taskState.currentStepIndex];
-    if (!currentStep) {
-      image.close();
-      return false;
-    }
-
-    const timeOnStep = performance.now() - taskState.stepStartTime;
-  if (timeOnStep < CORRECTION_FAILURE_THRESHOLD_MS) {
+     const currentStep = taskState.steps[taskState.currentStepIndex];
+     if (!currentStep) {
        image.close();
        return false;
      }
 
-    if (verificationEngineRef.current.getStats().consecutiveMatchCount > 0) {
-      image.close();
-      return false;
-    }
-
-    correctionAttemptCountRef.current += 1;
-    lastCorrectionTimeRef.current = performance.now();
-
-    abortPlanning();
-    setIsPlanning(true);
-
-    try {
-      const correctionSteps = await generateCorrectionFn(
-        analysis,
-        image,
-        taskState.currentStepIndex,
-        abortControllerRef.current?.signal
-      );
-
-      if (correctionSteps.length > 0) {
-        const insertedSteps = correctionSteps.map((step) => ({
-          ...step,
-          isCorrection: true,
-          originalStepIndex: taskState.currentStepIndex,
-        }));
-
-        const newSteps = [...taskState.steps];
-        newSteps.splice(taskState.currentStepIndex + 1, 0, ...insertedSteps);
-
-        setTaskState(prev => ({
-          ...prev,
-          steps: newSteps,
-        }));
-
-        if (speakRef.current) {
-          speakRef.current(`Let's try something different. ${insertedSteps[0].instruction}`);
-        }
-
-        verificationEngineRef.current.setConsecutiveMatchCount(0);
-        return true;
-      }
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        logger.debug('[TaskState] Correction generation aborted');
+     const timeOnStep = performance.now() - taskState.stepStartTime;
+   if (timeOnStep < CORRECTION_FAILURE_THRESHOLD_MS) {
+        image.close();
         return false;
       }
-      logger.error('[TaskState] Failed to generate correction:', error);
-    } finally {
-      setIsPlanning(false);
-    }
 
-    return false;
-  }, [taskState, setTaskState, abortPlanning]);
+     if (verificationEngineRef.current.getStats().consecutiveMatchCount > 0) {
+       image.close();
+       return false;
+     }
+
+     correctionAttemptCountRef.current += 1;
+     lastCorrectionTimeRef.current = performance.now();
+
+     abortPlanning();
+     setIsPlanning(true);
+
+     try {
+       const correctionSteps = await generateCorrectionFn(
+         analysis,
+         image,
+         taskState.currentStepIndex,
+         abortControllerRef.current?.signal
+       );
+
+       if (correctionSteps.length > 0) {
+         const insertedSteps = correctionSteps.map((step) => ({
+           ...step,
+           isCorrection: true,
+           originalStepIndex: taskState.currentStepIndex,
+         }));
+
+         const newSteps = [...taskState.steps];
+         newSteps.splice(taskState.currentStepIndex + 1, 0, ...insertedSteps);
+
+         setTaskState(prev => ({
+           ...prev,
+           steps: newSteps,
+         }));
+
+         if (speakRef.current) {
+           speakRef.current(`Let's try something different. ${insertedSteps[0].instruction}`);
+         }
+
+         verificationEngineRef.current.setConsecutiveMatchCount(0);
+         return true;
+       }
+     } catch (error) {
+       if ((error as Error).name === 'AbortError') {
+         logger.debug('[TaskState] Correction generation aborted');
+         return false;
+       }
+       logger.error('[TaskState] Failed to generate correction:', error);
+     } finally {
+       setIsPlanning(false);
+     }
+
+     return false;
+   }, [taskState, setTaskState, abortPlanning]);
+
+   const triggerCorrectionFlow = useCallback(async (
+    analysis: string,
+    image: ImageBitmap,
+    generateCorrectionFn: (analysis: string, image: ImageBitmap, originalStepIndex: number, signal?: AbortSignal) => Promise<TaskStep[]>
+  ): Promise<boolean> => {
+    return executeCorrection(analysis, image, generateCorrectionFn);
+  }, [executeCorrection]);
 
   const getVlmVerificationFailureCount = useCallback(() => {
     return verificationEngineRef.current.getStats().vlmFailureCount;

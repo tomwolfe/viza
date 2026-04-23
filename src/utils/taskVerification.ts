@@ -111,56 +111,9 @@ export class VerificationEngine {
     this.lastVerificationTime = now;
 
     if (verificationMode === 'removal') {
-      const worldMapPosition = worldMapPositions?.get(targetLower);
-      const wasPreviouslyPresent = worldMapPosition !== undefined;
-
-      if (!foundTarget && wasPreviouslyPresent) {
-        const absentCount = this.detectionHistory.filter(r => !r.wasPresent && r.objectName === targetLower).length;
-
-        this.recordDetection(targetLower, false);
-
-        if (absentCount >= requiredDetections - 1) {
-          result.verified = true;
-          result.confidence = 1.0;
-          result.message = `Verified: ${targetObject} has been removed`;
-          this.consecutiveMatchCount = 0;
-          result.shouldAdvanceStep = true;
-        } else {
-          result.missingCount = absentCount + 1;
-          result.message = `Verifying removal: ${targetObject} not seen for ${absentCount + 1} checks`;
-        }
-      } else if (foundTarget) {
-        result.confidence = foundTarget.confidence || 0.5;
-        result.message = `${targetObject} still visible - waiting for removal`;
-        this.consecutiveMatchCount = 0;
-      }
+      this._verifyRemoval(targetLower, foundTarget, worldMapPositions, requiredDetections, result);
     } else {
-      // presence or placement
-      if (foundTarget) {
-        const conf = foundTarget.confidence || 0.5;
-        if (conf >= confidenceThreshold) {
-          this.consecutiveMatchCount += 1;
-          this.recordDetection(targetLower, true);
-
-          result.confidence = conf;
-          result.consecutiveMatches = this.consecutiveMatchCount;
-
-          if (this.consecutiveMatchCount >= requiredDetections) {
-            result.verified = true;
-            result.message = `Verified: ${targetObject} found`;
-            result.shouldAdvanceStep = true;
-          } else {
-            result.message = `Verifying: ${this.consecutiveMatchCount}/${requiredDetections} confirmations`;
-          }
-        } else {
-          result.confidence = conf;
-          result.message = `Low confidence (${(conf * 100).toFixed(0)}%)`;
-          this.consecutiveMatchCount = 0;
-        }
-      } else {
-        this.consecutiveMatchCount = 0;
-        result.message = `${targetObject} not detected`;
-      }
+      this._verifyPresence(targetLower, foundTarget, requiredDetections, confidenceThreshold, result);
     }
 
     return result;
@@ -231,6 +184,72 @@ export class VerificationEngine {
     }
 
     return result;
+  }
+
+  private _verifyRemoval(
+    targetLower: string,
+    foundTarget: DetectedObject | undefined,
+    worldMapPositions: Map<string, { x: number; y: number; z: number }> | undefined,
+    requiredDetections: number,
+    result: VerificationResult & { shouldAdvanceStep: boolean }
+  ) {
+    const worldMapPosition = worldMapPositions?.get(targetLower);
+    const wasPreviouslyPresent = worldMapPosition !== undefined;
+
+    if (!foundTarget && wasPreviouslyPresent) {
+      const absentCount = this.detectionHistory.filter(r => !r.wasPresent && r.objectName === targetLower).length;
+
+      this.recordDetection(targetLower, false);
+
+      if (absentCount >= requiredDetections - 1) {
+        result.verified = true;
+        result.confidence = 1.0;
+        result.message = `Verified: ${targetLower} has been removed`;
+        this.consecutiveMatchCount = 0;
+        result.shouldAdvanceStep = true;
+      } else {
+        result.missingCount = absentCount + 1;
+        result.message = `Verifying removal: ${targetLower} not seen for ${absentCount + 1} checks`;
+      }
+    } else if (foundTarget) {
+      result.confidence = foundTarget.confidence || 0.5;
+      result.message = `${targetLower} still visible - waiting for removal`;
+      this.consecutiveMatchCount = 0;
+    }
+  }
+
+  private _verifyPresence(
+    targetLower: string,
+    foundTarget: DetectedObject | undefined,
+    requiredDetections: number,
+    confidenceThreshold: number,
+    result: VerificationResult & { shouldAdvanceStep: boolean }
+  ) {
+    if (foundTarget) {
+      const conf = foundTarget.confidence || 0.5;
+      if (conf >= confidenceThreshold) {
+        this.consecutiveMatchCount += 1;
+        this.recordDetection(targetLower, true);
+
+        result.confidence = conf;
+        result.consecutiveMatches = this.consecutiveMatchCount;
+
+        if (this.consecutiveMatchCount >= requiredDetections) {
+          result.verified = true;
+          result.message = `Verified: ${targetLower} found`;
+          result.shouldAdvanceStep = true;
+        } else {
+          result.message = `Verifying: ${this.consecutiveMatchCount}/${requiredDetections} confirmations`;
+        }
+      } else {
+        result.confidence = conf;
+        result.message = `Low confidence (${(conf * 100).toFixed(0)}%)`;
+        this.consecutiveMatchCount = 0;
+      }
+    } else {
+      this.consecutiveMatchCount = 0;
+      result.message = `${targetLower} not detected`;
+    }
   }
 
   private recordDetection(objectName: string, wasPresent: boolean) {

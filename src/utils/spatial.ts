@@ -110,9 +110,9 @@ export class SpatialEngine {
       const groundZ = cameraPosition.z + cameraDirection.z * t;
       
       return result.set(
-        groundX + relX * 0.3,
+        groundX + relX * CONFIG.SPATIAL.GROUND_PROJECTION_OFFSET,
         groundY,
-        groundZ + relY * 0.3
+        groundZ + relY * CONFIG.SPATIAL.GROUND_PROJECTION_OFFSET
       );
     }
 

@@ -8,19 +8,7 @@ import {
   type VerificationResponse,
 } from '@/schemas/vision';
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a spatial assistant. Analyze this image based on the user's audio request. 
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
+export const JSON_OUTPUT_TEMPLATE = 'Return ONLY a valid JSON object with the structure:\n<<SCHEMA>>\nDo not include any other text. Only return the JSON object.';
 
 export const VisionResponseSchema = VisionResponseSchemaRaw;
 export type InferenceResult = z.infer<typeof VisionResponseSchemaRaw>;
@@ -46,18 +34,16 @@ export interface MessageWithImage {
 }
 
 export function buildVisionPrompt(): string {
-  return `Analyze this scene and identify objects of interest. Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
+  return 'Analyze this scene and identify objects of interest. ' + buildJsonPrompt('{\n' +
+    '  "objects": [\n' +
+    '    {\n' +
+    '      "item": "string",\n' +
+    '      "coordinates": [x, y, width, height],\n' +
+    '      "action_step": "string"\n' +
+    '    }\n' +
+    '  ],\n' +
+    '  "completed": boolean\n' +
+    '}');
 }
 
 export function buildPlanningPrompt(userGoal: string): string {
@@ -66,23 +52,7 @@ export function buildPlanningPrompt(userGoal: string): string {
     ? 'Identify all objects that match the goal category and create a prioritized cleanup plan.'
     : 'Analyze this image and create a detailed task plan for completing this goal.';
 
-  return `You are a spatial planning assistant. The user wants to: "${userGoal}"
-
-${categoryFocus}
-
-Return ONLY a valid JSON object with this structure:
-{
-  "taskSteps": [
-    {
-      "id": "step-N",
-      "instruction": "Clear description of what to do",
-      "targetObject": "The specific object or category to target",
-      "validationPrompt": "How to verify this step is complete"
-    }
-  ]
-}
-
-Provide 5-10 specific steps in logical order. Do not include any other text.`;
+  return 'You are a spatial planning assistant. The user wants to: "' + userGoal + '"\n\n' + categoryFocus + '\n\n' + buildJsonPrompt('{' + '\n  "taskSteps": [\n    {\n      "id": "step-N",\n      "instruction": "Clear description of what to do",\n      "targetObject": "The specific object or category to target",\n      "validationPrompt": "How to verify this step is complete"\n    }\n  ]\n}');
 }
 
 export function buildCategoryPrompt(userGoal: string): string {
@@ -98,58 +68,48 @@ export function buildCategoryPrompt(userGoal: string): string {
     categoryFocus = 'Identify all objects and their categories. Use "keep" for items to preserve, "trash" for waste, "clutter" for items to organize.';
   }
 
-  return `You are a spatial assistant for cleaning tasks.
-  User Goal: "${userGoal}"
-
-  ${categoryFocus}
-
-  Return ONLY a valid JSON object with the structure:
-  {
-    "objects": [
-      {
-        "item": "string - object name",
-        "coordinates": [x, y, width, height],
-        "action_step": "string - action to take with this object (e.g., 'throw away', 'keep', 'organize')",
-        "category": "string - one of: trash, clutter, keep, tool, unknown"
-      }
-    ],
-    "completed": boolean
-  }
-  Do not include any other text. Only return the JSON object.`;
+  return 'You are a spatial assistant for cleaning tasks.\n' +
+    '  User Goal: "' + userGoal + '"\n\n' +
+    '  ' + categoryFocus + '\n\n' +
+    '  ' + buildJsonPrompt('{\n' +
+    '    "objects": [\n' +
+    '      {\n' +
+    '        "item": "string - object name",\n' +
+    '        "coordinates": [x, y, width, height],\n' +
+    '        "action_step": "string - action to take with this object (e.g., \'+\x27throw away\x27, \'+\x27keep\x27, \'+\x27organize\x27)",\n' +
+    '        "category": "string - one of: trash, clutter, keep, tool, unknown"\n' +
+    '      }\n' +
+    '    ],\n' +
+    '    "completed": boolean\n' +
+    '}');
 }
 
 export function buildVerifyPrompt(validationPrompt: string, targetObject: string): string {
-  return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.
-
-  Target Object: "${targetObject}"
-  Validation Question: "${validationPrompt}"
-
-  Return ONLY a valid JSON object with this structure:
-  {
-    "isCompleted": boolean - true if the task is successfully completed based on the validation question,
-    "confidence": number - a value between 0 and 1 indicating your confidence in this assessment,
-    "reasoning": "string - brief explanation of your verification decision"
-  }
-
-  Be strict but fair. Only return isCompleted: true if you are confident the step is truly complete.`;
+  return 'You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.\n\n' +
+    '  Target Object: "' + targetObject + '"\n' +
+    '  Validation Question: "' + validationPrompt + '"\n\n' +
+    '  ' + buildJsonPrompt('{\n' +
+    '    "isCompleted": boolean - true if the task is successfully completed based on the validation question,\n' +
+    '    "confidence": number - a value between 0 and 1 indicating your confidence in this assessment,\n' +
+    '    "reasoning": "string - brief explanation of your verification decision"\n' +
+    '}\n') + '\n\n' +
+    '  Be strict but fair. Only return isCompleted: true if you are confident the step is truly complete.';
 }
 
 export function buildSystemPrompt(taskContext: string, currentStep: string): string {
-  return `You are a spatial assistant for assembly tasks. Analyze this image based on the user's audio request.
-Current Task Context: ${taskContext}
-Current Step: ${currentStep}
-Return ONLY a valid JSON object with the structure:
-{
-  "objects": [
-    {
-      "item": "string",
-      "coordinates": [x, y, width, height],
-      "action_step": "string"
-    }
-  ],
-  "completed": boolean
-}
-Do not include any other text. Only return the JSON object.`;
+  return 'You are a spatial assistant for assembly tasks. Analyze this image based on the user\'s audio request.\n' +
+    'Current Task Context: ' + taskContext + '\n' +
+    'Current Step: ' + currentStep + '\n' +
+    buildJsonPrompt('{\n' +
+    '  "objects": [\n' +
+    '    {\n' +
+    '      "item": "string",\n' +
+    '      "coordinates": [x, y, width, height],\n' +
+    '      "action_step": "string"\n' +
+    '    }\n' +
+    '  ],\n' +
+    '  "completed": boolean\n' +
+    '}');
 }
 
 function normalizeVisionResult(raw: unknown): object {
@@ -264,6 +224,10 @@ export function buildMessages(
   }
 
   return messages;
+}
+
+function buildJsonPrompt(schema: string): string {
+  return JSON_OUTPUT_TEMPLATE.replace('<<SCHEMA>>', schema);
 }
 
 export const PromptFactory = {
