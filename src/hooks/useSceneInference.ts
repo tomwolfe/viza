@@ -47,10 +47,12 @@ export function useSceneInference({
     async (video: HTMLVideoElement | null) => {
       const frame = await captureFrame(video);
       if (!frame) return null;
-      if (sceneImageRef.current) {
-        sceneImageRef.current.close();
+      if (sceneImageRef) {
+        if (sceneImageRef.current) {
+          sceneImageRef.current.close();
+        }
+        sceneImageRef.current = await createImageBitmap(frame);
       }
-      sceneImageRef.current = await createImageBitmap(frame);
       return frame;
     },
     [captureFrame, sceneImageRef]
