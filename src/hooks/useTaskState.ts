@@ -357,10 +357,11 @@ const generateHint = useCallback((worldMapObjects: { name: string; position?: { 
           { z: -1, label: 'in front of' },
         ];
 
-        const relativeDir = directions.find(d => 
-          d.x && lastSeen.x && Math.sign(lastSeen.x) === Math.sign(d.x) ||
-          d.y && lastSeen.y && Math.sign(lastSeen.y) === Math.sign(d.y) ||
-          d.z && lastSeen.z && Math.sign(lastSeen.z) === Math.sign(d.z)
+        const relativeDir = directions.find(
+          (d: { x?: number; y?: number; z?: number }) =>
+            d.x && lastSeen.x && Math.sign(lastSeen.x) === Math.sign(d.x) ||
+            d.y && lastSeen.y && Math.sign(lastSeen.y) === Math.sign(d.y) ||
+            d.z && lastSeen.z && Math.sign(lastSeen.z) === Math.sign(d.z)
         )?.label || 'nearby';
 
         const dist = Math.sqrt(
