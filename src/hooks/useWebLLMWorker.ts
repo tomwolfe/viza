@@ -17,6 +17,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const [isInferring, setIsInferring] = useState(false);
   const { setError: setVizaError, clearError: clearVizaError, error: vizaErrorState } = useVizaError();
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
+  const [modelProgress, setModelProgress] = useState(0);
 
   const error = vizaErrorState.message;
   const errorCode = vizaErrorState.code;
@@ -44,7 +45,9 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       onReady: () => {
         logger.info('[WebLLM] Worker ready');
       },
-      onProgress: () => {},
+      onProgress: (progress) => {
+        setModelProgress(progress);
+      },
       onError: (message, code) => {
         logger.error('[WebLLM] Error:', message);
         setVizaError(code, message);
@@ -61,6 +64,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       },
       inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
       planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
+      initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
     });
 
     try {
@@ -111,7 +115,9 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
           onReady: () => {
             logger.info('[WebLLM] Worker ready');
           },
-          onProgress: () => {},
+          onProgress: (progress) => {
+            setModelProgress(progress);
+          },
           onError: (message, code) => {
             logger.error('[WebLLM] Error:', message);
             setVizaError(code, message);
@@ -128,6 +134,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
           },
           inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
           planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
+          initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
         });
         const worker = new Worker(
           new URL('../worker/vision.worker.ts', import.meta.url),
@@ -170,6 +177,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     errorCode,
     workerClient: workerClientRef.current,
     isModelReady: isModelReady,
+    modelProgress,
     setIsModelReady,
     initModel,
     dispose,

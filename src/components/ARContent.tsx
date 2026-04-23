@@ -76,9 +76,8 @@ function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; scene
 }
 
 function ARControlsWrapper({ onStartAR }: { onStartAR: () => void }) {
-  const { isInferring, isModelReady, isDeviceCompatible } = useVizaOrchestrator();
+  const { isInferring, isModelReady, isDeviceCompatible, modelProgress } = useVizaOrchestrator();
   const { isARActive } = useAROrchestrator();
-  const modelProgress = 0;
   const isIncompatible = isDeviceCompatible === false;
 
   return (

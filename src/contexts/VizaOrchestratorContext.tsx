@@ -22,6 +22,7 @@ export interface VizaOrchestratorContextValue {
   error: string | null;
   errorCode: VizaErrorCode | null;
   lastCompleted: boolean;
+  modelProgress: number;
   worldMap: WorldObject[];
   detectedObjects: DetectedObject[];
   initModel: () => Promise<void>;
@@ -47,6 +48,7 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
     errorCode,
     workerClient,
     isModelReady,
+    modelProgress,
     initModel,
     dispose,
     setIsInferring,
@@ -165,6 +167,7 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
         error,
         errorCode,
         lastCompleted,
+        modelProgress,
         worldMap,
         detectedObjects,
         initModel,

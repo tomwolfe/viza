@@ -20,7 +20,7 @@ export interface PendingRequest<T> {
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   bitmapHandle: ImageBitmap | null;
-  type: 'chat' | 'planning' | 'correction' | 'category' | 'verification';
+  type: WorkerMessageType;
 }
 
 export interface WorkerClientOptions {
@@ -34,6 +34,7 @@ export interface WorkerClientOptions {
   onUnresponsive?: () => void;
   inferenceTimeoutMs?: number;
   planningTimeoutMs?: number;
+  initializationTimeoutMs?: number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   onSoftReload?: () => void;
@@ -41,6 +42,7 @@ export interface WorkerClientOptions {
 
 const DEFAULT_INFERENCE_TIMEOUT = 15000;
 const DEFAULT_PLANNING_TIMEOUT = 30000;
+const DEFAULT_INITIALIZATION_TIMEOUT = 300000;
 const DEFAULT_HEARTBEAT_INTERVAL = 30000;
 const DEFAULT_HEARTBEAT_TIMEOUT = 60000;
 
@@ -70,6 +72,7 @@ export class WorkerClient {
       onUnresponsive: options.onUnresponsive ?? (() => {}),
       inferenceTimeoutMs: options.inferenceTimeoutMs ?? DEFAULT_INFERENCE_TIMEOUT,
       planningTimeoutMs: options.planningTimeoutMs ?? DEFAULT_PLANNING_TIMEOUT,
+      initializationTimeoutMs: options.initializationTimeoutMs ?? DEFAULT_INITIALIZATION_TIMEOUT,
       heartbeatIntervalMs: options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL,
       heartbeatTimeoutMs: options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT,
       onSoftReload: options.onSoftReload ?? (() => {}),
@@ -258,16 +261,31 @@ export class WorkerClient {
     return crypto.randomUUID();
   }
 
-  private createTimeout(type: 'chat' | 'planning' | 'correction' | 'category' | 'verification', messageId: string): ReturnType<typeof setTimeout> {
-    const timeoutMs = type === 'planning' || type === 'correction'
-      ? this.options.planningTimeoutMs 
-      : this.options.inferenceTimeoutMs;
-    
+  private createTimeout(type: WorkerMessageType, messageId: string): ReturnType<typeof setTimeout> {
+    let timeoutMs: number;
+
+    switch (type) {
+      case 'init':
+        timeoutMs = this.options.initializationTimeoutMs;
+        break;
+      case 'planning':
+      case 'correction':
+        timeoutMs = this.options.planningTimeoutMs;
+        break;
+      default:
+        timeoutMs = this.options.inferenceTimeoutMs;
+        break;
+    }
+
     return setTimeout(() => {
       this.pendingRequests.delete(messageId);
+
+      const errorType = type === 'init' ? 'Initialization' : type === 'planning' || type === 'correction' ? 'Planning' : 'Inference';
+      const errorCode = type === 'init' ? 'MODEL_INIT_FAILED' : 'INFERENCE_TIMEOUT';
+
       this.options.onError(
-        `${type === 'planning' ? 'Planning' : type === 'correction' ? 'Correction' : type === 'category' ? 'Category' : 'Inference'} timeout after ${timeoutMs / 1000}s`,
-        'INFERENCE_TIMEOUT',
+        `${errorType} timeout after ${timeoutMs / 1000}s`,
+        errorCode,
         messageId
       );
     }, timeoutMs);
@@ -276,10 +294,9 @@ export class WorkerClient {
   private createPendingRequest(
     type: WorkerMessageType,
     messageId: string,
-    inferenceType: 'chat' | 'planning' | 'correction' | 'category' | 'verification',
     transfer?: Transferable[]
   ): PendingRequest<unknown> {
-    const timeoutId = this.createTimeout(inferenceType, messageId);
+    const timeoutId = this.createTimeout(type, messageId);
     const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
 
     const pending: PendingRequest<unknown> = {
@@ -287,7 +304,7 @@ export class WorkerClient {
       reject: (() => {}) as (error: Error) => void,
       timeoutId,
       bitmapHandle,
-      type: inferenceType,
+      type,
     };
 
     this.pendingRequests.set(messageId, pending);
@@ -321,18 +338,17 @@ export class WorkerClient {
     }
 
     const messageId = this.createRequestId();
-    const inferenceType = type === 'planning' ? 'planning' : type === 'category' ? 'category' : type === 'verification' ? 'verification' : 'chat';
     const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
 
     return new Promise<T>((resolve, reject) => {
-      const timeoutId = this.createTimeout(inferenceType, messageId);
+      const timeoutId = this.createTimeout(type, messageId);
 
       const pending: PendingRequest<T> = {
         resolve,
         reject,
         timeoutId,
         bitmapHandle,
-        type: inferenceType,
+        type: type,
       };
 
       this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);

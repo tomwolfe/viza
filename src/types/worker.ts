@@ -39,6 +39,7 @@ export interface VizaError extends Error {
 export type VizaErrorCode =
   | 'WEBGPU_NOT_SUPPORTED'
   | 'WORKER_INIT_FAILED'
+  | 'MODEL_INIT_FAILED'
   | 'INFERENCE_TIMEOUT'
   | 'INFERENCE_ERROR'
   | 'MODEL_NOT_READY'
