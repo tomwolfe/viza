@@ -334,7 +334,7 @@ export function useTaskState(): UseTaskStateReturn {
     return { isStalled, timeOnStep, shouldSuggestHint };
   }, [taskState]);
 
-const generateHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number }[]}): string => {
+const generateHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number }[]}[]): string => {
     const currentStep = taskState.steps[taskState.currentStepIndex];
     if (!currentStep) return '';
 
