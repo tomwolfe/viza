@@ -1,5 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-// intentionally excludes vizaErrorState from initWorker deps to prevent circular dependency loop
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -28,6 +26,11 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const isInitializedRef = useRef(false);
   const isInitializingRef = useRef(false);
   const [isModelReady, setIsModelReady] = useState(false);
+  const vizaErrorCodeRef = useRef(vizaErrorState.code);
+
+  useEffect(() => {
+    vizaErrorCodeRef.current = vizaErrorState.code;
+  }, [vizaErrorState.code]);
 
    const getWorkerConfig = () => ({
     onReady: () => {
@@ -61,7 +64,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     const gpuCheck = await checkWebGPU();
     if (!gpuCheck.supported) {
       setIsDeviceCompatible(false);
-      if (vizaErrorState.code !== 'WEBGPU_NOT_SUPPORTED') {
+      if (vizaErrorCodeRef.current !== 'WEBGPU_NOT_SUPPORTED') {
         setVizaError('WEBGPU_NOT_SUPPORTED', `WebGPU not supported: ${gpuCheck.issues.join('; ')}`);
       }
       return false;
@@ -130,7 +133,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     } finally {
       isInitializingRef.current = false;
     }
-  }, [initWorker, isDeviceCompatible, isInitializedRef, setVizaError, isModelReady]);
+  }, [initWorker, isDeviceCompatible, setVizaError, isModelReady]);
 
   const dispose = useCallback(() => {
     const client = workerClientRef.current;
