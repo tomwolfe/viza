@@ -100,7 +100,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       loadingRef.current = false;
       logger.error('[Voice] Failed to load Whisper model:', err);
       setError('Failed to load speech recognition model.');
-      setErrorCode('MODEL_LOAD_FAILED');
+      setErrorCode('VOICE_ERROR');
     }
   }, []);
 
@@ -235,7 +235,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
       if (!isLoadedRef.current) {
         setError('Failed to load speech recognition model.');
-        setErrorCode('MODEL_LOAD_FAILED');
+     setErrorCode('VOICE_ERROR');
         setStatus('idle');
         return;
       }
@@ -325,7 +325,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
           }).catch((err: unknown) => {
             logger.error('[Voice] Transcription failed:', err);
             setError('Transcription failed.');
-            setErrorCode('TRANSCRIPTION_ERROR');
+   setErrorCode('VOICE_ERROR');
             setStatus('idle');
           });
         }
@@ -408,7 +408,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         }).catch((err: unknown) => {
           logger.error('[Voice] Transcription failed:', err);
           setError('Transcription failed.');
-          setErrorCode('TRANSCRIPTION_ERROR');
+          setErrorCode('VOICE_ERROR');
         });
       }
     }
