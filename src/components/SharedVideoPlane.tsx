@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface SharedVideoPlaneProps {
@@ -13,11 +13,11 @@ export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
   const { viewport } = useThree();
   const texture = useMemo(() => {
     const newTexture = new THREE.VideoTexture(video);
+    newTexture.generateMipmaps = false;
     newTexture.minFilter = THREE.LinearFilter;
     newTexture.magFilter = THREE.LinearFilter;
     newTexture.format = THREE.RGBAFormat;
     newTexture.colorSpace = THREE.SRGBColorSpace;
-    newTexture.needsUpdate = true;
     return newTexture;
   }, [video]);
 
@@ -25,15 +25,11 @@ export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
     return [viewport.width, viewport.height, 1];
   }, [viewport.width, viewport.height]);
 
-  useEffect(() => {
-    const onVideoPlay = () => {
+  useFrame(() => {
+    if (video.readyState >= 2) {
       texture.needsUpdate = true;
-    };
-    video.addEventListener('playing', onVideoPlay);
-    return () => {
-      video.removeEventListener('playing', onVideoPlay);
-    };
-  }, [video, texture]);
+    }
+  });
 
   useEffect(() => {
     return () => {

@@ -98,6 +98,12 @@ export function useUserMedia({
 
       video.srcObject = mediaStream;
 
+      try {
+        await video.play();
+      } catch (e) {
+        console.warn('[useUserMedia] video.play() failed:', e);
+      }
+
       streamRef.current = mediaStream;
       setStream(mediaStream);
       setVideoElement(video);

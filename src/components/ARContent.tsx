@@ -52,7 +52,7 @@ export function ARContent() {
           </Canvas>
         </ErrorBoundary>
 
-        <ARControlsWrapper onStartAR={handleStartAR} />
+        <ARControlsWrapper onStartAR={handleStartAR} isARActive={isARActive} />
         <AROverlayWrapper isARActive={isARActive} />
       </TaskProvider>
     </main>
@@ -75,9 +75,8 @@ function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; scene
   );
 }
 
-function ARControlsWrapper({ onStartAR }: { onStartAR: () => void }) {
+function ARControlsWrapper({ onStartAR, isARActive }: { onStartAR: () => void; isARActive: boolean }) {
   const { isInferring, isModelReady, isDeviceCompatible, modelProgress } = useVizaOrchestrator();
-  const { isARActive } = useAROrchestrator();
   const isIncompatible = isDeviceCompatible === false;
 
   return (
