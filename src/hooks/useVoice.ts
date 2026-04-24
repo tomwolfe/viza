@@ -64,8 +64,6 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
   const chunksRef = useRef<Float32Array[]>([]);
   const isRunningRef = useRef(false);
 
@@ -76,9 +74,6 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       }
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
       }
     };
   }, []);
@@ -253,10 +248,11 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
+     const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
+          channelCount: 1,
           sampleRate: 16000,
         },
       });
@@ -267,32 +263,26 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       audioContextRef.current = audioContext;
 
       const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 2048;
-      analyserRef.current = analyser;
 
-      source.connect(analyser);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if (!isRunningRef.current) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        chunksRef.current.push(new Float32Array(inputData));
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
 
       setStatus('listening');
       setError(null);
       isRunningRef.current = true;
 
-      const process = () => {
-        if (!isRunningRef.current) return;
-
-        const dataArray = new Float32Array(analyser.fftSize);
-        analyser.getFloatTimeDomainData(dataArray);
-        chunksRef.current.push(new Float32Array(dataArray));
-        animationFrameRef.current = requestAnimationFrame(process);
-      };
-
-      animationFrameRef.current = requestAnimationFrame(process);
-
       const timeoutId = setTimeout(() => {
         isRunningRef.current = false;
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
+        processor.disconnect();
+        source.disconnect();
         if (audioContext) {
           audioContext.close();
         }
@@ -309,8 +299,11 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
           offset += chunk.length;
         }
 
-       if (pipelineRef.current && combined.length > 0) {
-          pipelineRef.current(combined).then((result: any) => {
+        if (pipelineRef.current && combined.length > 0) {
+          pipelineRef.current(combined, {
+            chunk_length_s: 30,
+            stride_length_s: 5,
+          }).then((result: any) => {
             const text = typeof result === 'string' ? result : result.text || '';
             setTranscript(text);
 
@@ -340,14 +333,10 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
       const cleanup = () => {
         isRunningRef.current = false;
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        if (source) {
-          source.disconnect();
-        }
-        if (audioContext) {
-          audioContext.close();
+        processor.disconnect();
+        source.disconnect();
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+          audioContextRef.current.close();
         }
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach(track => track.stop());
@@ -391,7 +380,10 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       }
 
       if (pipelineRef.current && combined.length > 0) {
-        pipelineRef.current(combined).then((result: any) => {
+        pipelineRef.current(combined, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+        }).then((result: any) => {
           const text = typeof result === 'string' ? result : result.text || '';
           setTranscript(text);
 
