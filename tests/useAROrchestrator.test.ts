@@ -29,6 +29,31 @@ vi.mock('@/contexts/VizaErrorContext', () => ({
 
 import { useVizaError } from '@/contexts/VizaErrorContext';
 
+vi.mock('../src/contexts/VizaOrchestratorContext', () => ({
+  VizaOrchestratorProvider: ({ children, modelId }: { children: React.ReactNode; modelId?: string }) => ({ children }),
+  useVizaOrchestrator: vi.fn(() => ({
+    isModelReady: false,
+    isInferring: false,
+    isDeviceCompatible: true,
+    error: null,
+    errorCode: null,
+    lastCompleted: false,
+    modelProgress: 0,
+    worldMap: [],
+    detectedObjects: [],
+    initModel: vi.fn().mockImplementation(async () => {}),
+    dispose: vi.fn(),
+    runInference: vi.fn().mockImplementation(async () => null),
+    runPlanningInference: vi.fn().mockResolvedValue([]),
+    runCategoryInference: vi.fn().mockResolvedValue(null),
+    runVerificationInference: vi.fn().mockResolvedValue({ isCompleted: false, confidence: 0 }),
+    addOrUpdateObject: vi.fn(),
+    clearWorldMap: vi.fn(),
+    setDetectedObjects: vi.fn(),
+    getDetectedObjects: vi.fn().mockReturnValue([]),
+  })),
+}));
+
 vi.mock('../src/contexts/WebLLMContext', () => {
   return {
     WebLLMProvider: ({ children }: { children: React.ReactNode }) => ({ children }),

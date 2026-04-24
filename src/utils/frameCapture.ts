@@ -42,8 +42,9 @@ class BitmapPool {
   }
 
   dispose(): void {
+    const OC = typeof OffscreenCanvas !== 'undefined' ? OffscreenCanvas : null;
     for (const c of this.canvasPool) {
-      if (c instanceof OffscreenCanvas) {
+      if (OC !== null && c instanceof OC) {
         (c as unknown as { close(): void }).close();
       }
     }

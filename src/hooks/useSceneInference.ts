@@ -54,6 +54,7 @@ export function useSceneInference({
         if (oldBitmap) {
           oldBitmap.close();
         }
+        frame.close();
       }
       return frame;
     },

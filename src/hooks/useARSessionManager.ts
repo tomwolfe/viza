@@ -32,12 +32,14 @@ export function useARSessionManager(): UseARSessionManagerResult {
       if (webXR.isSupported) {
         const xrSuccess = await webXR.startSession();
         if (xrSuccess) {
+          console.trace('[Viza:DEBUG] Setting isARActive=true (XR session started)');
           setIsARActive(true);
           clearVizaError();
           return;
         }
       }
 
+      console.trace('[Viza:DEBUG] Setting isARActive=true (fallback)');
       setIsARActive(true);
       clearVizaError();
     } catch (err) {
@@ -50,6 +52,7 @@ export function useARSessionManager(): UseARSessionManagerResult {
     if (webXR.isActive) {
       await webXR.endSession();
     }
+    console.trace('[Viza:DEBUG] Setting isARActive=false');
     setIsARActive(false);
   }, [webXR]);
 

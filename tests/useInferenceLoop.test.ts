@@ -140,6 +140,10 @@ describe('useInferenceLoop', () => {
       vi.advanceTimersByTime(4000);
     });
 
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+
     expect(runInference).toHaveBeenCalled();
   });
 });

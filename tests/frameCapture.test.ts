@@ -31,6 +31,7 @@ describe('Frame Capture Utilities', () => {
         transferToImageBitmap() {
           return new MockImageBitmap();
         }
+        close() {}
       };
     }
 

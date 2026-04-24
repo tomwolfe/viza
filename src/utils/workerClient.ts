@@ -323,6 +323,17 @@ export class WorkerClient {
     this.pendingRequests.clear();
   }
 
+  private clearBitmapHandles(): void {
+    this.pendingRequests.forEach((pending) => {
+      if (isBitmapValid(pending.bitmapHandle)) {
+        ensureBitmapClosed(pending.bitmapHandle);
+      }
+    });
+    this.pendingRequests.forEach((pending) => {
+      pending.bitmapHandle = null;
+    });
+  }
+
  sendMessage<T>(
     type: WorkerMessageType,
     payload: Record<string, unknown>,
@@ -381,9 +392,7 @@ export class WorkerClient {
           req.bitmapHandle = null;
         }
       } catch (err) {
-        if (isBitmapValid(bitmapHandle)) {
-          ensureBitmapClosed(bitmapHandle);
-        }
+        ensureBitmapClosed(bitmapHandle);
         cleanup();
         reject(err);
       }

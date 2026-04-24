@@ -52,7 +52,11 @@ export function useInferenceLoop({
 
   const processFrame = useCallback(
     async (prompt: string) => {
-      if (isRunningRef.current || !videoRef.current || !acknowledgedRef.current) return;
+      if (isRunningRef.current || !videoRef.current || !acknowledgedRef.current) {
+        isRunningRef.current = false;
+        acknowledgedRef.current = true;
+        return;
+      }
 
       const loopStartTime = performance.now();
       isRunningRef.current = true;
@@ -133,12 +137,12 @@ export function useInferenceLoop({
 
     let isMounted = true;
 
-    const loop = async () => {
+     const loop = async () => {
       if (!isMounted || !stateRef.current.isActive) return;
 
       const { captureFrame: captureFrameRef, processFrame: processFrameRef, getStallStatus: getStallStatusRef, getVlmVerificationFailureCount: getVlmVerificationFailureCountRef, isTaskActive: isTaskActiveRef, runVerificationInference: runVerificationInferenceRef, triggerCorrectionFlow: triggerCorrectionFlowRef, triggerHint: triggerHintRef, worldMapObjects: worldMapObjectsRef } = callbacksRef.current;
 
-      if (!isRunningRef.current && !stateRef.current.isInferring && acknowledgedRef.current) {
+      if (!isRunningRef.current && acknowledgedRef.current) {
         if (getStallStatusRef && triggerHintRef) {
           const stallStatus = getStallStatusRef();
           if (stallStatus.shouldSuggestHint) {

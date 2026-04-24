@@ -82,6 +82,7 @@ export function ARScene({
         worldObjects={worldObjects || []}
         taskActive={taskActive ?? false}
         currentStepTarget={currentStepTarget}
+        videoElement={videoElement}
         cameraRef={cameraRef}
         viewportRef={viewportRef}
       />

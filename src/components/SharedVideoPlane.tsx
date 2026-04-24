@@ -11,7 +11,6 @@ interface SharedVideoPlaneProps {
 export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const { viewport } = useThree();
-
   const texture = useMemo(() => {
     const newTexture = new THREE.VideoTexture(video);
     newTexture.minFilter = THREE.LinearFilter;
@@ -25,6 +24,16 @@ export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
   const planeScale: [number, number, number] = useMemo(() => {
     return [viewport.width, viewport.height, 1];
   }, [viewport.width, viewport.height]);
+
+  useEffect(() => {
+    const onVideoPlay = () => {
+      texture.needsUpdate = true;
+    };
+    video.addEventListener('playing', onVideoPlay);
+    return () => {
+      video.removeEventListener('playing', onVideoPlay);
+    };
+  }, [video, texture]);
 
   useEffect(() => {
     return () => {
