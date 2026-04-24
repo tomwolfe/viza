@@ -56,7 +56,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
     planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
     initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
-  }), []);
+  }), [setVizaError]);
 
   const initWorker = useCallback(async (): Promise<boolean> => {
     if (isInitializedRef.current) return true;
