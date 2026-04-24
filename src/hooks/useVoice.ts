@@ -88,13 +88,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
     try {
       const pipe = await pipeline('automatic-speech-recognition', MODEL_ID, {
-        device: 'wasm',
-        profile: 'wasm-web',
-        overrides: {
-          model: {
-            dtype: 'int8',
-          },
-        },
+        quantized: true,
       });
 
       pipelineRef.current = pipe;
