@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { DEFAULT_SYSTEM_PROMPT } from '@/services/promptManager';
 import { logger, CONFIG, checkWebGPU } from '@/config';
 import { WorkerClient, createWorkerClient } from '@/utils/workerClient';
@@ -32,7 +32,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     vizaErrorCodeRef.current = vizaErrorState.code;
   }, [vizaErrorState.code]);
 
-   const getWorkerConfig = () => ({
+  const getWorkerConfig = useMemo(() => ({
     onReady: () => {
       logger.info('[WebLLM] Worker ready');
     },
@@ -56,7 +56,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     inferenceTimeoutMs: CONFIG.INFERENCE_TIMEOUT_MS,
     planningTimeoutMs: CONFIG.PLANNING_TIMEOUT_MS,
     initializationTimeoutMs: CONFIG.INITIALIZATION_TIMEOUT_MS,
-  });
+  }), []);
 
   const initWorker = useCallback(async (): Promise<boolean> => {
     if (isInitializedRef.current) return true;
@@ -88,7 +88,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       setVizaError('WORKER_INIT_FAILED', 'Failed to create AI worker instance.');
       return false;
     }
-  }, [setVizaError]);
+  }, [setVizaError, getWorkerConfig]);
 
   const initModel = useCallback(async () => {
     if (isInitializingRef.current || isModelReady) {
@@ -133,7 +133,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     } finally {
       isInitializingRef.current = false;
     }
-  }, [initWorker, isDeviceCompatible, setVizaError, isModelReady]);
+  }, [initWorker, isDeviceCompatible, setVizaError, isModelReady, getWorkerConfig]);
 
   const dispose = useCallback(() => {
     const client = workerClientRef.current;
