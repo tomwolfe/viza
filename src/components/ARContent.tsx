@@ -80,16 +80,17 @@ function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; scene
 
 function ARControlsWrapper({ onStartAR, isARActive }: { onStartAR: () => void; isARActive: boolean }) {
   const { isInferring, isModelReady, isDeviceCompatible, modelProgress } = useVizaOrchestrator();
+  const { startListening, isListening } = useTaskContext();
   const isIncompatible = isDeviceCompatible === false;
 
   return (
     <ARControls
       onStartAR={onStartAR}
-      onVoiceInput={() => {}}
+      onVoiceInput={startListening}
       isARActive={isARActive}
       isModelLoading={!isModelReady && isInferring}
       modelProgress={modelProgress}
-      isListening={false}
+      isListening={isListening}
       isDeviceIncompatible={isIncompatible}
     />
   );
