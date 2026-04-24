@@ -66,51 +66,58 @@ export function useUserMedia({
 
   const startSingleAttempt = useCallback(async (): Promise<boolean> => {
     if (cancelledRef.current) return false;
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: width },
-          height: { ideal: height },
-        },
-        audio: false,
-      });
 
-      if (cancelledRef.current) {
-        mediaStream.getTracks().forEach((t) => t.stop());
-        return false;
-      }
+    if (streamRef.current && videoRef.current?.srcObject === streamRef.current) {
+      return true;
+    }
 
-      let video = videoRef.current;
-      if (!video) {
-        video = document.createElement('video');
-        video.className = 'viza-video-elt';
-        video.setAttribute('autoplay', '');
-        video.setAttribute('playsinline', '');
-        video.setAttribute('muted', '');
-        video.style.setProperty('position', 'fixed');
-        video.style.setProperty('left', '-9999px');
-        video.style.setProperty('top', '-9999px');
-        video.style.setProperty('width', '1px');
-        video.style.setProperty('height', '1px');
-        document.body.appendChild(video);
-        videoRef.current = video;
-      }
+    const mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: facingMode },
+        width: { ideal: width },
+        height: { ideal: height },
+      },
+      audio: false,
+    });
 
-      video.srcObject = mediaStream;
+    if (cancelledRef.current) {
+      mediaStream.getTracks().forEach((t) => t.stop());
+      return false;
+    }
 
-      try {
-        await video.play();
-      } catch (e) {
+    let video = videoRef.current;
+    if (!video) {
+      video = document.createElement('video');
+      video.className = 'viza-video-elt';
+      video.setAttribute('autoplay', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
+      video.style.setProperty('position', 'fixed');
+      video.style.setProperty('left', '-9999px');
+      video.style.setProperty('top', '-9999px');
+      video.style.setProperty('width', '1px');
+      video.style.setProperty('height', '1px');
+      document.body.appendChild(video);
+      videoRef.current = video;
+    }
+
+    video.srcObject = mediaStream;
+
+    try {
+      await video.play();
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
         console.warn('[useUserMedia] video.play() failed:', e);
       }
+    }
 
-      streamRef.current = mediaStream;
-      setStream(mediaStream);
-      setVideoElement(video);
-      setStatus('active');
-      setError(null);
+    streamRef.current = mediaStream;
+    setStream(mediaStream);
+    setVideoElement(video);
+    setStatus('active');
+    setError(null);
 
-      return true;
+    return true;
   }, [facingMode, width, height]);
 
   const start = useCallback(async (): Promise<boolean> => {
@@ -150,9 +157,12 @@ export function useUserMedia({
 
   useEffect(() => {
     cancelledRef.current = false;
-    if (isActive && status === 'idle') {
-      start();
-    } else if (!isActive && status !== 'idle') {
+
+    if (isActive) {
+      if (streamRef.current === null) {
+        start();
+      }
+    } else {
       stop();
     }
     
@@ -160,7 +170,7 @@ export function useUserMedia({
       cancelledRef.current = true;
       stop();
     };
-  }, [isActive, status, start, stop]);
+  }, [isActive, start, stop]);
 
   return {
     videoElement,
