@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { logger } from '@/config';
 import type { VizaErrorCode } from '@/types/worker';
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@huggingface/transformers';
+
+// Disable local model loading — use HuggingFace Hub CDN
+env.allowLocalModels = false;
+env.allowRemoteModels = true;
 
 type VoiceStatus = 'idle' | 'listening' | 'starting';
 
@@ -28,7 +32,7 @@ interface UseVoiceReturn {
   lastQueryType: 'command' | 'spatial_query' | 'none';
 }
 
-const MODEL_ID = 'Xenova/whisper-tiny.en';
+const MODEL_ID = 'onnx-community/whisper-tiny.en';
 
 export function useVoice(onCommand?: (transcript: string) => void): UseVoiceReturn {
   const [status, setStatus] = useState<VoiceStatus>('idle');
@@ -88,19 +92,28 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
     try {
       const pipe = await pipeline('automatic-speech-recognition', MODEL_ID, {
-        quantized: true,
+        device: 'webgpu',
       });
 
       pipelineRef.current = pipe;
       isLoadedRef.current = true;
       loadingRef.current = false;
 
-      logger.info('[Voice] Whisper model loaded successfully:', MODEL_ID);
+      logger.info('[Voice] Whisper WebGPU loaded:', MODEL_ID);
     } catch (err) {
       loadingRef.current = false;
-      logger.error('[Voice] Failed to load Whisper model:', err);
-      setError('Failed to load speech recognition model.');
-      setErrorCode('VOICE_ERROR');
+      logger.error('[Voice] WebGPU failed, falling back to WASM:', err);
+      try {
+        const pipe = await pipeline('automatic-speech-recognition', MODEL_ID);
+        pipelineRef.current = pipe;
+        isLoadedRef.current = true;
+        loadingRef.current = false;
+        logger.info('[Voice] Whisper WASM loaded:', MODEL_ID);
+      } catch (fallbackErr) {
+        logger.error('[Voice] WASM fallback also failed:', fallbackErr);
+        setError('Failed to load speech recognition model.');
+        setErrorCode('VOICE_ERROR');
+      }
     }
   }, []);
 
@@ -267,13 +280,9 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       const process = () => {
         if (!isRunningRef.current) return;
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(dataArray);
-        const converted = new Float32Array(dataArray.length);
-        for (let i = 0; i < dataArray.length; i++) {
-          converted[i] = (dataArray[i] - 128) / 128;
-        }
-        chunksRef.current.push(converted);
+        const dataArray = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(dataArray);
+        chunksRef.current.push(new Float32Array(dataArray));
         animationFrameRef.current = requestAnimationFrame(process);
       };
 
@@ -300,13 +309,9 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
           offset += chunk.length;
         }
 
-        if (pipelineRef.current) {
-          pipelineRef.current(combined, {
-            forward: {
-              batch_size: 1,
-            },
-          }).then((result: any) => {
-            const text = result?.text || '';
+       if (pipelineRef.current && combined.length > 0) {
+          pipelineRef.current(combined).then((result: any) => {
+            const text = typeof result === 'string' ? result : result.text || '';
             setTranscript(text);
 
             if (text) {
@@ -325,7 +330,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
           }).catch((err: unknown) => {
             logger.error('[Voice] Transcription failed:', err);
             setError('Transcription failed.');
-   setErrorCode('VOICE_ERROR');
+            setErrorCode('VOICE_ERROR');
             setStatus('idle');
           });
         }
@@ -385,13 +390,9 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
         offset += chunk.length;
       }
 
-      if (pipelineRef.current) {
-        pipelineRef.current(combined, {
-          forward: {
-            batch_size: 1,
-          },
-        }).then((result: any) => {
-          const text = result?.text || '';
+      if (pipelineRef.current && combined.length > 0) {
+        pipelineRef.current(combined).then((result: any) => {
+          const text = typeof result === 'string' ? result : result.text || '';
           setTranscript(text);
 
           if (text) {
