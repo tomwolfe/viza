@@ -71,8 +71,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     }
     setIsDeviceCompatible(true);
 
-    const workerConfig = getWorkerConfig();
-    const client = createWorkerClient(workerConfig);
+    const client = createWorkerClient(getWorkerConfig);
 
     try {
       const worker = new Worker(
@@ -118,8 +117,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
       setIsModelReady(true);
       client.startHeartbeat(() => {
-        const workerConfig = getWorkerConfig();
-        const newClient = createWorkerClient(workerConfig);
+        const newClient = createWorkerClient(getWorkerConfig);
         const worker = new Worker(
           new URL('../worker/vision.worker.ts', import.meta.url),
           { type: 'module' }
