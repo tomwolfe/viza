@@ -237,7 +237,7 @@ export class VizaWorker {
   private async _executeInference(
     messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: ImageBitmap }; text?: string }> }>,
     maxTokens: number
-  ): Promise<webllm.ChatCompletionResponse> {
+  ): Promise<webllm.ChatCompletion> {
     this.postMessageFn({ type: 'inference_start' });
     return await (this.state.engine!.chat.completions as any).create({
       messages,

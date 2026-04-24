@@ -10,6 +10,8 @@ import {
 
 export const JSON_OUTPUT_TEMPLATE = 'Return ONLY a valid JSON object with the structure:\n<<SCHEMA>>\nDo not include any other text. Only return the JSON object.';
 
+export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful assistant for spatial tasks. Analyze the user input and provide useful responses.';
+
 export const VisionResponseSchema = VisionResponseSchemaRaw;
 export type InferenceResult = z.infer<typeof VisionResponseSchemaRaw>;
 export type PlanningResult = PlanningResponse;

@@ -7,6 +7,7 @@ import { DEFAULT_SYSTEM_PROMPT } from '@/services/promptManager';
 import { logger, CONFIG, checkWebGPU } from '@/config';
 import { WorkerClient, createWorkerClient } from '@/utils/workerClient';
 import { useVizaError } from '@/contexts/VizaErrorContext';
+import type { VizaErrorCode } from '@/types/worker';
 
 
 interface UseWebLLMWorkerOptions {
@@ -35,7 +36,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     onProgress: (progress: number) => {
       setModelProgress(progress);
     },
-    onError: (message: string, code: string) => {
+    onError: (message: string, code: VizaErrorCode) => {
       logger.error('[WebLLM] Error:', message);
       setVizaError(code, message);
       setIsInferring(false);

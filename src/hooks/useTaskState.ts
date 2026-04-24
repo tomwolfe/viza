@@ -334,7 +334,7 @@ export function useTaskState(): UseTaskStateReturn {
     return { isStalled, timeOnStep, shouldSuggestHint };
   }, [taskState]);
 
-const generateHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number }[]}[]): string => {
+const generateHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number } }[]): string => {
     const currentStep = taskState.steps[taskState.currentStepIndex];
     if (!currentStep) return '';
 
@@ -349,19 +349,19 @@ const generateHint = useCallback((worldMapObjects: { name: string; position?: { 
       const lastSeen = knownObjects[0].position;
       if (lastSeen) {
         const directions = [
-          { x: 1, label: 'right' },
-          { x: -1, label: 'left' },
-          { y: 1, label: 'above' },
-          { y: -1, label: 'below' },
-          { z: 1, label: 'behind' },
-          { z: -1, label: 'in front of' },
+          { key: 'x' as const, label: 'right', value: 1 },
+          { key: 'x' as const, label: 'left', value: -1 },
+          { key: 'y' as const, label: 'above', value: 1 },
+          { key: 'y' as const, label: 'below', value: -1 },
+          { key: 'z' as const, label: 'behind', value: 1 },
+          { key: 'z' as const, label: 'in front of', value: -1 },
         ];
 
         const relativeDir = directions.find(
-          (d: { x?: number; y?: number; z?: number }) =>
-            d.x && lastSeen.x && Math.sign(lastSeen.x) === Math.sign(d.x) ||
-            d.y && lastSeen.y && Math.sign(lastSeen.y) === Math.sign(d.y) ||
-            d.z && lastSeen.z && Math.sign(lastSeen.z) === Math.sign(d.z)
+          (d) => {
+            const lastVal = lastSeen[d.key];
+            return lastVal && Math.sign(lastVal) === Math.sign(d.value);
+          }
         )?.label || 'nearby';
 
         const dist = Math.sqrt(
@@ -379,7 +379,7 @@ const generateHint = useCallback((worldMapObjects: { name: string; position?: { 
     }
   }, [taskState]);
 
-   const triggerHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number }[] }) => {
+   const triggerHint = useCallback((worldMapObjects: { name: string; position?: { x: number; y: number; z: number } }[]) => {
     if (!taskState.isActive) return;
 
     const hintText = generateHint(worldMapObjects);
