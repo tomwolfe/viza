@@ -3,11 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { logger } from '@/config';
 import type { VizaErrorCode } from '@/types/worker';
-import type { 
-  SpeechRecognitionEvent, 
-  SpeechRecognitionErrorEvent, 
-  SpeechRecognitionInstance 
-} from '@/types/speech';
+import { pipeline } from '@xenova/transformers';
 
 type VoiceStatus = 'idle' | 'listening' | 'starting';
 
@@ -32,46 +28,87 @@ interface UseVoiceReturn {
   lastQueryType: 'command' | 'spatial_query' | 'none';
 }
 
+const MODEL_ID = 'Xenova/whisper-tiny.en';
+
 export function useVoice(onCommand?: (transcript: string) => void): UseVoiceReturn {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
-
-  const onCommandRef = useRef(onCommand);
-
-  const [isSupported] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  });
-
-  const [error, setError] = useState<string | null>(() => {
-    if (!isSupported) {
-      return 'Speech recognition is not supported in this browser.';
-    }
-    return null;
-  });
+  const [isSupported, setIsSupported] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<VizaErrorCode | null>(null);
-
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const shouldRestartRef = useRef(false);
-  const isIntendingToListenRef = useRef(false);
-  const spatialQueryHandlerRef = useRef<SpatialQueryHandler | null>(null);
   const [lastQueryType, setLastQueryType] = useState<'command' | 'spatial_query' | 'none'>('none');
 
-  const SPATIAL_QUERY_PATTERNS = useMemo(() => [
-    /where.*(is|was|are|were)\s+(the\s+)?(\w+)/i,
-    /where.*did.*see\s+(the\s+)?(\w+)/i,
-    /where.*(\w+)\s+located/i,
-    /where.*(\w+)\s+position/i,
-    /how.*far.*(\w+)/i,
-    /direction.*(\w+)/i,
-    /where.*should.*look/i,
-    /point.*to.*(\w+)/i,
-  ], []);
+  const onCommandRef = useRef(onCommand);
+  const spatialQueryHandlerRef = useRef<SpatialQueryHandler | null>(null);
 
- useEffect(() => {
+  useEffect(() => {
     onCommandRef.current = onCommand;
   }, [onCommand]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
+      setIsSupported(false);
+      setError('Audio input not supported in this environment.');
+      return;
+    }
+  }, []);
+
+  const pipelineRef = useRef<any>(null);
+  const isLoadedRef = useRef(false);
+  const loadingRef = useRef(false);
+
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const chunksRef = useRef<Float32Array[]>([]);
+  const isRunningRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  const loadModel = useCallback(async () => {
+    if (loadingRef.current || isLoadedRef.current) {
+      return;
+    }
+
+    loadingRef.current = true;
+
+    try {
+      const pipe = await pipeline('automatic-speech-recognition', MODEL_ID, {
+        device: 'wasm',
+        profile: 'wasm-web',
+        overrides: {
+          model: {
+            dtype: 'int8',
+          },
+        },
+      });
+
+      pipelineRef.current = pipe;
+      isLoadedRef.current = true;
+      loadingRef.current = false;
+
+      logger.info('[Voice] Whisper model loaded successfully:', MODEL_ID);
+    } catch (err) {
+      loadingRef.current = false;
+      logger.error('[Voice] Failed to load Whisper model:', err);
+      setError('Failed to load speech recognition model.');
+      setErrorCode('MODEL_LOAD_FAILED');
+    }
+  }, []);
 
   const speak = useCallback((text: string): void => {
     if (!window.speechSynthesis) {
@@ -102,6 +139,17 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
 
     window.speechSynthesis.speak(utterance);
   }, []);
+
+  const SPATIAL_QUERY_PATTERNS = useMemo(() => [
+    /where.*(is|was|are|were)\s+(the\s+)?(\w+)/i,
+    /where.*did.*see\s+(the\s+)?(\w+)/i,
+    /where.*(\w+)\s+located/i,
+    /where.*(\w+)\s+position/i,
+    /how.*far.*(\w+)/i,
+    /direction.*(\w+)/i,
+    /where.*should.*look/i,
+    /point.*to.*(\w+)/i,
+  ], []);
 
   const handleSpatialQuery = useCallback((query: string) => {
     const handler = spatialQueryHandlerRef.current;
@@ -173,117 +221,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     }
   }, [SPATIAL_QUERY_PATTERNS, speak]);
 
-  const handleResult = useCallback((event: SpeechRecognitionEvent) => {
-    let finalTranscript = '';
-    let interimTranscript = '';
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i];
-      if (result.isFinal) {
-        finalTranscript += result[0].transcript;
-      } else {
-        interimTranscript += result[0].transcript;
-      }
-    }
-
-    const transcriptText = (finalTranscript || interimTranscript).trim();
-    setTranscript(transcriptText);
-
-    if (!finalTranscript) return;
-
-    if (spatialQueryHandlerRef.current && transcriptText) {
-      handleSpatialQuery(transcriptText);
-      setLastQueryType('spatial_query');
-      return;
-    }
-
-    setLastQueryType('command');
-    if (onCommandRef.current) {
-      onCommandRef.current(transcriptText);
-    }
-  }, [handleSpatialQuery]);
-
-  const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
-    logger.error('[Voice] Speech recognition error:', event.error);
-    setStatus('idle');
-
-    switch (event.error) {
-      case 'no-speech':
-        setError('No speech detected. Please try again.');
-        setErrorCode('NO_SPEECH_DETECTED');
-        break;
-      case 'audio-capture':
-        setError('No microphone found. Please ensure microphone is connected.');
-        setErrorCode('MICROPHONE_NOT_FOUND');
-        break;
-      case 'not-allowed':
-        setError('Microphone permission denied. Please allow microphone access.');
-        setErrorCode('MICROPHONE_NOT_ALLOWED');
-        break;
-      case 'network':
-        setError('Speech recognition network error. Check connection or try again later.');
-        setErrorCode('VOICE_ERROR');
-        break;
-      default:
-        setError(`Speech recognition error: ${event.error}`);
-        setErrorCode('VOICE_ERROR');
-    }
-  }, []);
-
-  const handleEnd = useCallback(() => {
-    setStatus('idle');
-    if (shouldRestartRef.current && isIntendingToListenRef.current) {
-      shouldRestartRef.current = false;
-      try {
-        recognitionRef.current?.start();
-      } catch (e) {
-        logger.debug('[Voice] Auto-restart failed:', e);
-      }
-    }
-  }, []);
-
-  const handleStart = useCallback(() => {
-    setStatus('listening');
-    setError(null);
-  }, []);
-
-  useEffect(() => {
-    if (!isSupported) {
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = handleStart;
-    recognition.onresult = handleResult;
-    recognition.onerror = handleError;
-    recognition.onend = handleEnd;
-
-    recognitionRef.current = recognition;
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch (e) {
-          logger.debug('[Voice] Abort ignored during cleanup:', e);
-        }
-      }
-    };
-  }, [isSupported, handleStart, handleResult, handleError, handleEnd]);
-
   const startListening = useCallback(async (): Promise<void> => {
-    if (!recognitionRef.current) {
-      setError('Speech recognition is not available.');
-      return;
-    }
-
     if (status !== 'idle') {
       return;
     }
@@ -293,38 +231,194 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     }
     setIsSpeaking(false);
     setStatus('starting');
-    isIntendingToListenRef.current = true;
-    shouldRestartRef.current = false;
+    setTranscript('');
+    chunksRef.current = [];
 
     try {
-      setTranscript('');
-      recognitionRef.current.start();
-    } catch (err: unknown) {
-      isIntendingToListenRef.current = false;
-      setStatus('idle');
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      if (errorMessage.includes('already started')) {
-        shouldRestartRef.current = true;
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {
-          logger.debug('[Voice] Stop failed during restart handling:', e);
+      if (!isLoadedRef.current) {
+        await loadModel();
+      }
+
+      if (!isLoadedRef.current) {
+        setError('Failed to load speech recognition model.');
+        setErrorCode('MODEL_LOAD_FAILED');
+        setStatus('idle');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        },
+      });
+
+      mediaStreamRef.current = stream;
+
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyserRef.current = analyser;
+
+      source.connect(analyser);
+
+      setStatus('listening');
+      setError(null);
+      isRunningRef.current = true;
+
+      const process = () => {
+        if (!isRunningRef.current) return;
+
+        const dataArray = new Float32Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        const converted = new Float32Array(dataArray.length);
+        for (let i = 0; i < dataArray.length; i++) {
+          converted[i] = (dataArray[i] - 128) / 128;
         }
+        chunksRef.current.push(converted);
+        animationFrameRef.current = requestAnimationFrame(process);
+      };
+
+      animationFrameRef.current = requestAnimationFrame(process);
+
+      const timeoutId = setTimeout(() => {
+        isRunningRef.current = false;
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        if (audioContext) {
+          audioContext.close();
+        }
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        }
+
+        const audioData = chunksRef.current;
+        const totalLength = audioData.reduce((acc, chunk) => acc + chunk.length, 0);
+        const combined = new Float32Array(totalLength);
+        let offset = 0;
+        for (const chunk of audioData) {
+          combined.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        if (pipelineRef.current) {
+          pipelineRef.current(combined, {
+            forward: {
+              batch_size: 1,
+            },
+          }).then((result: any) => {
+            const text = result?.text || '';
+            setTranscript(text);
+
+            if (text) {
+              if (spatialQueryHandlerRef.current) {
+                handleSpatialQuery(text);
+                setLastQueryType('spatial_query');
+              } else {
+                setLastQueryType('command');
+                if (onCommandRef.current) {
+                  onCommandRef.current(text);
+                }
+              }
+            }
+
+            setStatus('idle');
+          }).catch((err: unknown) => {
+            logger.error('[Voice] Transcription failed:', err);
+            setError('Transcription failed.');
+            setErrorCode('TRANSCRIPTION_ERROR');
+            setStatus('idle');
+          });
+        }
+
+        clearTimeout(timeoutId);
+      }, 15000);
+
+      const cleanup = () => {
+        isRunningRef.current = false;
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        if (source) {
+          source.disconnect();
+        }
+        if (audioContext) {
+          audioContext.close();
+        }
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        }
+        clearTimeout(timeoutId);
+      };
+
+      stopListenCleanupRef.current = cleanup;
+
+    } catch (err: unknown) {
+      setStatus('idle');
+      if (err instanceof DOMException && err.name === 'NotFoundError') {
+        setError('Microphone not found.');
+        setErrorCode('MICROPHONE_NOT_FOUND');
+      } else if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setError('Microphone permission denied.');
+        setErrorCode('MICROPHONE_NOT_ALLOWED');
       } else {
-        logger.error('[Voice] Failed to start recognition');
-        setError('Failed to start speech recognition.');
+        setError('Failed to start listening.');
+        setErrorCode('VOICE_ERROR');
       }
     }
-  }, [status]);
+  }, [status, loadModel, handleSpatialQuery]);
+
+  const stopListenCleanupRef = useRef<(() => void) | null>(null);
 
   const stopListening = useCallback((): void => {
-    isIntendingToListenRef.current = false;
-    shouldRestartRef.current = false;
-    if (recognitionRef.current && status === 'listening') {
-      recognitionRef.current.stop();
-    }
     setStatus('idle');
-  }, [status]);
+
+    if (stopListenCleanupRef.current) {
+      stopListenCleanupRef.current();
+      stopListenCleanupRef.current = null;
+
+      const audioData = chunksRef.current;
+      const totalLength = audioData.reduce((acc, chunk) => acc + chunk.length, 0);
+      const combined = new Float32Array(totalLength);
+      let offset = 0;
+      for (const chunk of audioData) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      if (pipelineRef.current) {
+        pipelineRef.current(combined, {
+          forward: {
+            batch_size: 1,
+          },
+        }).then((result: any) => {
+          const text = result?.text || '';
+          setTranscript(text);
+
+          if (text) {
+            if (spatialQueryHandlerRef.current) {
+              handleSpatialQuery(text);
+              setLastQueryType('spatial_query');
+            } else {
+              setLastQueryType('command');
+              if (onCommandRef.current) {
+                onCommandRef.current(text);
+              }
+            }
+          }
+        }).catch((err: unknown) => {
+          logger.error('[Voice] Transcription failed:', err);
+          setError('Transcription failed.');
+          setErrorCode('TRANSCRIPTION_ERROR');
+        });
+      }
+    }
+  }, [handleSpatialQuery]);
 
   const stopSpeaking = useCallback((): void => {
     if (window.speechSynthesis) {
