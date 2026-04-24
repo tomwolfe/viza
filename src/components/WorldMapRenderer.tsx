@@ -63,11 +63,13 @@ export function WorldMapRenderer({
     
     video.addEventListener('loadeddata', checkReady);
     video.addEventListener('playing', checkReady);
+    video.addEventListener('timeupdate', checkReady);
     checkReady();
     
     return () => {
       video.removeEventListener('loadeddata', checkReady);
       video.removeEventListener('playing', checkReady);
+      video.removeEventListener('timeupdate', checkReady);
     };
   }, [videoElement]);
 

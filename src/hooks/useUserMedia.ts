@@ -93,10 +93,13 @@ export function useUserMedia({
       video.setAttribute('playsinline', '');
       video.setAttribute('muted', '');
       video.style.setProperty('position', 'fixed');
-      video.style.setProperty('left', '-9999px');
-      video.style.setProperty('top', '-9999px');
-      video.style.setProperty('width', '1px');
-      video.style.setProperty('height', '1px');
+      video.style.setProperty('top', '0');
+      video.style.setProperty('left', '0');
+      video.style.setProperty('width', '640px');
+      video.style.setProperty('height', '480px');
+      video.style.setProperty('opacity', '0');
+      video.style.setProperty('pointer-events', 'none');
+      video.style.setProperty('z-index', '-1');
       document.body.appendChild(video);
       videoRef.current = video;
     }

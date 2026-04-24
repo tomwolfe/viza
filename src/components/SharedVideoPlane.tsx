@@ -10,7 +10,7 @@ interface SharedVideoPlaneProps {
 
 export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const { viewport } = useThree();
+  const { viewport, camera } = useThree();
   const texture = useMemo(() => {
     const newTexture = new THREE.VideoTexture(video);
     newTexture.generateMipmaps = false;
@@ -22,8 +22,9 @@ export function SharedVideoPlane({ video }: SharedVideoPlaneProps) {
   }, [video]);
 
   const planeScale: [number, number, number] = useMemo(() => {
-    return [viewport.width, viewport.height, 1];
-  }, [viewport.width, viewport.height]);
+    const vp = viewport.getCurrentViewport(camera, new THREE.Vector3(0, 0, -5));
+    return [vp.width, vp.height, 1];
+  }, [viewport, camera]);
 
   useFrame(() => {
     if (video.readyState >= 2) {

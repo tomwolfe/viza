@@ -39,7 +39,10 @@ export function ARContent() {
           <Canvas
             camera={{ position: [0, 0, 0], fov: 75 }}
             style={{ width: '100%', height: '100%' }}
-            gl={{ preserveDrawingBuffer: true }}
+            gl={{ 
+              preserveDrawingBuffer: true,
+              alpha: true 
+            }}
           >
             {isARActive ? (
               <ARContentCanvas
