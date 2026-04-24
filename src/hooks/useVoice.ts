@@ -267,7 +267,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
       const process = () => {
         if (!isRunningRef.current) return;
 
-        const dataArray = new Float32Array(analyser.frequencyBinCount);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
         const converted = new Float32Array(dataArray.length);
         for (let i = 0; i < dataArray.length; i++) {
