@@ -14,8 +14,4 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  oxoid: {
-    jsx: 'react-jsx',
-    jsxStyle: 'classic',
-  },
 });
