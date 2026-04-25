@@ -31,26 +31,6 @@ export class VizaWorker {
 
   constructor(private postMessageFn: typeof postMessage) {}
 
-  private async imageBitmapToBase64(bitmap: ImageBitmap): Promise<string> {
-    const targetSize = 336;
-    const canvas = new OffscreenCanvas(targetSize, targetSize);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not get offscreen canvas context');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0, targetSize, targetSize);
-    const blob = await canvas.convertToBlob({ type: 'image/png' });
-    if (!blob) throw new Error('Failed to create blob');
-    const arrayBuffer = await blob.arrayBuffer();
-    let binary = '';
-    const bytes = new Uint8Array(arrayBuffer);
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    return `data:image/png;base64,${base64}`;
-  }
-
   async initializeModel(modelId: string, messageId: string, systemPrompt?: string): Promise<void> {
     if (systemPrompt) {
       this.state.systemPrompt = systemPrompt;
@@ -143,10 +123,8 @@ export class VizaWorker {
       }
     }
 
-    const imageBase64 = await this.imageBitmapToBase64(image);
-
     const messages = PromptFactory.buildMessages(
-      imageBase64,
+      image,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -217,11 +195,10 @@ export class VizaWorker {
       return;
     }
 
-    const imageBase64 = await this.imageBitmapToBase64(image);
-    const userInput = `${validationPrompt}|||${targetObject}`;
-    const messages = PromptFactory.buildMessages(
-      imageBase64,
-      userInput,
+     const userInput = `${validationPrompt}|||${targetObject}`;
+      const messages = PromptFactory.buildMessages(
+        image,
+        userInput,
       undefined,
       this.state.systemPrompt,
       {
@@ -269,7 +246,7 @@ export class VizaWorker {
   }
 
   private async _executeInference(
-    messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string }; text?: string }> }>,
+    messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string | ImageBitmap }; text?: string }> }>,
     maxTokens: number
   ): Promise<webllm.ChatCompletion> {
     this.postMessageFn({ type: 'inference_start' });

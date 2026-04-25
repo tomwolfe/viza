@@ -30,7 +30,7 @@ export interface MessageWithImage {
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{
     type: 'image_url' | 'text';
-    image_url?: { url: string };
+    image_url?: { url: string | ImageBitmap | HTMLImageElement | HTMLCanvasElement };
     text?: string;
   }>;
 }
@@ -175,13 +175,13 @@ export const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
 };
 
 export function buildMessages(
-  imageUrl: string,
+  imageSource: ImageBitmap | string,
   userInput: string | undefined,
   goal: string | undefined,
   systemPrompt: string,
   config: TaskRunnerConfig
 ) {
-  type MessageContent = string | Array<{ type: 'image_url' | 'text'; image_url?: { url: string }; text?: string }>;
+  type MessageContent = string | Array<{ type: 'image_url' | 'text'; image_url?: { url: ImageBitmap | string }; text?: string }>;
   type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: MessageContent };
   
   const messages: ChatMessage[] = [];
@@ -205,7 +205,7 @@ export function buildMessages(
   messages.push({
     role: 'user',
     content: [
-      { type: 'image_url', image_url: { url: imageUrl } },
+      { type: 'image_url', image_url: { url: imageSource } },
       { type: 'text', text: fullPrompt },
     ],
   });
