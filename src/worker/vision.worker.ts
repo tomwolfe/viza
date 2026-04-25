@@ -10,7 +10,7 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (msg.type) {
     case 'init':
-      await worker.initializeModel(msg.model || '', msg.systemPrompt);
+      await worker.initializeModel(msg.model || '', msg.messageId, msg.systemPrompt);
       break;
 
     case 'chat':

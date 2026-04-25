@@ -163,10 +163,20 @@ export class WorkerClient {
         this.options.onProgress((data.progress as number) ?? 0);
         break;
 
-      case 'init_complete':
+      case 'init_complete': {
         this.isModelReadyState = true;
         this.options.onProgress(100);
+        const messageId = (data as { messageId?: string }).messageId;
+        if (messageId) {
+          const pending = this.pendingRequests.get(messageId);
+          if (pending) {
+            clearTimeout(pending.timeoutId);
+            this.pendingRequests.delete(messageId);
+            pending.resolve(undefined);
+          }
+        }
         break;
+      }
 
       case 'inference_complete': {
         const messageId = data.messageId as string;

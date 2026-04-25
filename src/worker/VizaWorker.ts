@@ -31,13 +31,20 @@ export class VizaWorker {
 
   constructor(private postMessageFn: typeof postMessage) {}
 
-  async initializeModel(modelId: string, systemPrompt?: string): Promise<void> {
+  async initializeModel(modelId: string, messageId: string, systemPrompt?: string): Promise<void> {
     if (systemPrompt) {
       this.state.systemPrompt = systemPrompt;
     }
 
     if (this.state.isInitialized && this.state.currentModel === modelId) {
       this.postMessageFn({ type: 'init_progress', progress: 100, status: 'already_loaded' });
+      this.postMessageFn({
+        type: 'init_complete',
+        messageId,
+        model: modelId,
+        progress: 100,
+        cacheStatus: 'already_loaded',
+      });
       return;
     }
 
@@ -75,6 +82,7 @@ export class VizaWorker {
 
       this.postMessageFn({
         type: 'init_complete',
+        messageId,
         model: modelId,
         progress: 100,
         cacheStatus: CONFIG.USE_INDEXED_DB_CACHE ? 'indexeddb' : 'cache',

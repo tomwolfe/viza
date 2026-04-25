@@ -3,7 +3,7 @@
  */
 
 export type WorkerOutgoingMessage =
-  | { type: 'init'; model: string; systemPrompt?: string }
+   | { type: 'init'; model: string; messageId: string; systemPrompt?: string }
   | { type: 'chat'; image: ImageBitmap; prompt: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
   | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
   | { type: 'correction'; image: ImageBitmap; analysis: string; originalStepIndex: number; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
@@ -17,7 +17,7 @@ export type WorkerOutgoingMessage =
 export type WorkerIncomingMessage =
   | { type: 'worker_ready' }
   | { type: 'init_progress'; progress: number; status: string; details?: unknown }
-  | { type: 'init_complete'; model: string; progress: number; cacheStatus?: 'cache' | 'indexeddb' | 'already_loaded' }
+  | { type: 'init_complete'; messageId: string; model: string; progress: number; cacheStatus?: 'cache' | 'indexeddb' | 'already_loaded' }
   | { type: 'inference_start' }
   | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown; spatialContext?: string }
   | { type: 'planning_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
