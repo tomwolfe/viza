@@ -36,8 +36,7 @@ export class VizaWorker {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not get offscreen canvas context');
     ctx.drawImage(bitmap, 0, 0);
-    // @ts-expect-error - toBlob is available at runtime on OffscreenCanvas
-    const blob = await canvas.toBlob({ type: 'image/jpeg', quality: 0.9 });
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
     bitmap.close();
     if (!blob) throw new Error('Failed to create blob');
     const arrayBuffer = await blob.arrayBuffer();
