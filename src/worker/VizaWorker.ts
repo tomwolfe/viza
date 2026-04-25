@@ -123,8 +123,9 @@ export class VizaWorker {
       }
     }
 
+    const imageSource = await this._imageToBase64(image);
     const messages = PromptFactory.buildMessages(
-      image,
+      imageSource,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -196,8 +197,9 @@ export class VizaWorker {
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-      const messages = PromptFactory.buildMessages(
-        image,
+       const imageSource = await this._imageToBase64(image);
+       const messages = PromptFactory.buildMessages(
+         imageSource,
         userInput,
       undefined,
       this.state.systemPrompt,
@@ -243,6 +245,16 @@ export class VizaWorker {
     } finally {
       image.close();
     }
+  }
+
+  private async _imageToBase64(image: ImageBitmap): Promise<string> {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    image.close();
+    return canvas.toDataURL('image/jpeg', 0.8);
   }
 
   private async _executeInference(
