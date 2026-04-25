@@ -88,6 +88,7 @@ export function useVoice(onCommand?: (transcript: string) => void): UseVoiceRetu
     try {
       const pipe = await pipeline('automatic-speech-recognition', MODEL_ID, {
         device: 'webgpu',
+        dtype: 'fp16',
       });
 
       pipelineRef.current = pipe;

@@ -18,6 +18,7 @@ type InferenceType = 'chat' | 'planning' | 'category' | 'verification';
 export interface VizaOrchestratorContextValue {
   isModelReady: boolean;
   isInferring: boolean;
+  isModelInitializing: boolean;
   isDeviceCompatible: boolean;
   error: string | null;
   errorCode: VizaErrorCode | null;
@@ -43,6 +44,7 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
   const { setError: setVizaError } = useVizaError();
   const {
     isInferring,
+    isModelInitializing,
     isDeviceCompatible,
     error,
     errorCode,
@@ -179,6 +181,7 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
       value={{
         isModelReady,
         isInferring,
+        isModelInitializing,
         isDeviceCompatible,
         error,
         errorCode,

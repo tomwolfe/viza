@@ -77,16 +77,7 @@ export function useTaskOrchestrator(
     await generateTaskPlan(userGoal, sceneImage!, generatePlanFromGoal);
   }, [isModelReady, isPlanning, generateTaskPlan, generatePlanFromGoal, sceneImageRef]);
 
-  const handleTranscriptReady = useCallback((transcript: string) => {
-    if (isModelReady && !taskState.isActive) {
-      if (isCleaningIntent(transcript)) {
-        triggerPlanningMode(transcript);
-        return;
-      }
-    }
-  }, [isModelReady, taskState, triggerPlanningMode, isCleaningIntent]);
-
-  const voiceRef = useRef<((text: string) => void) | null>(null);
+  const speakRef = useRef<((text: string) => void) | null>(null);
 
   const {
     isListening,
@@ -97,14 +88,30 @@ export function useTaskOrchestrator(
     speak,
     error: voiceError,
     errorCode: voiceErrorCode,
-  } = useVoice(handleTranscriptReady);
+  } = useVoice(() => {});
 
   useEffect(() => {
-    if (speak) {
-      voiceRef.current = speak;
-      setSpeak(speak);
-    }
+    speakRef.current = speak;
+    setSpeak(speak);
   }, [speak, setSpeak]);
+
+  const handleTranscriptReady = useCallback((transcript: string) => {
+    if (!isModelReady) {
+      speakRef.current?.("I'm still preparing the AI model. Please wait a moment.");
+      logger.warn(`[TaskOrchestrator] Transcript received but model not ready: "${transcript}"`);
+      return;
+    }
+
+    if (taskState.isActive) {
+      return;
+    }
+
+    if (isCleaningIntent(transcript)) {
+      logger.info(`[TaskOrchestrator] Cleaning intent matched for: "${transcript}"`);
+      triggerPlanningMode(transcript);
+      return;
+    }
+  }, [isModelReady, taskState, triggerPlanningMode, isCleaningIntent]);
 
   useEffect(() => {
     if (voiceError) {

@@ -14,6 +14,7 @@ interface UseWebLLMWorkerOptions {
 
 export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const [isInferring, setIsInferring] = useState(false);
+  const [isModelInitializing, setIsModelInitializing] = useState(false);
   const { setError: setVizaError, clearError: clearVizaError, error: vizaErrorState } = useVizaError();
   const [isDeviceCompatible, setIsDeviceCompatible] = useState(true);
   const [modelProgress, setModelProgress] = useState(0);
@@ -59,6 +60,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   }), [setVizaError]);
 
   const initWorker = useCallback(async (): Promise<boolean> => {
+    console.debug('[WebLLM] initWorker called, isInitialized:', isInitializedRef.current);
     if (isInitializedRef.current) return true;
 
     const gpuCheck = await checkWebGPU();
@@ -81,19 +83,23 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       client.initialize(worker);
       workerClientRef.current = client;
       isInitializedRef.current = true;
+      console.debug('[WebLLM] Worker initialized successfully');
       return true;
     } catch (err) {
       logger.error('[WebLLM] Worker creation failed:', err);
       setVizaError('WORKER_INIT_FAILED', 'Failed to create AI worker instance.');
+      console.debug('[WebLLM] Worker initialization failed:', err);
       return false;
     }
   }, [setVizaError, getWorkerConfig]);
 
   const initModel = useCallback(async () => {
+    console.debug('[WebLLM] initModel called, initializing:', isInitializingRef.current, 'ready:', isModelReady);
     if (isInitializingRef.current || isModelReady) {
       return;
     }
     isInitializingRef.current = true;
+    setIsModelInitializing(true);
 
     try {
       if (!isInitializedRef.current) {
@@ -115,6 +121,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       }
 
       await client.init(modelIdRef.current, DEFAULT_SYSTEM_PROMPT);
+      console.debug('[WebLLM] Model initialized, setting isModelReady to true');
       setIsModelReady(true);
       client.startHeartbeat(() => {
         const newClient = createWorkerClient(getWorkerConfig);
@@ -130,6 +137,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
       setVizaError('WORKER_INIT_FAILED', (err as Error).message);
     } finally {
       isInitializingRef.current = false;
+      setIsModelInitializing(false);
     }
   }, [initWorker, isDeviceCompatible, setVizaError, isModelReady, getWorkerConfig]);
 
@@ -154,6 +162,7 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
 
   return {
     isInferring,
+    isModelInitializing,
     isDeviceCompatible,
     error,
     errorCode,
