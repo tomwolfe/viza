@@ -248,9 +248,7 @@ export class VizaWorker {
   }
 
   private async _imageToBase64(image: ImageBitmap): Promise<string> {
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
+    const canvas = new OffscreenCanvas(image.width, image.height);
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(image, 0, 0);
     image.close();
