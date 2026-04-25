@@ -32,11 +32,14 @@ export class VizaWorker {
   constructor(private postMessageFn: typeof postMessage) {}
 
   private async imageBitmapToBase64(bitmap: ImageBitmap): Promise<string> {
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const targetSize = 336;
+    const canvas = new OffscreenCanvas(targetSize, targetSize);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not get offscreen canvas context');
-    ctx.drawImage(bitmap, 0, 0);
-    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, targetSize, targetSize);
+    const blob = await canvas.convertToBlob({ type: 'image/png' });
     if (!blob) throw new Error('Failed to create blob');
     const arrayBuffer = await blob.arrayBuffer();
     let binary = '';
@@ -45,7 +48,7 @@ export class VizaWorker {
       binary += String.fromCharCode(bytes[i]);
     }
     const base64 = btoa(binary);
-    return `data:image/jpeg;base64,${base64}`;
+    return `data:image/png;base64,${base64}`;
   }
 
   async initializeModel(modelId: string, messageId: string, systemPrompt?: string): Promise<void> {
