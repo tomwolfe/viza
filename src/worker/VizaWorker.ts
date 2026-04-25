@@ -89,8 +89,8 @@ export class VizaWorker {
       };
 
       const appConfig = {
+        ...webllm.prebuiltAppConfig,
         useIndexedDBCache: CONFIG.USE_INDEXED_DB_CACHE,
-        low_compute_usage: false,
       };
 
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
