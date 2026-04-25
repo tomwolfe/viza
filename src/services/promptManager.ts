@@ -199,8 +199,8 @@ export function buildMessages(
   }
 
   const fullPrompt = systemPrompt
-    ? `${systemPrompt}\n\nTask Instruction: ${promptText}`
-    : promptText;
+    ? `${systemPrompt}\n\n<|image_1|>\n\nTask Instruction: ${promptText}`
+    : `<|image_1|>\n\n${promptText}`;
 
   messages.push({
     role: 'user',

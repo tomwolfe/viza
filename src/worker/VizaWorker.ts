@@ -88,11 +88,14 @@ export class VizaWorker {
         });
       };
 
-      const appConfig = CONFIG.USE_INDEXED_DB_CACHE ? { useIndexedDBCache: true } : {};
+      const appConfig = {
+        useIndexedDBCache: CONFIG.USE_INDEXED_DB_CACHE,
+        low_compute_usage: false,
+      };
 
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: initProgressCallback,
-        ...appConfig,
+        appConfig: appConfig,
       });
 
       this.state.isInitialized = true;
@@ -268,6 +271,14 @@ export class VizaWorker {
     maxTokens: number
   ): Promise<webllm.ChatCompletion> {
     this.postMessageFn({ type: 'inference_start' });
+
+    try {
+      await this.state.engine!.resetChat();
+    } catch (resetError) {
+      const err = resetError as Error;
+      logger.warn(`[Worker] resetChat failed (non-fatal): ${err.message}`);
+    }
+
     return await (this.state.engine!.chat.completions as any).create({
       messages,
       temperature: 0.1,
