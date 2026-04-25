@@ -37,7 +37,6 @@ export class VizaWorker {
     if (!ctx) throw new Error('Could not get offscreen canvas context');
     ctx.drawImage(bitmap, 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
-    bitmap.close();
     if (!blob) throw new Error('Failed to create blob');
     const arrayBuffer = await blob.arrayBuffer();
     let binary = '';
@@ -317,7 +316,7 @@ export class VizaWorker {
       this.state.engine = null;
       this.state.isInitialized = false;
 
-      await this.initializeModel(oldModel || modelId || CONFIG.DEFAULT_MODEL, newSystemPrompt || this.state.systemPrompt);
+      await this.initializeModel(oldModel || modelId || CONFIG.DEFAULT_MODEL, `reload-${Date.now()}`, newSystemPrompt ?? this.state.systemPrompt);
     } catch (error) {
       const err = error as Error;
       logger.error('[Worker] Soft reload failed:', err);
