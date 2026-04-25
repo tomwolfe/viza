@@ -181,49 +181,34 @@ export function buildMessages(
   systemPrompt: string,
   config: TaskRunnerConfig
 ) {
-  type MessageContent = string | Array<{ type: string; image_url?: { url: ImageBitmap }; text?: string }>;
+  type MessageContent = string | Array<{ type: 'image_url' | 'text'; image_url?: { url: ImageBitmap }; text?: string }>;
   type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: MessageContent };
+  
   const messages: ChatMessage[] = [];
-  messages.push({ role: 'system', content: systemPrompt });
 
+  let promptText = '';
   if (config.responseType === 'planning_complete') {
-    const prompt = buildPlanningPrompt(goal || '');
-    messages.push({
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    });
+    promptText = buildPlanningPrompt(goal || '');
   } else if (config.responseType === 'verification_complete') {
-    const [validationPrompt, targetObject] = (userInput || '').split('|||');
-    const prompt = buildVerifyPrompt(validationPrompt || '', targetObject || '');
-    messages.push({
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    });
+    const [valPrompt, target] = (userInput || '').split('|||');
+    promptText = buildVerifyPrompt(valPrompt || '', target || '');
   } else if (config.responseType === 'inference_complete' && config.maxTokens === 1024) {
-    const prompt = buildCategoryPrompt(goal || '');
-    messages.push({
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    });
+    promptText = buildCategoryPrompt(goal || '');
   } else {
-    const prompt = (userInput || buildVisionPrompt());
-    messages.push({
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'text', text: prompt },
-      ],
-    });
+    promptText = (userInput || buildVisionPrompt());
   }
+
+  const fullPrompt = systemPrompt
+    ? `${systemPrompt}\n\nTask Instruction: ${promptText}`
+    : promptText;
+
+  messages.push({
+    role: 'user',
+    content: [
+      { type: 'image_url', image_url: { url: image } },
+      { type: 'text', text: fullPrompt },
+    ],
+  });
 
   return messages;
 }
