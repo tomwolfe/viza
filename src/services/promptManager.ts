@@ -198,15 +198,18 @@ export function buildMessages(
     promptText = (userInput || buildVisionPrompt());
   }
 
-  const fullPrompt = systemPrompt
-    ? `${systemPrompt}\n\n<|image_1|>\n\nTask Instruction: ${promptText}`
-    : `<|image_1|>\n\n${promptText}`;
+  if (systemPrompt) {
+    messages.push({
+      role: 'system',
+      content: systemPrompt,
+    });
+  }
 
   messages.push({
     role: 'user',
     content: [
       { type: 'image_url', image_url: { url: imageSource } },
-      { type: 'text', text: fullPrompt },
+      { type: 'text', text: promptText },
     ],
   });
 
