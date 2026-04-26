@@ -46,12 +46,14 @@ export function validateImage(
 }
 
 export async function bitmapToBase64(bitmap: ImageBitmap): Promise<string> {
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0);
-  const base64 = canvas.toDataURL('image/jpeg', 0.8);
   bitmap.close();
-  return base64;
+  const blob = await canvas.convertToBlob({ quality: 0.8 });
+  return new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
 }
