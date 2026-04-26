@@ -198,15 +198,18 @@ export function buildMessages(
     promptText = (userInput || buildVisionPrompt());
   }
 
-  const combinedText = systemPrompt
-    ? `${systemPrompt}\n\n${promptText}`
-    : promptText;
+  if (systemPrompt) {
+    messages.push({
+      role: 'system',
+      content: systemPrompt,
+    });
+  }
 
   messages.push({
     role: 'user',
     content: [
       { type: 'image_url', image_url: { url: imageSource } },
-      { type: 'text', text: combinedText },
+      { type: 'text', text: promptText },
     ],
   });
 

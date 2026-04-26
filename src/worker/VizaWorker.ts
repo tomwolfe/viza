@@ -88,15 +88,10 @@ export class VizaWorker {
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: initProgressCallback,
         appConfig: appConfig,
-        chatOpts: {
-          vision_config: {
-            max_slice: 1,
-          },
-        },
-      } as any, {
-        vision_config: {
-          max_slice: 1,
-        },
+      }, {
+        vision_config: { max_slice: 1 },
+        context_window_size: 4096,
+        prefill_chunk_size: 4096,
       } as any);
 
       this.state.isInitialized = true;
@@ -263,24 +258,29 @@ async runVerification(
 }
 
   private async _executeInference(
-    messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string | ImageBitmap }; text?: string }> }>,
-    maxTokens: number
-  ): Promise<webllm.ChatCompletion> {
-    this.postMessageFn({ type: 'inference_start' });
+     messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string | ImageBitmap }; text?: string }> }>,
+     maxTokens: number
+   ): Promise<webllm.ChatCompletion> {
+     this.postMessageFn({ type: 'inference_start' });
 
-    try {
-      await this.state.engine!.resetChat();
-    } catch (resetError) {
-      const err = resetError as Error;
-      logger.warn(`[Worker] resetChat failed (non-fatal): ${err.message}`);
-    }
+     if (!this.state.engine) throw new Error("Engine not initialized");
 
-    return await (this.state.engine!.chat.completions as any).create({
-      messages,
-      temperature: 0.1,
-      max_tokens: maxTokens,
-    });
-  }
+     try {
+       await this.state.engine.resetChat();
+      
+       return await (this.state.engine!.chat.completions as any).create({
+         messages,
+         temperature: 0.0,
+         max_tokens: maxTokens,
+       });
+     } catch (err: any) {
+       if (err.message?.includes("embed.shape[0]")) {
+         console.error("Critical VLM Shape Mismatch. Force reloading engine...");
+         this.state.isInitialized = false;
+       }
+       throw err;
+     }
+   }
 
   async reloadEngine(): Promise<void> {
     if (this.state.engine) {
