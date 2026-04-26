@@ -49,6 +49,15 @@ export function useInferenceLoop({
   const CIRCUIT_BREAKER_THRESHOLD = 3;
   const CIRCUIT_BREAKER_RESET_MS = 30000;
 
+  const cancelPending = useCallback(() => {
+    if (intervalRef.current) {
+      clearTimeout(intervalRef.current);
+      intervalRef.current = null;
+    }
+    isRunningRef.current = false;
+    acknowledgedRef.current = true;
+  }, []);
+
    const {
     adjustedInterval,
     recordMetrics,
@@ -119,7 +128,7 @@ export function useInferenceLoop({
         acknowledgedRef.current = true;
       }
     },
-   [recordMetrics]
+   [recordMetrics, cancelPending]
   );
 
   const callbacksRef = useRef({ captureFrame, runInference, processFrame, onObjectsDetected, getStallStatus, getVlmVerificationFailureCount, isTaskActive, runVerificationInference, triggerCorrectionFlow, triggerHint, worldMapObjects });
@@ -130,15 +139,6 @@ export function useInferenceLoop({
 
   const setVideoSource = useCallback((video: HTMLVideoElement | null) => {
     videoRef.current = video;
-  }, []);
-
-  const cancelPending = useCallback(() => {
-    if (intervalRef.current) {
-      clearTimeout(intervalRef.current);
-      intervalRef.current = null;
-    }
-    isRunningRef.current = false;
-    acknowledgedRef.current = true;
   }, []);
 
   const stateRef = useRef({ isActive, isInferring, adjustedInterval });
