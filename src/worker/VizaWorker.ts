@@ -3,7 +3,7 @@ import { CONFIG, logger } from '@/config';
 import { PromptFactory, type TaskRunnerConfig } from '@/services/promptManager';
 import { VerificationResponseSchema } from '@/schemas/vision';
 import { parseJsonResponse } from '@/utils/responseParser';
-import { mapErrorToCode, sendError } from './messageUtils';
+import { mapErrorToCode, sendError, bitmapToBase64 } from './messageUtils';
 import { 
   createDetectionMemory, 
   updateDetectionMemory, 
@@ -128,8 +128,9 @@ export class VizaWorker {
       }
     }
 
+    const imageUrl = await bitmapToBase64(image);
     const messages = PromptFactory.buildMessages(
-      image,
+      imageUrl,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -182,8 +183,6 @@ export class VizaWorker {
       const err = error as Error;
       const code = mapErrorToCode(err);
       sendError(messageId, `Inference failed: ${err.message}`, code, err, this.postMessageFn);
-    } finally {
-      image.close();
     }
   }
 
@@ -201,23 +200,24 @@ async runVerification(
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-   const messages = PromptFactory.buildMessages(
-      image,
-     userInput,
-    undefined,
-    this.state.systemPrompt,
-    {
-      maxTokens: 512,
-      schema: VerificationResponseSchema,
-      responseType: 'verification_complete',
-      normalizeFn: (data: unknown) => data as { isCompleted: boolean; confidence: number },
-      defaultValue: { isCompleted: false, confidence: 0 },
-      promptBuilder: (input: string) => {
-        const [valPrompt, target] = input.split('|||');
-        return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.\n\nTarget Object: "${target || ''}"\nValidation Question: "${valPrompt || ''}"\n\nReturn ONLY a valid JSON object with this structure:\n{\n  "isCompleted": boolean,\n  "confidence": number,\n  "reasoning": "string"\n}`;
-      },
-    }
-  );
+    const verificationImageUrl = await bitmapToBase64(image);
+    const messages = PromptFactory.buildMessages(
+      verificationImageUrl,
+      userInput,
+      undefined,
+      this.state.systemPrompt,
+      {
+        maxTokens: 512,
+        schema: VerificationResponseSchema,
+        responseType: 'verification_complete',
+        normalizeFn: (data: unknown) => data as { isCompleted: boolean; confidence: number },
+        defaultValue: { isCompleted: false, confidence: 0 },
+        promptBuilder: (input: string) => {
+          const [valPrompt, target] = input.split('|||');
+          return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.\n\nTarget Object: "${target || ''}"\nValidation Question: "${valPrompt || ''}"\n\nReturn ONLY a valid JSON object with this structure:\n{\n  "isCompleted": boolean,\n  "confidence": number,\n  "reasoning": "string"\n}`;
+        },
+      }
+    );
 
   try {
     const response = await this._executeInference(messages, 512);
@@ -241,12 +241,10 @@ async runVerification(
       rawText: content,
       usage: response.usage,
     });
-  } catch (error) {
+   } catch (error) {
     const err = error as Error;
     const code = mapErrorToCode(err);
     sendError(messageId, `Verification failed: ${err.message}`, code, err, this.postMessageFn);
-  } finally {
-    image.close();
   }
 }
 
