@@ -142,7 +142,7 @@ export const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
     schema: VisionResponseSchema,
     normalizeFn: normalizeVisionResult,
     defaultValue: { objects: [] },
-    responseType: 'inference_complete',
+    responseType: 'chat_complete',
     maxTokens: 1024,
   },
   planning: {

@@ -19,6 +19,7 @@ export type WorkerIncomingMessage =
   | { type: 'init_progress'; progress: number; status: string; details?: unknown }
   | { type: 'init_complete'; messageId: string; model: string; progress: number; cacheStatus?: 'cache' | 'indexeddb' | 'already_loaded' }
   | { type: 'inference_start' }
+  | { type: 'chat_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown; spatialContext?: string }
   | { type: 'inference_complete'; messageId: string; response: unknown; completed?: boolean; rawText?: string; usage?: unknown; spatialContext?: string }
   | { type: 'planning_complete'; messageId: string; response: unknown; rawText?: string; usage?: unknown }
   | { type: 'correction_complete'; messageId: string; response: unknown; analysis: string; rawText?: string }

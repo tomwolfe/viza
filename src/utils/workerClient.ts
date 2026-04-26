@@ -183,6 +183,19 @@ export class WorkerClient {
         break;
       }
 
+      case 'chat_complete': {
+        const messageId = data.messageId as string;
+        const pending = this.pendingRequests.get(messageId);
+        
+        if (pending) {
+          clearTimeout(pending.timeoutId);
+          this.pendingRequests.delete(messageId);
+          this.options.onComplete(messageId, data.response, data.completed as boolean | undefined);
+          pending.resolve(data.response);
+        }
+        break;
+      }
+
       case 'inference_complete': {
         const messageId = data.messageId as string;
         const pending = this.pendingRequests.get(messageId);
