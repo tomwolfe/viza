@@ -78,7 +78,12 @@ export class VizaWorker {
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: initProgressCallback,
         appConfig: appConfig,
-      });
+        chatConfig: {
+          vision_config: {
+            max_slice: 1,
+          },
+        },
+      } as any);
 
       this.state.isInitialized = true;
       this.state.currentModel = modelId;
@@ -98,13 +103,14 @@ export class VizaWorker {
   }
 
   async runTask(
-    imageBase64: string,
+    image: ImageBitmap,
     userInput: string,
     messageId: string,
     config: TaskRunnerConfig,
     worldMapContext?: { name: string; x: number; y: number; z: number }[]
   ): Promise<void> {
     if (!this.state.engine || !this.state.isInitialized) {
+      image.close();
       sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, this.postMessageFn);
       return;
     }
@@ -122,9 +128,8 @@ export class VizaWorker {
       }
     }
 
-    const imageSource = imageBase64;
     const messages = PromptFactory.buildMessages(
-      imageSource,
+      image,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -177,69 +182,73 @@ export class VizaWorker {
       const err = error as Error;
       const code = mapErrorToCode(err);
       sendError(messageId, `Inference failed: ${err.message}`, code, err, this.postMessageFn);
+    } finally {
+      image.close();
     }
   }
 
 async runVerification(
-    imageBase64: string,
+    image: ImageBitmap,
     validationPrompt: string,
     targetObject: string,
     messageId: string,
     _worldMapContext?: { name: string; x: number; y: number; z: number }[]
   ): Promise<void> {
     if (!this.state.engine || !this.state.isInitialized) {
+      image.close();
       sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, this.postMessageFn);
       return;
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-        const imageSource = imageBase64;
-       const messages = PromptFactory.buildMessages(
-         imageSource,
-        userInput,
-      undefined,
-      this.state.systemPrompt,
-      {
-        maxTokens: 512,
-        schema: VerificationResponseSchema,
-        responseType: 'verification_complete',
-        normalizeFn: (data: unknown) => data as { isCompleted: boolean; confidence: number },
-        defaultValue: { isCompleted: false, confidence: 0 },
-        promptBuilder: (input: string) => {
-          const [valPrompt, target] = input.split('|||');
-          return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.\n\nTarget Object: "${target || ''}"\nValidation Question: "${valPrompt || ''}"\n\nReturn ONLY a valid JSON object with this structure:\n{\n  "isCompleted": boolean,\n  "confidence": number,\n  "reasoning": "string"\n}`;
-        },
-      }
-    );
-
-    try {
-      const response = await this._executeInference(messages, 512);
-
-      const content = response.choices[0]?.message?.content || '';
-      const parseResult = parseJsonResponse(content, VerificationResponseSchema);
-
-      const parsedData = parseResult.data as Record<string, unknown> | null;
-      const isCompleted = parsedData && typeof parsedData === 'object' && parsedData !== null
-        ? (parsedData as { isCompleted?: boolean }).isCompleted ?? false
-        : false;
-      const confidence = parsedData && typeof parsedData === 'object' && parsedData !== null
-        ? (parsedData as { confidence?: number }).confidence ?? 0
-        : 0;
-
-      this.postMessageFn({
-        type: 'verification_complete',
-        messageId,
-        isCompleted,
-        confidence,
-        rawText: content,
-        usage: response.usage,
-      });
-    } catch (error) {
-      const err = error as Error;
-      const code = mapErrorToCode(err);
-      sendError(messageId, `Verification failed: ${err.message}`, code, err, this.postMessageFn);
+   const messages = PromptFactory.buildMessages(
+      image,
+     userInput,
+    undefined,
+    this.state.systemPrompt,
+    {
+      maxTokens: 512,
+      schema: VerificationResponseSchema,
+      responseType: 'verification_complete',
+      normalizeFn: (data: unknown) => data as { isCompleted: boolean; confidence: number },
+      defaultValue: { isCompleted: false, confidence: 0 },
+      promptBuilder: (input: string) => {
+        const [valPrompt, target] = input.split('|||');
+        return `You are a task verification assistant. Analyze this image to verify if a physical task step has been completed.\n\nTarget Object: "${target || ''}"\nValidation Question: "${valPrompt || ''}"\n\nReturn ONLY a valid JSON object with this structure:\n{\n  "isCompleted": boolean,\n  "confidence": number,\n  "reasoning": "string"\n}`;
+      },
     }
+  );
+
+  try {
+    const response = await this._executeInference(messages, 512);
+
+    const content = response.choices[0]?.message?.content || '';
+    const parseResult = parseJsonResponse(content, VerificationResponseSchema);
+
+    const parsedData = parseResult.data as Record<string, unknown> | null;
+    const isCompleted = parsedData && typeof parsedData === 'object' && parsedData !== null
+      ? (parsedData as { isCompleted?: boolean }).isCompleted ?? false
+      : false;
+    const confidence = parsedData && typeof parsedData === 'object' && parsedData !== null
+      ? (parsedData as { confidence?: number }).confidence ?? 0
+      : 0;
+
+    this.postMessageFn({
+      type: 'verification_complete',
+      messageId,
+      isCompleted,
+      confidence,
+      rawText: content,
+      usage: response.usage,
+    });
+  } catch (error) {
+    const err = error as Error;
+    const code = mapErrorToCode(err);
+    sendError(messageId, `Verification failed: ${err.message}`, code, err, this.postMessageFn);
+  } finally {
+    image.close();
   }
+}
 
   private async _executeInference(
     messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string | ImageBitmap }; text?: string }> }>,

@@ -4,11 +4,11 @@
 
 export type WorkerOutgoingMessage =
     | { type: 'init'; model: string; messageId: string; systemPrompt?: string }
-   | { type: 'chat'; imageBase64: string; prompt: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
-   | { type: 'planning'; imageBase64: string; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
-   | { type: 'correction'; imageBase64: string; analysis: string; originalStepIndex: number; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
-   | { type: 'category'; imageBase64: string; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
-   | { type: 'verification'; imageBase64: string; validationPrompt: string; targetObject: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+   | { type: 'chat'; image: ImageBitmap; prompt: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+   | { type: 'planning'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+   | { type: 'correction'; image: ImageBitmap; analysis: string; originalStepIndex: number; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+   | { type: 'category'; image: ImageBitmap; goal: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
+   | { type: 'verification'; image: ImageBitmap; validationPrompt: string; targetObject: string; messageId: string; worldMapContext?: { name: string; x: number; y: number; z: number }[] }
    | { type: 'reload' }
    | { type: 'soft_reload'; model: string; systemPrompt?: string }
    | { type: 'ping' }

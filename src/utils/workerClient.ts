@@ -314,10 +314,11 @@ export class WorkerClient {
     this.pendingRequests.clear();
   }
 
-  sendMessage<T>(
+ sendMessage<T>(
     type: WorkerMessageType,
     payload: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    transfers?: Transferable[]
   ): Promise<T> {
     if (!this.worker) {
       return Promise.reject(new Error('Worker not initialized'));
@@ -356,7 +357,7 @@ export class WorkerClient {
       }, { once: true });
 
       try {
-        this.worker!.postMessage({ type, messageId, ...payload });
+        this.worker!.postMessage({ type, messageId, ...payload }, transfers || []);
       } catch (err) {
         cleanup();
         reject(err);
@@ -368,24 +369,24 @@ export class WorkerClient {
     return this.sendMessage('init', { model, systemPrompt });
   }
 
-  chat(imageBase64: string, prompt: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('chat', { imageBase64, prompt, messageId }, signal);
+  chat(image: ImageBitmap, prompt: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('chat', { image, prompt, messageId }, signal, [image]);
   }
 
-  planning(imageBase64: string, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('planning', { imageBase64, goal, messageId }, signal);
+  planning(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('planning', { image, goal, messageId }, signal, [image]);
   }
 
-  correction(imageBase64: string, analysis: string, originalStepIndex: number, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('correction', { imageBase64, analysis, originalStepIndex, messageId }, signal);
+  correction(image: ImageBitmap, analysis: string, originalStepIndex: number, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('correction', { image, analysis, originalStepIndex, messageId }, signal, [image]);
   }
 
-  category(imageBase64: string, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('category', { imageBase64, goal, messageId }, signal);
+  category(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('category', { image, goal, messageId }, signal, [image]);
   }
 
-  verification(imageBase64: string, validationPrompt: string, targetObject: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('verification', { imageBase64, validationPrompt, targetObject, messageId }, signal);
+  verification(image: ImageBitmap, validationPrompt: string, targetObject: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('verification', { image, validationPrompt, targetObject, messageId }, signal, [image]);
   }
 
   ping(): void {
