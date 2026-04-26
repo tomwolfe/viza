@@ -265,21 +265,32 @@ async runVerification(
 
      if (!this.state.engine) throw new Error("Engine not initialized");
 
-     try {
-       await this.state.engine.resetChat();
+   try {
+      await this.state.engine.resetChat();
       
-       return await (this.state.engine!.chat.completions as any).create({
-         messages,
-         temperature: 0.0,
-         max_tokens: maxTokens,
-       });
-     } catch (err: any) {
-       if (err.message?.includes("embed.shape[0]")) {
-         console.error("Critical VLM Shape Mismatch. Force reloading engine...");
-         this.state.isInitialized = false;
-       }
-       throw err;
-     }
+      return await (this.state.engine!.chat.completions as any).create({
+        messages,
+        temperature: 0.0,
+        max_tokens: maxTokens,
+      });
+    } catch (err: any) {
+      const isShapeMismatch = err.message?.includes("embed.shape[0]") || 
+        err.message?.includes("shape mismatch") ||
+        err.message?.includes("shape mismatch");
+      
+      if (isShapeMismatch) {
+        console.error('[VizaWorker] Critical VLM shape error - forcing full engine reload');
+        this.state.isInitialized = false;
+        this.state.engine = null;
+        this.postMessageFn({
+          type: 'error',
+          messageId: '',
+          message: 'VLM shape mismatch - engine requires reinitialization',
+          errorCode: 'MODEL_INIT_FAILED'
+        });
+      }
+      throw err;
+    }
    }
 
   async reloadEngine(): Promise<void> {

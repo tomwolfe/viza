@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, Mic, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Play, Mic, Loader2, AlertTriangle, RotateCcw, RefreshCcw } from 'lucide-react';
 import { useId } from 'react';
 import { useVizaError } from '@/contexts/VizaErrorContext';
 
@@ -47,6 +47,15 @@ export default function ARControls({
             <span>Error</span>
           </div>
           <span className="text-xs text-red-300">{unifiedError}</span>
+          {unifiedErrorCode === 'MODEL_INIT_FAILED' && (
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs mt-1 flex items-center gap-1"
+            >
+              <RefreshCcw className="w-3 h-3" />
+              Reset AI Engine
+            </button>
+          )}
         </div>
       );
     }

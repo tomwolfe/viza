@@ -44,6 +44,10 @@ export function useInferenceLoop({
   const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRunningRef = useRef(false);
   const acknowledgedRef = useRef(true);
+  const errorCountRef = useRef(0);
+  const lastErrorTimeRef = useRef(0);
+  const CIRCUIT_BREAKER_THRESHOLD = 3;
+  const CIRCUIT_BREAKER_RESET_MS = 30000;
 
    const {
     adjustedInterval,
@@ -84,6 +88,7 @@ export function useInferenceLoop({
 
           if (result?.objects && result.objects.length > 0) {
             callbacksRef.current.onObjectsDetected?.(result.objects);
+            errorCountRef.current = 0;
           }
 
           recordMetrics({
@@ -93,6 +98,18 @@ export function useInferenceLoop({
           });
         } catch (error) {
           logger.error('[useInferenceLoop] Inference error:', error);
+          errorCountRef.current += 1;
+          lastErrorTimeRef.current = performance.now();
+          
+          if (errorCountRef.current >= CIRCUIT_BREAKER_THRESHOLD) {
+            logger.warn('[useInferenceLoop] Circuit breaker triggered - stopping inference loop');
+            cancelPending();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('viza:inference-failed', {
+                detail: { errorCount: errorCountRef.current }
+              }));
+            }
+          }
         }
       } finally {
         if (isBitmapValid(frame)) {
@@ -128,6 +145,18 @@ export function useInferenceLoop({
   useEffect(() => {
     stateRef.current = { isActive, isInferring, adjustedInterval };
   }, [isActive, isInferring, adjustedInterval]);
+
+  useEffect(() => {
+    const checkReset = () => {
+      if (errorCountRef.current >= CIRCUIT_BREAKER_THRESHOLD &&
+          performance.now() - lastErrorTimeRef.current > CIRCUIT_BREAKER_RESET_MS) {
+        errorCountRef.current = 0;
+        logger.debug('[useInferenceLoop] Circuit breaker reset');
+      }
+    };
+    const interval = setInterval(checkReset, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!isActive) {

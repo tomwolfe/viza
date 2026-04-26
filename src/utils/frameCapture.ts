@@ -100,27 +100,16 @@ async function downsampleToBitmap(
   const sourceWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
   const sourceHeight = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
   
-  const aspectRatio = sourceWidth / sourceHeight;
-  let cropWidth: number;
-  let cropHeight: number;
-  let cropX: number;
-  let cropY: number;
+  const cropSize = Math.min(sourceWidth, sourceHeight);
+  const cropX = (sourceWidth - cropSize) / 2;
+  const cropY = (sourceHeight - cropSize) / 2;
 
-  if (aspectRatio > 1) {
-    cropHeight = sourceHeight;
-    cropWidth = sourceHeight;
-    cropX = (sourceWidth - cropWidth) / 2;
-    cropY = 0;
-  } else {
-    cropWidth = sourceWidth;
-    cropHeight = sourceWidth;
-    cropX = 0;
-    cropY = (sourceHeight - cropHeight) / 2;
-  }
-
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+  
   ctx.drawImage(
     source,
-    cropX, cropY, cropWidth, cropHeight,
+    cropX, cropY, cropSize, cropSize,
     0, 0, TARGET_SIZE, TARGET_SIZE
   );
 

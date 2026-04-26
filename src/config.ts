@@ -17,6 +17,8 @@ export const CONFIG = {
     MIN_INTERVAL: 500,
     MAX_INTERVAL: 10000,
     TELEMETRY_SAMPLE_RATE: 10,
+    MAX_RETRY_ATTEMPTS: 1,
+    RETRY_DELAY_MS: 5000,
   },
 
   SPATIAL: {
@@ -123,13 +125,20 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
       return result;
     }
 
-    // If we have an adapter, we consider it supported.
-    // WebLLM will request specific limits (like maxStorageBufferBindingSize)
-    // internally when it creates its own device.
+    const device = await adapter.requestDevice();
+    device.lost.then((info) => {
+      logger.error('[WebGPU] Device lost:', info);
+    });
+
     result.supported = true;
     result.isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
     
     return result;
+  } catch (error) {
+    result.issues.push(`WebGPU check failed: ${(error as Error).message}`);
+    return result;
+  }
+}
   } catch (error) {
     result.issues.push(`WebGPU check failed: ${(error as Error).message}`);
     return result;
