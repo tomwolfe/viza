@@ -1,7 +1,6 @@
 'use client';
 
 import type { VizaErrorCode, WorkerIncomingMessage } from '@/types/worker';
-import { ensureBitmapClosed, isBitmapValid } from '@/utils/SafeTransfer';
 
 export type WorkerMessageType =
   | 'init'
@@ -19,7 +18,13 @@ export interface PendingRequest<T> {
   resolve: (value: T) => void;
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
-  bitmapHandle: ImageBitmap | null;
+  type: WorkerMessageType;
+}
+
+export interface PendingRequestInternal<T> {
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
   type: WorkerMessageType;
 }
 
@@ -48,7 +53,7 @@ const DEFAULT_HEARTBEAT_TIMEOUT = 60000;
 
 export class WorkerClient {
   private worker: Worker | null = null;
-  private pendingRequests: Map<string, PendingRequest<unknown>> = new Map();
+  private pendingRequests: Map<string, PendingRequestInternal<unknown>> = new Map();
   private isInitialized = false;
   private options: Required<WorkerClientOptions>;
   private messageHandlers: Map<string, (data: Record<string, unknown>) => void> = new Map();
@@ -301,53 +306,17 @@ export class WorkerClient {
     }, timeoutMs);
   }
 
-  private createPendingRequest(
-    type: WorkerMessageType,
-    messageId: string,
-    transfer?: Transferable[]
-  ): PendingRequest<unknown> {
-    const timeoutId = this.createTimeout(type, messageId);
-    const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
-
-    const pending: PendingRequest<unknown> = {
-      resolve: (() => {}) as (value: unknown) => void,
-      reject: (() => {}) as (error: Error) => void,
-      timeoutId,
-      bitmapHandle,
-      type,
-    };
-
-    this.pendingRequests.set(messageId, pending);
-
-    return pending;
-  }
-
-  private rejectAllPending(reason: string): void {
+ private rejectAllPending(reason: string): void {
     this.pendingRequests.forEach((pending) => {
       clearTimeout(pending.timeoutId);
-      if (isBitmapValid(pending.bitmapHandle)) {
-        ensureBitmapClosed(pending.bitmapHandle);
-      }
       pending.reject(new Error(reason));
     });
     this.pendingRequests.clear();
   }
 
-  private clearBitmapHandles(): void {
-    this.pendingRequests.forEach((pending) => {
-      if (isBitmapValid(pending.bitmapHandle)) {
-        ensureBitmapClosed(pending.bitmapHandle);
-      }
-    });
-    this.pendingRequests.forEach((pending) => {
-      pending.bitmapHandle = null;
-    });
-  }
-
- sendMessage<T>(
+  sendMessage<T>(
     type: WorkerMessageType,
     payload: Record<string, unknown>,
-    transfer?: Transferable[],
     signal?: AbortSignal
   ): Promise<T> {
     if (!this.worker) {
@@ -359,20 +328,18 @@ export class WorkerClient {
     }
 
     const messageId = this.createRequestId();
-    const bitmapHandle = transfer?.[0] instanceof ImageBitmap ? (transfer[0] as unknown as ImageBitmap) : null;
 
     return new Promise<T>((resolve, reject) => {
       const timeoutId = this.createTimeout(type, messageId);
 
-      const pending: PendingRequest<T> = {
+      const pending: PendingRequestInternal<T> = {
         resolve,
         reject,
         timeoutId,
-        bitmapHandle,
-        type: type,
+        type,
       };
 
-      this.pendingRequests.set(messageId, pending as PendingRequest<unknown>);
+      this.pendingRequests.set(messageId, pending as PendingRequestInternal<unknown>);
 
       const cleanup = () => {
         clearTimeout(timeoutId);
@@ -380,9 +347,6 @@ export class WorkerClient {
       };
 
       const abortHandler = () => {
-        if (isBitmapValid(bitmapHandle)) {
-          ensureBitmapClosed(bitmapHandle);
-        }
         cleanup();
         reject(new Error('Request aborted'));
       };
@@ -392,17 +356,13 @@ export class WorkerClient {
       }, { once: true });
 
       try {
-        this.worker!.postMessage(
-          { type, messageId, ...payload },
-          transfer || []
-        );
+        this.worker!.postMessage({ type, messageId, ...payload });
 
         const req = this.pendingRequests.get(messageId);
         if (req) {
-          req.bitmapHandle = null;
+          this.pendingRequests.delete(messageId);
         }
       } catch (err) {
-        ensureBitmapClosed(bitmapHandle);
         cleanup();
         reject(err);
       }
@@ -413,25 +373,24 @@ export class WorkerClient {
     return this.sendMessage('init', { model, systemPrompt });
   }
 
-  chat(image: ImageBitmap, prompt: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('chat', { image, prompt, messageId }, [image], signal);
+  chat(imageBase64: string, prompt: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('chat', { imageBase64, prompt, messageId }, signal);
   }
 
-  planning(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('planning', { image, goal, messageId }, [image], signal);
+  planning(imageBase64: string, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('planning', { imageBase64, goal, messageId }, signal);
   }
 
-  correction(image: ImageBitmap, analysis: string, originalStepIndex: number, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('correction', { image, analysis, originalStepIndex, messageId }, [image], signal);
+  correction(imageBase64: string, analysis: string, originalStepIndex: number, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('correction', { imageBase64, analysis, originalStepIndex, messageId }, signal);
   }
 
-  category(image: ImageBitmap, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    return this.sendMessage('category', { image, goal, messageId }, [image], signal);
+  category(imageBase64: string, goal: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('category', { imageBase64, goal, messageId }, signal);
   }
 
-  verification(image: ImageBitmap, validationPrompt: string, targetObject: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
-    const _userInput = `${validationPrompt}|||${targetObject}`;
-    return this.sendMessage('verification', { image, validationPrompt, targetObject, messageId }, [image], signal);
+  verification(imageBase64: string, validationPrompt: string, targetObject: string, messageId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.sendMessage('verification', { imageBase64, validationPrompt, targetObject, messageId }, signal);
   }
 
   ping(): void {

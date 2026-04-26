@@ -9,6 +9,7 @@ import type { WorldObject } from '@/hooks/useWorldMap';
 import type { VizaErrorCode } from '@/types/worker';
 import { parseVisionResponse, parsePlanningResponse } from '@/schemas/vision';
 import { logger } from '@/config';
+import { imageBitmapToBase64 } from '@/utils/imageBase64';
 import { ensureBitmapClosed } from '@/utils/SafeTransfer';
 import * as THREE from 'three';
 
@@ -92,13 +93,15 @@ export function VizaOrchestratorProvider({ children, modelId }: { children: Reac
       const messageId = crypto.randomUUID();
 
       try {
+        const imageBase64 = await imageBitmapToBase64(image);
+
         const infPromise = inferenceType === 'planning'
-          ? client.planning(image, prompt, messageId, signal)
+          ? client.planning(imageBase64, prompt, messageId, signal)
           : inferenceType === 'category'
-          ? client.category(image, prompt, messageId, signal)
+          ? client.category(imageBase64, prompt, messageId, signal)
           : inferenceType === 'verification'
-          ? client.verification(image, prompt, '', messageId, signal)
-          : client.chat(image, prompt, messageId, signal);
+          ? client.verification(imageBase64, prompt, '', messageId, signal)
+          : client.chat(imageBase64, prompt, messageId, signal);
 
         const response = await infPromise;
 

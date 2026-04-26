@@ -98,7 +98,7 @@ export class VizaWorker {
   }
 
   async runTask(
-    image: ImageBitmap,
+    imageBase64: string,
     userInput: string,
     messageId: string,
     config: TaskRunnerConfig,
@@ -106,7 +106,6 @@ export class VizaWorker {
   ): Promise<void> {
     if (!this.state.engine || !this.state.isInitialized) {
       sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, this.postMessageFn);
-      image.close();
       return;
     }
 
@@ -123,7 +122,7 @@ export class VizaWorker {
       }
     }
 
-    const imageSource = await this._imageToBase64(image);
+    const imageSource = imageBase64;
     const messages = PromptFactory.buildMessages(
       imageSource,
       enhancedUserInput,
@@ -178,13 +177,11 @@ export class VizaWorker {
       const err = error as Error;
       const code = mapErrorToCode(err);
       sendError(messageId, `Inference failed: ${err.message}`, code, err, this.postMessageFn);
-    } finally {
-      image.close();
     }
   }
 
-  async runVerification(
-    image: ImageBitmap,
+async runVerification(
+    imageBase64: string,
     validationPrompt: string,
     targetObject: string,
     messageId: string,
@@ -192,12 +189,11 @@ export class VizaWorker {
   ): Promise<void> {
     if (!this.state.engine || !this.state.isInitialized) {
       sendError(messageId, 'Engine not initialized. Call init first.', 'MODEL_NOT_READY', undefined, this.postMessageFn);
-      image.close();
       return;
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-       const imageSource = await this._imageToBase64(image);
+        const imageSource = imageBase64;
        const messages = PromptFactory.buildMessages(
          imageSource,
         userInput,
@@ -242,17 +238,7 @@ export class VizaWorker {
       const err = error as Error;
       const code = mapErrorToCode(err);
       sendError(messageId, `Verification failed: ${err.message}`, code, err, this.postMessageFn);
-    } finally {
-      image.close();
     }
-  }
-
-  private async _imageToBase64(image: ImageBitmap): Promise<string> {
-    const canvas = new OffscreenCanvas(image.width, image.height) as unknown as HTMLCanvasElement;
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(image, 0, 0);
-    image.close();
-    return canvas.toDataURL('image/jpeg', 0.8);
   }
 
   private async _executeInference(

@@ -1,6 +1,5 @@
 import type { WorkerOutgoingMessage } from '@/types/worker';
 import { TASK_CONFIGS } from '@/services/promptManager';
-import { validateImage } from './messageUtils';
 import { VizaWorker } from './VizaWorker';
 
 const worker = new VizaWorker(self.postMessage.bind(self));
@@ -14,26 +13,26 @@ self.onmessage = async (event: MessageEvent) => {
       break;
 
     case 'chat':
-      if (validateImage(msg, msg.messageId, msg.type)) {
-        await worker.runTask(msg.image!, msg.prompt, msg.messageId, TASK_CONFIGS['chat'], msg.worldMapContext);
+      if (msg.imageBase64) {
+        await worker.runTask(msg.imageBase64, msg.prompt, msg.messageId, TASK_CONFIGS['chat'], msg.worldMapContext);
       }
       break;
 
     case 'planning':
-      if (validateImage(msg, msg.messageId, msg.type)) {
-        await worker.runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['planning'], msg.worldMapContext);
+      if (msg.imageBase64) {
+        await worker.runTask(msg.imageBase64, msg.goal, msg.messageId, TASK_CONFIGS['planning'], msg.worldMapContext);
       }
       break;
 
     case 'category':
-      if (validateImage(msg, msg.messageId, msg.type)) {
-        await worker.runTask(msg.image!, msg.goal, msg.messageId, TASK_CONFIGS['category'], msg.worldMapContext);
+      if (msg.imageBase64) {
+        await worker.runTask(msg.imageBase64, msg.goal, msg.messageId, TASK_CONFIGS['category'], msg.worldMapContext);
       }
       break;
 
     case 'verification':
-      if (validateImage(msg, msg.messageId, msg.type)) {
-        await worker.runVerification(msg.image!, msg.validationPrompt, msg.targetObject, msg.messageId, msg.worldMapContext);
+      if (msg.imageBase64) {
+        await worker.runVerification(msg.imageBase64, msg.validationPrompt, msg.targetObject, msg.messageId, msg.worldMapContext);
       }
       break;
 
