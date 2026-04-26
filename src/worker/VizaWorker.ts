@@ -32,9 +32,9 @@ export class VizaWorker {
   constructor(private postMessageFn: typeof postMessage) {}
 
   async initializeModel(modelId: string, messageId: string, systemPrompt?: string): Promise<void> {
-    if (systemPrompt) {
-      this.state.systemPrompt = systemPrompt;
-    }
+    this.state.systemPrompt = (systemPrompt && systemPrompt.trim().length > 0)
+      ? systemPrompt
+      : "You are a helpful spatial assistant.";
 
     if (this.state.isInitialized && this.state.currentModel === modelId) {
       this.postMessageFn({ type: 'init_progress', progress: 100, status: 'already_loaded' });

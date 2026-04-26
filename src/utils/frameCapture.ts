@@ -15,12 +15,12 @@ class BitmapPool {
   private initCanvas(): void {
     if (typeof OffscreenCanvas !== 'undefined') {
       this.canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
-      this.ctx = this.canvas.getContext('2d');
+      this.ctx = this.canvas.getContext('2d', { alpha: false, willReadFrequently: true });
     } else if (typeof document !== 'undefined') {
       this.canvas = document.createElement('canvas');
       this.canvas.width = TARGET_SIZE;
       this.canvas.height = TARGET_SIZE;
-      this.ctx = this.canvas.getContext('2d');
+      this.ctx = this.canvas.getContext('2d', { alpha: false, willReadFrequently: true }) as CanvasRenderingContext2D;
     }
 
     if (this.canvas) {
