@@ -72,7 +72,7 @@ export function useAROrchestrator(): UseAROrchestratorResult {
   const handleStartAR = useCallback(async () => {
     console.trace('[Viza:DEBUG] handleStartAR called');
     dispatchActions.initModel();
-    webllmInitModel();
+    await webllmInitModel();
     await startAR();
     console.trace('[Viza:DEBUG] handleStartAR completed');
   }, [startAR, dispatchActions, webllmInitModel]);
