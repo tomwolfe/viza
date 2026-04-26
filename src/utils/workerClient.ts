@@ -357,11 +357,6 @@ export class WorkerClient {
 
       try {
         this.worker!.postMessage({ type, messageId, ...payload });
-
-        const req = this.pendingRequests.get(messageId);
-        if (req) {
-          this.pendingRequests.delete(messageId);
-        }
       } catch (err) {
         cleanup();
         reject(err);
