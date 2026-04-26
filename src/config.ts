@@ -139,11 +139,6 @@ export async function checkWebGPU(): Promise<WebGPUCheckResult> {
     return result;
   }
 }
-  } catch (error) {
-    result.issues.push(`WebGPU check failed: ${(error as Error).message}`);
-    return result;
-  }
-}
 
 export function estimateModelCacheStatus(): { likelyCached: boolean; message: string } {
   if (!CONFIG.SHOW_MODEL_CACHE_HINT) {
