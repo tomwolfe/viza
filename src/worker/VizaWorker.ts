@@ -146,6 +146,8 @@ export class VizaWorker {
       config
     );
 
+    logger.info(`[VizaWorker] Running task: ${config.responseType}. Image: ${image.width}x${image.height}`);
+
     try {
       const response = await this._executeInference(messages, config.maxTokens);
 
@@ -274,18 +276,20 @@ async runVerification(
         max_tokens: maxTokens,
       });
     } catch (err: any) {
-      const isShapeMismatch = err.message?.includes("embed.shape[0]") || 
+      const isShapeMismatch = err.message?.includes("embed.shape[0]") ||
         err.message?.includes("shape mismatch") ||
-        err.message?.includes("shape mismatch");
-      
+        err.message?.includes("embed") ||
+        err.message?.includes("shape") ||
+        err.message?.includes("token");
+
       if (isShapeMismatch) {
-        console.error('[VizaWorker] Critical VLM shape error - forcing full engine reload');
+        logger.error('[VizaWorker] CRITICAL VLM shape error detected - engine corrupted');
         this.state.isInitialized = false;
         this.state.engine = null;
         this.postMessageFn({
           type: 'error',
           messageId: '',
-          message: 'VLM shape mismatch - engine requires reinitialization',
+          message: `VLM shape mismatch - engine requires full reinitialization: ${err.message}`,
           errorCode: 'MODEL_INIT_FAILED'
         });
       }

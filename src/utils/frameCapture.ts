@@ -113,10 +113,17 @@ async function downsampleToBitmap(
     0, 0, TARGET_SIZE, TARGET_SIZE
   );
 
-  if (canvas instanceof OffscreenCanvas) {
-    return canvas.transferToImageBitmap();
+  const bitmap = canvas instanceof OffscreenCanvas
+    ? canvas.transferToImageBitmap()
+    : await createImageBitmap(canvas);
+
+  logger.debug(`[FrameCapture] Created bitmap: ${bitmap.width}x${bitmap.height} (expected ${TARGET_SIZE}x${TARGET_SIZE})`);
+
+  if (bitmap.width !== TARGET_SIZE || bitmap.height !== TARGET_SIZE) {
+    logger.error(`[FrameCapture] Dimension mismatch! Expected ${TARGET_SIZE}x${TARGET_SIZE}, got ${bitmap.width}x${bitmap.height}`);
   }
-  return createImageBitmap(canvas);
+
+  return bitmap;
 }
 
 export async function captureFrame(source: CanvasImageSource): Promise<ImageBitmap | null> {

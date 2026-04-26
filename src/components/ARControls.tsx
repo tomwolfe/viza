@@ -1,7 +1,7 @@
 'use client';
 
 import { Play, Mic, Loader2, AlertTriangle, RotateCcw, RefreshCcw } from 'lucide-react';
-import { useId } from 'react';
+import { useId, useEffect, useState } from 'react';
 import { useVizaError } from '@/contexts/VizaErrorContext';
 
 
@@ -28,8 +28,36 @@ export default function ARControls({
 }: ARControlsProps) {
   const statusId = useId();
   const { unifiedError, unifiedErrorCode } = useVizaError();
+  const [criticalModelError, setCriticalModelError] = useState(false);
+
+  useEffect(() => {
+    const handleCriticalError = () => setCriticalModelError(true);
+    window.addEventListener('viza:critical-model-error', handleCriticalError);
+    return () => window.removeEventListener('viza:critical-model-error', handleCriticalError);
+  }, []);
 
   const renderStatusContent = () => {
+    if (criticalModelError) {
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2 text-red-500 font-semibold">
+            <AlertTriangle className="w-5 h-5" />
+            <span>Critical Model Error</span>
+          </div>
+          <p className="text-xs text-red-300 text-center max-w-xs">
+            The AI engine encountered a critical image format error. A full refresh is required.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs mt-1 flex items-center gap-1"
+          >
+            <RefreshCcw className="w-3 h-3" />
+            Refresh App
+          </button>
+        </div>
+      );
+    }
+
     if (isDeviceIncompatible) {
       return (
         <div className="flex items-center gap-2 text-red-400">

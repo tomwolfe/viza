@@ -63,8 +63,16 @@ export function useInferenceLoop({
     recordMetrics,
   } = useInferenceAnalytics({ intervalMs });
 
+  const criticalErrorRef = useRef(false);
+
   const processFrame = useCallback(
     async (prompt: string) => {
+      if (criticalErrorRef.current) {
+        logger.error('[useInferenceLoop] Critical model error - stopping all inference');
+        cancelPending();
+        return;
+      }
+
       if (isRunningRef.current || !videoRef.current || !acknowledgedRef.current) {
         isRunningRef.current = false;
         acknowledgedRef.current = true;
@@ -106,6 +114,20 @@ export function useInferenceLoop({
             processingTime,
           });
         } catch (error) {
+          const errMsg = (error as Error).message || '';
+          
+              if (errMsg.includes('MODEL_INIT_FAILED') || errMsg.includes('shape') || errMsg.includes('embed.shape')) {
+            criticalErrorRef.current = true;
+            logger.error('[useInferenceLoop] CRITICAL model error detected - stopping loop immediately');
+            cancelPending();
+            errorCountRef.current = CIRCUIT_BREAKER_THRESHOLD;
+            lastErrorTimeRef.current = performance.now();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('viza:critical-model-error'));
+            }
+            return;
+          }
+
           logger.error('[useInferenceLoop] Inference error:', error);
           errorCountRef.current += 1;
           lastErrorTimeRef.current = performance.now();
