@@ -261,6 +261,7 @@ export class WorkerClient {
           if (pending) {
             clearTimeout(pending.timeoutId);
             this.pendingRequests.delete(messageId);
+            pending.reject(new Error((data as { message?: string }).message ?? 'Unknown worker error'));
           }
         }
         this.options.onError(
@@ -306,13 +307,19 @@ export class WorkerClient {
     }
 
     return setTimeout(() => {
+      const pending = this.pendingRequests.get(messageId);
       this.pendingRequests.delete(messageId);
 
       const errorType = type === 'init' ? 'Initialization' : type === 'planning' || type === 'correction' ? 'Planning' : 'Inference';
       const errorCode = type === 'init' ? 'MODEL_INIT_FAILED' : 'INFERENCE_TIMEOUT';
+      const errorMessage = `${errorType} timeout after ${timeoutMs / 1000}s`;
+
+      if (pending) {
+        pending.reject(new Error(errorMessage));
+      }
 
       this.options.onError(
-        `${errorType} timeout after ${timeoutMs / 1000}s`,
+        errorMessage,
         errorCode,
         messageId
       );

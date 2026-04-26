@@ -73,15 +73,29 @@ export class VizaWorker {
       const appConfig = {
         ...webllm.prebuiltAppConfig,
         useIndexedDBCache: CONFIG.USE_INDEXED_DB_CACHE,
+        model_list: webllm.prebuiltAppConfig.model_list.map((m: any) => ({ ...m })),
       };
+
+      const modelRecord = appConfig.model_list.find((m: any) => m.model_id === modelId);
+      if (modelRecord) {
+        modelRecord.overrides = {
+          ...(modelRecord.overrides || {}),
+          context_window_size: 4096,
+          prefill_chunk_size: 4096,
+        };
+      }
 
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: initProgressCallback,
         appConfig: appConfig,
-        chatConfig: {
+        chatOpts: {
           vision_config: {
             max_slice: 1,
           },
+        },
+      } as any, {
+        vision_config: {
+          max_slice: 1,
         },
       } as any);
 

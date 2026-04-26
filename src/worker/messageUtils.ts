@@ -50,7 +50,7 @@ export async function bitmapToBase64(bitmap: ImageBitmap): Promise<string> {
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
-  const blob = await canvas.convertToBlob({ quality: 0.8 });
+  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
   return new Promise<string>((resolve) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);
