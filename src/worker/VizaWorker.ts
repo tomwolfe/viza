@@ -88,9 +88,8 @@ export class VizaWorker {
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: initProgressCallback,
         appConfig: appConfig,
-      }, {
-        context_window_size: 8192,
-      } as any);
+        context_window_size: 4096,
+      });
 
       this.state.isInitialized = true;
       this.state.currentModel = modelId;
@@ -122,6 +121,11 @@ export class VizaWorker {
       return;
     }
 
+    if (!image || image.width === 0 || image.height === 0) {
+      sendError(messageId, 'Invalid or neutered image received', 'INFERENCE_ERROR', undefined, this.postMessageFn);
+      return;
+    }
+
     let enhancedUserInput = userInput;
     const isContextQuery = isContextualQuery(userInput);
 
@@ -135,9 +139,8 @@ export class VizaWorker {
       }
     }
 
-    const imageBase64 = await bitmapToBase64(image);
     const messages = PromptFactory.buildMessages(
-      imageBase64,
+      image,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -210,10 +213,14 @@ async runVerification(
       return;
     }
 
+    if (!image || image.width === 0 || image.height === 0) {
+      sendError(messageId, 'Invalid or neutered image received', 'INFERENCE_ERROR', undefined, this.postMessageFn);
+      return;
+    }
+
      const userInput = `${validationPrompt}|||${targetObject}`;
-     const imageBase64 = await bitmapToBase64(image);
      const messages = PromptFactory.buildMessages(
-      imageBase64,
+      image,
       userInput,
       undefined,
       this.state.systemPrompt,

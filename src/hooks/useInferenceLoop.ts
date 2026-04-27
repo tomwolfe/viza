@@ -74,8 +74,6 @@ export function useInferenceLoop({
       }
 
       if (isRunningRef.current || !videoRef.current || !acknowledgedRef.current) {
-        isRunningRef.current = false;
-        acknowledgedRef.current = true;
         return;
       }
 

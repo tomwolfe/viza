@@ -12,6 +12,7 @@ import * as THREE from 'three';
 interface ARSceneProps {
   isARActive: boolean;
   isModelReady: boolean;
+  isInferring: boolean;
   runInference?: (
     _image: ImageBitmap,
     _prompt: string
@@ -30,6 +31,7 @@ interface ARSceneProps {
 export function ARScene({
   isARActive,
   isModelReady,
+  isInferring,
   runInference,
   detectedObjects,
   worldObjects,
@@ -64,7 +66,7 @@ export function ARScene({
     speak: speak ?? contextSpeak,
     isXRMode,
     sceneImageRef,
-    isInferring: false,
+    isInferring,
   });
 
   useEffect(() => {

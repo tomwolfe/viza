@@ -63,12 +63,13 @@ export function ARContent() {
 }
 
 function ARContentCanvas({ isXRMode, sceneImageRef }: { isXRMode: boolean; sceneImageRef: React.MutableRefObject<ImageBitmap | null> }) {
-  const { isModelReady, detectedObjects, worldMap, runInference } = useVizaOrchestrator();
+  const { isModelReady, detectedObjects, worldMap, runInference, isInferring } = useVizaOrchestrator();
 
   return (
     <ARScene
       isARActive={true}
       isModelReady={isModelReady}
+      isInferring={isInferring}
       runInference={runInference}
       detectedObjects={detectedObjects || []}
       worldObjects={worldMap || []}
