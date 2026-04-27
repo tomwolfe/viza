@@ -135,8 +135,9 @@ export class VizaWorker {
       }
     }
 
+    const imageBase64 = await bitmapToBase64(image);
     const messages = PromptFactory.buildMessages(
-      image,
+      imageBase64,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -210,8 +211,9 @@ async runVerification(
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-    const messages = PromptFactory.buildMessages(
-      image,
+     const imageBase64 = await bitmapToBase64(image);
+     const messages = PromptFactory.buildMessages(
+      imageBase64,
       userInput,
       undefined,
       this.state.systemPrompt,
