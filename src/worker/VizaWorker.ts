@@ -3,7 +3,7 @@ import { CONFIG, logger } from '@/config';
 import { PromptFactory, type TaskRunnerConfig } from '@/services/promptManager';
 import { VerificationResponseSchema } from '@/schemas/vision';
 import { parseJsonResponse } from '@/utils/responseParser';
-import { mapErrorToCode, sendError, bitmapToBase64 } from './messageUtils';
+import { mapErrorToCode, sendError } from './messageUtils';
 import { 
   createDetectionMemory, 
   updateDetectionMemory, 
@@ -88,7 +88,6 @@ export class VizaWorker {
       this.state.engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: initProgressCallback,
         appConfig: appConfig,
-        context_window_size: 4096,
       });
 
       this.state.isInitialized = true;
