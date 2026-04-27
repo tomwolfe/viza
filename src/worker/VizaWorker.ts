@@ -89,9 +89,7 @@ export class VizaWorker {
         initProgressCallback: initProgressCallback,
         appConfig: appConfig,
       }, {
-        vision_config: { max_slice: 1 },
-        context_window_size: 4096,
-        prefill_chunk_size: 4096,
+        context_window_size: 8192,
       } as any);
 
       this.state.isInitialized = true;
@@ -137,9 +135,8 @@ export class VizaWorker {
       }
     }
 
-    const imageUrl = await bitmapToBase64(image);
     const messages = PromptFactory.buildMessages(
-      imageUrl,
+      image,
       enhancedUserInput,
       undefined,
       this.state.systemPrompt,
@@ -194,6 +191,8 @@ export class VizaWorker {
       const err = error as Error;
       const code = mapErrorToCode(err);
       sendError(messageId, `Inference failed: ${err.message}`, code, err, this.postMessageFn);
+    } finally {
+      image.close();
     }
   }
 
@@ -211,9 +210,8 @@ async runVerification(
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-    const verificationImageUrl = await bitmapToBase64(image);
     const messages = PromptFactory.buildMessages(
-      verificationImageUrl,
+      image,
       userInput,
       undefined,
       this.state.systemPrompt,
@@ -256,6 +254,8 @@ async runVerification(
     const err = error as Error;
     const code = mapErrorToCode(err);
     sendError(messageId, `Verification failed: ${err.message}`, code, err, this.postMessageFn);
+  } finally {
+    image.close();
   }
 }
 
