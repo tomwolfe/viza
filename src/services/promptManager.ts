@@ -174,15 +174,24 @@ export const TASK_CONFIGS: Record<string, TaskRunnerConfig> = {
   },
 };
 
-export function buildMessages(
+export async function buildMessages(
   imageSource: ImageBitmap | string,
   userInput: string | undefined,
   goal: string | undefined,
   systemPrompt: string,
   config: TaskRunnerConfig
-) {
-  type MessageContent = string | Array<{ type: 'image_url' | 'text'; image_url?: { url: ImageBitmap | string }; text?: string }>;
-  type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: MessageContent };
+): Promise<Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: 'image_url' | 'text'; image_url?: { url: string }; text?: string }>; }>> {
+  let imageForMessage: string = imageSource;
+  
+  if (typeof imageSource !== 'string') {
+    const canvas = new OffscreenCanvas(imageSource.width, imageSource.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(imageSource, 0, 0);
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.85));
+    imageForMessage = await blobToBase64(blob);
+  }
+
+  type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: 'image_url' | 'text'; image_url?: { url: string }; text?: string }>; };
   
   const messages: ChatMessage[] = [];
 
@@ -208,12 +217,21 @@ export function buildMessages(
   messages.push({
     role: 'user',
     content: [
-      { type: 'image_url', image_url: { url: imageSource } },
+      { type: 'image_url', image_url: { url: imageForMessage } },
       { type: 'text', text: promptText },
     ],
   });
 
   return messages;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 function buildJsonPrompt(schema: string): string {

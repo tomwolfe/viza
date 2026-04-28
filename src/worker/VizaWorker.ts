@@ -138,7 +138,7 @@ export class VizaWorker {
       }
     }
 
-    const messages = PromptFactory.buildMessages(
+    const messages = await PromptFactory.buildMessages(
       image,
       enhancedUserInput,
       undefined,
@@ -218,12 +218,12 @@ async runVerification(
     }
 
      const userInput = `${validationPrompt}|||${targetObject}`;
-     const messages = PromptFactory.buildMessages(
-      image,
-      userInput,
-      undefined,
-      this.state.systemPrompt,
-      {
+     const messages = await PromptFactory.buildMessages(
+       image,
+       userInput,
+       undefined,
+       this.state.systemPrompt,
+       {
         maxTokens: 512,
         schema: VerificationResponseSchema,
         responseType: 'verification_complete',
@@ -268,7 +268,7 @@ async runVerification(
 }
 
   private async _executeInference(
-     messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string | ImageBitmap }; text?: string }> }>,
+     messages: Array<{ role: string; content: string | Array<{ type: string; image_url?: { url: string }; text?: string }> }>,
      maxTokens: number
    ): Promise<webllm.ChatCompletion> {
      this.postMessageFn({ type: 'inference_start' });
