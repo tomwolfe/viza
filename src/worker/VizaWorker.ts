@@ -57,24 +57,26 @@ export class VizaWorker {
       }
     }
 
+    const initProgressCallback = (report: webllm.InitProgressReport) => {
+      const progress = Math.round(report.progress * 100);
+      this.postMessageFn({
+        type: 'init_progress',
+        progress,
+        status: report.text || 'downloading',
+        details: report,
+      });
+    };
+
+    const createAppConfig = (useCache: boolean) => ({
+      ...webllm.prebuiltAppConfig,
+      useIndexedDBCache: useCache,
+      model_list: webllm.prebuiltAppConfig.model_list.map((m: any) => ({ ...m })),
+    });
+
     try {
       this.postMessageFn({ type: 'init_progress', progress: 0, status: 'loading' });
 
-      const initProgressCallback = (report: webllm.InitProgressReport) => {
-        const progress = Math.round(report.progress * 100);
-        this.postMessageFn({
-          type: 'init_progress',
-          progress,
-          status: report.text || 'downloading',
-          details: report,
-        });
-      };
-
-      const appConfig = {
-        ...webllm.prebuiltAppConfig,
-        useIndexedDBCache: CONFIG.USE_INDEXED_DB_CACHE,
-        model_list: webllm.prebuiltAppConfig.model_list.map((m: any) => ({ ...m })),
-      };
+      const appConfig = createAppConfig(CONFIG.USE_INDEXED_DB_CACHE);
 
       const modelRecord = appConfig.model_list.find((m: any) => m.model_id === modelId);
       if (modelRecord) {
@@ -102,6 +104,54 @@ export class VizaWorker {
       });
     } catch (error) {
       const err = error as Error;
+      const isShapeMismatch = err.message?.includes('embed.shape') ||
+        err.message?.includes('shape mismatch') ||
+        err.message?.includes('tokenizer') ||
+        err.message?.includes('vocab');
+
+      if (isShapeMismatch && CONFIG.USE_INDEXED_DB_CACHE) {
+        logger.warn('[VizaWorker] Shape mismatch detected, clearing IndexedDB cache and retrying');
+        try {
+          await new Promise<void>((resolve) => {
+            const request = indexedDB.deleteDatabase('web-llm-cache');
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+            request.onblocked = () => resolve();
+          });
+          this.postMessageFn({ type: 'init_progress', progress: 0, status: 'cache_cleared' });
+
+          const retryAppConfig = createAppConfig(false);
+
+          const retryModelRecord = retryAppConfig.model_list.find((m: any) => m.model_id === modelId);
+          if (retryModelRecord) {
+            retryModelRecord.overrides = {
+              ...(retryModelRecord.overrides || {}),
+              context_window_size: 4096,
+              prefill_chunk_size: 4096,
+            };
+          }
+
+          this.state.engine = await webllm.CreateMLCEngine(modelId, {
+            initProgressCallback: initProgressCallback,
+            appConfig: retryAppConfig,
+          });
+
+          this.state.isInitialized = true;
+          this.state.currentModel = modelId;
+
+          this.postMessageFn({
+            type: 'init_complete',
+            messageId,
+            model: modelId,
+            progress: 100,
+            cacheStatus: 'fresh_download',
+          });
+          return;
+        } catch (retryError) {
+          logger.error('[VizaWorker] Cache clear and retry failed:', retryError);
+        }
+      }
+
       const code = mapErrorToCode(err);
       sendError('', `Failed to initialize model: ${err.message}`, code, err, this.postMessageFn);
     }
@@ -291,15 +341,42 @@ async runVerification(
         err.message?.includes("token");
 
       if (isShapeMismatch) {
-        logger.error('[VizaWorker] CRITICAL VLM shape error detected - engine corrupted');
+        logger.error('[VizaWorker] CRITICAL VLM shape error detected - clearing cache');
         this.state.isInitialized = false;
         this.state.engine = null;
-        this.postMessageFn({
-          type: 'error',
-          messageId: '',
-          message: `VLM shape mismatch - engine requires full reinitialization: ${err.message}`,
-          errorCode: 'MODEL_INIT_FAILED'
-        });
+
+        if (CONFIG.USE_INDEXED_DB_CACHE) {
+          try {
+            await new Promise<void>((resolve) => {
+              const request = indexedDB.deleteDatabase('web-llm-cache');
+              request.onsuccess = () => resolve();
+              request.onerror = () => resolve();
+              request.onblocked = () => resolve();
+            });
+            logger.info('[VizaWorker] IndexedDB cache cleared after shape mismatch');
+            this.postMessageFn({
+              type: 'error',
+              messageId: '',
+              message: 'Model cache corrupted. Downloading fresh model...',
+              errorCode: 'MODEL_INIT_FAILED'
+            });
+          } catch (cacheErr) {
+            logger.error('[VizaWorker] Failed to clear cache:', cacheErr);
+            this.postMessageFn({
+              type: 'error',
+              messageId: '',
+              message: `VLM shape mismatch - engine requires full reinitialization: ${err.message}`,
+              errorCode: 'MODEL_INIT_FAILED'
+            });
+          }
+        } else {
+          this.postMessageFn({
+            type: 'error',
+            messageId: '',
+            message: `VLM shape mismatch - engine requires full reinitialization: ${err.message}`,
+            errorCode: 'MODEL_INIT_FAILED'
+          });
+        }
       }
       throw err;
     }

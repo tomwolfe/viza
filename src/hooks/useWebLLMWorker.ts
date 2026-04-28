@@ -96,8 +96,8 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
   const initModel = useCallback(async () => {
     console.debug('[WebLLM] initModel called, initializing:', isInitializingRef.current, 'ready:', isModelReady);
     
-    if (errorCode === 'MODEL_INIT_FAILED' || errorCode === 'WEBGPU_NOT_SUPPORTED') {
-      logger.warn('[WebLLM] Skipping init due to previous fatal error');
+    if (errorCode === 'WEBGPU_NOT_SUPPORTED') {
+      logger.warn('[WebLLM] Skipping init due to WebGPU incompatibility');
       return;
     }
     
@@ -142,9 +142,9 @@ export function useWebLLMWorker({ modelId }: UseWebLLMWorkerOptions = {}) {
     } catch (err) {
       const errorMsg = (err as Error).message;
       if (errorMsg.includes('shape') || errorMsg.includes('embed')) {
-        setVizaError('MODEL_INIT_FAILED', 'Model initialization failed - incompatible image format. Please refresh.');
+        setVizaError('MODEL_INIT_FAILED', 'Model cache corrupted - clearing and re-downloading. Please wait...');
       } else {
-        setVizaError('WORKER_INIT_FAILED', errorMsg);
+        setVizaError('MODEL_INIT_FAILED', errorMsg);
       }
     } finally {
       isInitializingRef.current = false;

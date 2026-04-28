@@ -29,7 +29,21 @@ export function VizaErrorProvider({ children }: { children: React.ReactNode }) {
   });
 
   const setError = useCallback((code: VizaErrorCode, originalError?: unknown) => {
-    const message = getErrorMessage(code);
+    let message: string;
+    if (typeof originalError === 'string') {
+      message = originalError;
+    } else if (originalError instanceof Error) {
+      message = getErrorMessage(code) ?? 'An error occurred';
+      logger.error(`[VizaError] ${code}: ${message}`, originalError.message);
+      setErrorState({
+        code,
+        message,
+        originalError: originalError,
+      });
+      return;
+    } else {
+      message = getErrorMessage(code) ?? 'An error occurred';
+    }
     logger.error(`[VizaError] ${code}: ${message}`, originalError);
     setErrorState({
       code,
