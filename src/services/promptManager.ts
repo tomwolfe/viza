@@ -190,7 +190,7 @@ export async function buildMessages(
     const canvas = new OffscreenCanvas(imageSource.width, imageSource.height);
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(imageSource, 0, 0);
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.85));
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
     imageForMessage = await blobToBase64(blob);
   }
 
