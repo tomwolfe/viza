@@ -181,9 +181,12 @@ export async function buildMessages(
   systemPrompt: string,
   config: TaskRunnerConfig
 ): Promise<Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: 'image_url' | 'text'; image_url?: { url: string }; text?: string }>; }>> {
-  let imageForMessage: string = imageSource;
+  let imageForMessage: string;
   
-  if (typeof imageSource !== 'string') {
+  if (typeof imageSource === 'string') {
+    imageForMessage = imageSource;
+  }
+  else {
     const canvas = new OffscreenCanvas(imageSource.width, imageSource.height);
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(imageSource, 0, 0);
